@@ -3,7 +3,7 @@
 > **Product:** ORBO
 > **Boss agent:** DIYA (the primary orchestrator inside ORBO)
 > **Owner:** Opraiz Technology Pvt Ltd · **Developer:** Narein Rao
-> **Status:** Phase 2 rebrand complete (green, pre-`git init`); Phase 3 unification designs drafted in `docs/planning/01–09` — W0 owner decisions pending.
+> **Status:** Phase 2 rebrand complete and pushed; Phase 3 unification designs in `docs/planning/01–09`; Phase 4 kickoff done (surface inventories 10–15 + `apps/app` scaffold) — W0 owner decisions pending before ports.
 
 This document is the single source of truth for merging three upstream products into one
 unified product, **ORBO**, with a single interface and no visible origin traces. Upstream

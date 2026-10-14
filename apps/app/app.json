@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "ORBO",
+    "slug": "orbo",
+    "version": "0.1.0",
+    "scheme": "orbo",
+    "web": {
+      "bundler": "metro"
+    },
+    "ios": {
+      "bundleIdentifier": "ai.orbo.app",
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "ai.orbo.app"
+    },
+    "plugins": ["expo-router"]
+  }
+}
