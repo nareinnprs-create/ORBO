@@ -153,7 +153,10 @@ function main(command: string | undefined) {
   write(
     `${native}tauri.build-version.conf.json`,
     json({
-      version: buildVersion,
+      // WiX/MSI rejects non-numeric pre-release identifiers (NSIS tolerated
+      // `0.1.0-internal.g<sha>`). Keep the bundle overlay strictly numeric and
+      // retain the full internal identity in build-version.json + plist keys.
+      version: releaseVersion,
       bundle: { macOS: { infoPlist: "build-version.plist" } },
     }),
   );

@@ -380,8 +380,7 @@ mod tests {
     #[test]
     #[ignore = "requires an isolated Intelligence server and interactive browser SSO"]
     fn live_self_hosted_browser_connection() {
-        let root =
-            PathBuf::from(std::env::var("ORBO_LIVE_SELF_HOSTED_ROOT").expect("test root"));
+        let root = PathBuf::from(std::env::var("ORBO_LIVE_SELF_HOSTED_ROOT").expect("test root"));
         let bun = PathBuf::from(std::env::var("ORBO_LIVE_SELF_HOSTED_BUN").expect("owned Bun"));
         let api = std::env::var("ORBO_LIVE_SELF_HOSTED_API_URL").expect("test API");
         let project = std::env::var("ORBO_LIVE_SELF_HOSTED_PROJECT_ID").expect("test project");
@@ -431,8 +430,7 @@ mod tests {
                 }
             }
         }
-        let root =
-            PathBuf::from(std::env::var("ORBO_LIVE_SELF_HOSTED_ROOT").expect("test root"));
+        let root = PathBuf::from(std::env::var("ORBO_LIVE_SELF_HOSTED_ROOT").expect("test root"));
         let bun = PathBuf::from(std::env::var("ORBO_LIVE_SELF_HOSTED_BUN").expect("owned Bun"));
         let api = std::env::var("ORBO_LIVE_SELF_HOSTED_API_URL").expect("test API");
         let signing = SigningIn::begin(&root, &bun, &api).unwrap();

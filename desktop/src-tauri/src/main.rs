@@ -1149,8 +1149,8 @@ fn fresh_root_without_encryption_key(
     let unknown = || {
         Problem::plain("ORBO could not verify that this is an unconfigured installation. Its leftover database cannot be reset here.")
     };
-    let settings = orbo_env::read_already_set(&root.join(".env"), &["DATABASE_URL"])
-        .map_err(|_| unknown())?;
+    let settings =
+        orbo_env::read_already_set(&root.join(".env"), &["DATABASE_URL"]).map_err(|_| unknown())?;
     if settings.contains_key("DATABASE_URL") {
         return Ok(false);
     }
@@ -1291,10 +1291,10 @@ async fn start_stack_inner<R: tauri::Runtime>(
                 && url.username().is_empty()
                 && url.password().is_none()
         }) {
-            return Err(Problem::plain(
-                "Enter a valid http:// or https:// organization ORBO URL.",
-            )
-            .connection(orbo_desktop_lib::problem::Connection::Organization));
+            return Err(
+                Problem::plain("Enter a valid http:// or https:// organization ORBO URL.")
+                    .connection(orbo_desktop_lib::problem::Connection::Organization),
+            );
         }
     }
     let shell = app.state::<Shell>();
@@ -1345,20 +1345,21 @@ async fn start_stack_inner<R: tauri::Runtime>(
      * the window says which Bot it will be while there is still a screen to say it on.
      */
     let requested_harness = harness.clone();
-    let harness =
-        match &credential {
-            orbo_env::ModelCredential::ClaudePlan { .. } => harness::speaking_for("anthropic")
-                .map(|id| harness::HarnessChoice {
-                    id: id.into(),
-                    agent_url: None,
-                }),
-            orbo_env::ModelCredential::ChatGptPlan { .. } => harness::speaking_for("openai")
-                .map(|id| harness::HarnessChoice {
-                    id: id.into(),
-                    agent_url: None,
-                }),
-            _ => harness,
-        };
+    let harness = match &credential {
+        orbo_env::ModelCredential::ClaudePlan { .. } => {
+            harness::speaking_for("anthropic").map(|id| harness::HarnessChoice {
+                id: id.into(),
+                agent_url: None,
+            })
+        }
+        orbo_env::ModelCredential::ChatGptPlan { .. } => {
+            harness::speaking_for("openai").map(|id| harness::HarnessChoice {
+                id: id.into(),
+                agent_url: None,
+            })
+        }
+        _ => harness,
+    };
     let picked = harness::picked(harness.as_ref(), &root).map_err(|error| {
         // Two registers, because one of these refusals is about a release and the other is
         // about a pick. "ORBO v0.0.8 does not include agent-langgraph-agui" is the
@@ -2415,9 +2416,8 @@ fn ports_for_shell<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
 ) -> Result<orbo_env::Ports, Problem> {
     let root = cleanup_root(&app.state::<Shell>(), &stack::default_root());
-    orbo_env::Ports::read(&root).map_err(|error| {
-        Problem::with("ORBO could not read its local ports.", error.to_string())
-    })
+    orbo_env::Ports::read(&root)
+        .map_err(|error| Problem::with("ORBO could not read its local ports.", error.to_string()))
 }
 
 fn show_orbo_on<R: tauri::Runtime>(
@@ -2448,10 +2448,9 @@ fn show_orbo_on<R: tauri::Runtime>(
     let url = owned_app_url(&root, ports).ok_or_else(|| {
         format!("ORBO could not verify its app on port {port} belongs to this installation. Try starting ORBO again.")
     })?;
-    let authority =
-        orbo_env::already_set(&root.join(".env"), &["ORBO_ORGANIZATION_AUTH_URL"])
-            .remove("ORBO_ORGANIZATION_AUTH_URL")
-            .unwrap_or_default();
+    let authority = orbo_env::already_set(&root.join(".env"), &["ORBO_ORGANIZATION_AUTH_URL"])
+        .remove("ORBO_ORGANIZATION_AUTH_URL")
+        .unwrap_or_default();
     let destination = if authority.is_empty() {
         if organization_recovery {
             return Err(Problem::plain(
@@ -3160,8 +3159,7 @@ async fn begin_intelligence_sign_in(app: tauri::AppHandle) -> Result<String, Str
 #[tauri::command]
 async fn finish_intelligence_sign_in(
     app: tauri::AppHandle,
-) -> Result<Vec<orbo_desktop_lib::intelligence::Project>, orbo_desktop_lib::problem::Problem>
-{
+) -> Result<Vec<orbo_desktop_lib::intelligence::Project>, orbo_desktop_lib::problem::Problem> {
     let signing = app
         .state::<Shell>()
         .signing_in_to_intelligence
@@ -3216,9 +3214,7 @@ async fn intelligence_key_for(
         .lock()
         .unwrap()
         .clone()
-        .ok_or_else(|| {
-            orbo_desktop_lib::problem::Problem::plain("Sign in to ORBO first.")
-        })?;
+        .ok_or_else(|| orbo_desktop_lib::problem::Problem::plain("Sign in to ORBO first."))?;
     let provisioned = tauri::async_runtime::spawn_blocking(move || {
         orbo_desktop_lib::intelligence::provision_connection(&credential, &project)
     })
@@ -3248,10 +3244,9 @@ async fn begin_organization_sign_in(
                 "Start this ORBO installation before signing in to its organization.",
             ));
         }
-        let configured =
-            orbo_env::already_set(&root.join(".env"), &["ORBO_ORGANIZATION_AUTH_URL"])
-                .remove("ORBO_ORGANIZATION_AUTH_URL")
-                .unwrap_or_default();
+        let configured = orbo_env::already_set(&root.join(".env"), &["ORBO_ORGANIZATION_AUTH_URL"])
+            .remove("ORBO_ORGANIZATION_AUTH_URL")
+            .unwrap_or_default();
         if configured.trim() != authority_url.trim() {
             return Err(Problem::plain(
                 "Save this organization's ORBO URL before signing in.",
@@ -3381,9 +3376,15 @@ fn publish_connection_failure<R: tauri::Runtime>(
         return Ok(true);
     }
     let said = match connection {
-        orbo_desktop_lib::problem::Connection::Model => "Your AI connection was refused. Refresh it to continue using your existing ORBO.",
-        orbo_desktop_lib::problem::Connection::Intelligence => "Your ORBO connection was refused. Refresh it to continue using your existing ORBO.",
-        orbo_desktop_lib::problem::Connection::Organization => "Your organization sign-in needs to be refreshed to continue using your existing ORBO.",
+        orbo_desktop_lib::problem::Connection::Model => {
+            "Your AI connection was refused. Refresh it to continue using your existing ORBO."
+        }
+        orbo_desktop_lib::problem::Connection::Intelligence => {
+            "Your ORBO connection was refused. Refresh it to continue using your existing ORBO."
+        }
+        orbo_desktop_lib::problem::Connection::Organization => {
+            "Your organization sign-in needs to be refreshed to continue using your existing ORBO."
+        }
     };
     mark_recovery_required(&shell, root, generation);
     if let Some(recovery) = shell.recovery_required.lock().unwrap().as_mut() {
@@ -3440,10 +3441,9 @@ fn supervise_host_processes<R: tauri::Runtime>(
                 connection_notice_sent = false;
             }
             if !connection_notice_sent {
-                if let (Some(client), Some(token)) = (
-                    &connection_client,
-                    secrets.get("ORBO_DESKTOP_HOST_TOKEN"),
-                ) {
+                if let (Some(client), Some(token)) =
+                    (&connection_client, secrets.get("ORBO_DESKTOP_HOST_TOKEN"))
+                {
                     match desktop_connection::poll(client, ports.server, token) {
                         Ok(Some(connection)) => {
                             match publish_connection_failure(&app, &root, generation, connection) {
@@ -3579,10 +3579,7 @@ where
         return Ok(false);
     }
     let child = spawn().map_err(|error| {
-        Problem::with(
-            format!("ORBO could not restart {name}."),
-            error.to_string(),
-        )
+        Problem::with(format!("ORBO could not restart {name}."), error.to_string())
     })?;
     #[cfg(unix)]
     stack::replace_host_process(root, &mut children, name, child)?;
@@ -4468,8 +4465,7 @@ mod tests {
             ),
         ] {
             if let Some(metadata) = metadata {
-                std::fs::write(root.join(orbo_desktop_lib::saved_intent::FILE), metadata)
-                    .unwrap();
+                std::fs::write(root.join(orbo_desktop_lib::saved_intent::FILE), metadata).unwrap();
             }
             for legacy in ["", "INTELLIGENCE_API_KEY=synthetic-cpk\nOPENAI_API_KEY=synthetic-openai\nANTHROPIC_API_KEY=synthetic-anthropic\nCLAUDE_CODE_OAUTH_TOKEN=synthetic-claude\n"] {
                 std::fs::write(root.join(".env"), format!("INTELLIGENCE_API_URL=https://synthetic.example\n{legacy}")).unwrap();
@@ -4864,12 +4860,8 @@ mod tests {
                 format!("MANAGED_AGENT_AG_UI_URL=https://agent-{label}.example\n"),
             )
             .unwrap();
-            orbo_desktop_lib::vault::remember(
-                root,
-                "OPENAI_API_KEY",
-                &format!("openai-{label}"),
-            )
-            .unwrap();
+            orbo_desktop_lib::vault::remember(root, "OPENAI_API_KEY", &format!("openai-{label}"))
+                .unwrap();
             orbo_desktop_lib::vault::remember(
                 root,
                 "MANAGED_AGENT_TOKEN",
@@ -5698,10 +5690,7 @@ mod tests {
         let error = choice
             .into_credential_with(&root, |_, key| {
                 reads += 1;
-                assert_eq!(
-                    key,
-                    orbo_desktop_lib::saved_intent::COMPATIBLE_CREDENTIAL
-                );
+                assert_eq!(key, orbo_desktop_lib::saved_intent::COMPATIBLE_CREDENTIAL);
                 Ok(
                     r#"{"base_url":"https://other.example/v1","api_key":"synthetic-other-key"}"#
                         .into(),

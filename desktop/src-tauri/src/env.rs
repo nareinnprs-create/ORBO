@@ -572,10 +572,7 @@ pub fn compose(
 
     env.insert(
         "DATABASE_URL".into(),
-        format!(
-            "postgres://orbo:orbo@127.0.0.1:{}/orbo",
-            ports.postgres
-        ),
+        format!("postgres://orbo:orbo@127.0.0.1:{}/orbo", ports.postgres),
     );
     // Every address the app is actually reachable at, because it is reachable at more than one.
     //

@@ -817,10 +817,7 @@ fn main() {
         let status = answering(Address::new(Engine::Podman, Some("orbo".into())));
         assert!(status.responding);
         assert!(status.detail.contains("orbo"), "{}", status.detail);
-        assert_eq!(
-            status.address.unwrap().connection.as_deref(),
-            Some("orbo")
-        );
+        assert_eq!(status.address.unwrap().connection.as_deref(), Some("orbo"));
     }
 }
 

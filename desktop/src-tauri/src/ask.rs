@@ -225,9 +225,7 @@ fn mastra_stream_url(endpoint: &str, agent_id: &str) -> Result<reqwest::Url, Pro
     })?;
     url.path_segments_mut()
         .map_err(|_| {
-            Problem::plain(
-                "ORBO cannot find the Bot it just set up. Stop ORBO and start it again.",
-            )
+            Problem::plain("ORBO cannot find the Bot it just set up. Stop ORBO and start it again.")
         })?
         .clear()
         .extend(["api", "agents", agent_id, "stream"]);

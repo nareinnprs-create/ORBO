@@ -459,11 +459,12 @@ describe("tenant YAML validation", () => {
     });
   });
 
-  test("starts a deployment with two coworkers, not the whole catalog", async () => {
+  test("starts a deployment with three coworkers, not the whole catalog", async () => {
     /*
      * The roster a fresh deployment opens on. The ten in `catalog/` used to load from `agents/`, so
-     * every new deployment met a dozen Bots at once. Risk Analyst and the picked harness only register
-     * with an endpoint, so they are switched off here to read the package as a bare install does.
+     * every new deployment met a dozen Bots at once. General Assistant, Knowledge, and DIYA are the
+     * always-on rows; Risk Analyst and the picked harness only register with an endpoint, so they
+     * are switched off here to read the package as a bare install does.
      */
     const saved = {
       managed: process.env.MANAGED_AGENT_AG_UI_URL,
@@ -478,6 +479,7 @@ describe("tenant YAML validation", () => {
       expect(tenantPackage.agents.map((agent) => agent.id)).toEqual([
         "general-assistant",
         "knowledge",
+        "diya",
       ]);
     } finally {
       if (saved.managed === undefined)

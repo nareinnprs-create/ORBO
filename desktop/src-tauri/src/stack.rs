@@ -1251,10 +1251,7 @@ pub fn replace_windows_host_process_with(
 
 #[cfg(unix)]
 fn unix_ownership_problem(detail: impl Into<String>) -> Problem {
-    Problem::with(
-        "ORBO could not verify its host process ownership.",
-        detail,
-    )
+    Problem::with("ORBO could not verify its host process ownership.", detail)
 }
 
 #[cfg(unix)]
@@ -1995,10 +1992,7 @@ fn cleanup_status_problem(operation: &str, output: &std::process::Output) -> Pro
         detail.push_str("\nstdout:\n");
         detail.push_str(&stdout);
     }
-    Problem::with(
-        "ORBO could not inspect or stop its host processes.",
-        detail,
-    )
+    Problem::with("ORBO could not inspect or stop its host processes.", detail)
 }
 
 fn combined_cleanup_problem(failures: Vec<Problem>) -> Problem {
@@ -5114,10 +5108,7 @@ fn main() {
             services_that_exited(&Address::new(crate::engine::Engine::Docker, None), &root)
                 .expect_err("a failed inspection command must stop startup");
 
-        assert_eq!(
-            problem.said,
-            "ORBO could not inspect its Compose services."
-        );
+        assert_eq!(problem.said, "ORBO could not inspect its Compose services.");
         assert!(
             problem
                 .detail
@@ -5143,10 +5134,7 @@ fn main() {
             services_that_exited(&Address::new(crate::engine::Engine::Docker, None), &root)
                 .expect_err("a nonzero inspection status must stop startup");
 
-        assert_eq!(
-            problem.said,
-            "ORBO could not inspect its Compose services."
-        );
+        assert_eq!(problem.said, "ORBO could not inspect its Compose services.");
         let detail = problem.detail.as_deref().unwrap_or_default();
         assert!(
             detail.contains("docker compose ps -a exited with status"),
@@ -5209,10 +5197,7 @@ fn main() {
                 services_that_exited(&Address::new(crate::engine::Engine::Docker, None), &root)
                     .expect_err("a malformed nonempty row cannot prove health");
 
-            assert_eq!(
-                problem.said,
-                "ORBO could not inspect its Compose services."
-            );
+            assert_eq!(problem.said, "ORBO could not inspect its Compose services.");
             assert!(
                 problem
                     .detail
@@ -5734,12 +5719,8 @@ fn main() {
         )];
         let processes = [live_process(8636, 7000, "20260909010101.000000-420")];
 
-        let found = super::verified_orbo_pids_listening_on(
-            listing,
-            &[3010, 3001],
-            &recorded,
-            &processes,
-        );
+        let found =
+            super::verified_orbo_pids_listening_on(listing, &[3010, 3001], &recorded, &processes);
 
         assert_eq!(found, vec![8636]);
     }
@@ -6003,8 +5984,7 @@ fn main() {
         )];
         let processes = [live_process(424242, 7000, "20260909020202.000000-420")];
 
-        let found =
-            super::verified_orbo_pids_listening_on(listing, &[3001], &recorded, &processes);
+        let found = super::verified_orbo_pids_listening_on(listing, &[3001], &recorded, &processes);
 
         assert!(found.is_empty(), "{found:?}");
     }
@@ -6019,8 +5999,7 @@ fn main() {
         ];
 
         let roots = super::verified_orbo_root_pids(&recorded, &processes);
-        let found =
-            super::verified_orbo_pids_listening_on(listing, &[3010], &recorded, &processes);
+        let found = super::verified_orbo_pids_listening_on(listing, &[3010], &recorded, &processes);
 
         assert_eq!(roots, vec![8636]);
         assert_eq!(found, vec![9000]);
@@ -6233,9 +6212,7 @@ fn main() {
             },
             live_process(42, 0, "reused"),
         ] {
-            assert!(
-                verified_orbo_root_pids(std::slice::from_ref(&recorded), &[live]).is_empty()
-            );
+            assert!(verified_orbo_root_pids(std::slice::from_ref(&recorded), &[live]).is_empty());
         }
     }
 
@@ -6656,10 +6633,7 @@ fn main() {
             root_from("  /home/me/ORBO  "),
             PathBuf::from("/home/me/ORBO")
         );
-        assert_eq!(
-            root_from("/home/me/ORBO\n"),
-            PathBuf::from("/home/me/ORBO")
-        );
+        assert_eq!(root_from("/home/me/ORBO\n"), PathBuf::from("/home/me/ORBO"));
         assert!(
             root_from(" /home/me/ORBO").has_root(),
             "a leading space turned an absolute path into a relative one"
@@ -6679,10 +6653,7 @@ fn main() {
             PathBuf::from(r"C:\Users\me\ORBO")
         );
         // And an ordinary path is handed back exactly as it was.
-        assert_eq!(
-            root_from("/home/me/ORBO"),
-            PathBuf::from("/home/me/ORBO")
-        );
+        assert_eq!(root_from("/home/me/ORBO"), PathBuf::from("/home/me/ORBO"));
     }
 
     #[test]
@@ -7335,10 +7306,7 @@ fn main() {
             return;
         }
         let path = PathFixture::with_fake_engine("computer-stop");
-        for (index, namespace) in ["orbo", "", "  ", " fixture-selected "]
-            .iter()
-            .enumerate()
-        {
+        for (index, namespace) in ["orbo", "", "  ", " fixture-selected "].iter().enumerate() {
             let (root, record) = computer_stop_root(
                 &path,
                 &format!("case-{index}"),

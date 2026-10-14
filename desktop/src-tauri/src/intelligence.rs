@@ -281,7 +281,9 @@ fn read_json(
         let mut shown = without_credentials(body.trim());
         shown.truncate(2000);
         crate::problem::Problem::with(
-            format!("The Intelligence service's {what} came back in a shape ORBO does not understand."),
+            format!(
+                "The Intelligence service's {what} came back in a shape ORBO does not understand."
+            ),
             format!("HTTP {status}\n{error}\n\n{shown}"),
         )
     })
@@ -693,8 +695,7 @@ pub fn projects_in(raw: &serde_json::Value) -> Vec<Project> {
 
 #[cfg(test)]
 mod tests {
-    const LEARNING_CONTAINER: &str =
-        r#"{"container":{"id":"orbo","projectId":42,"name":"ORBO"}}"#;
+    const LEARNING_CONTAINER: &str = r#"{"container":{"id":"orbo","projectId":42,"name":"ORBO"}}"#;
     const NO_LEARNING_CONTAINER: &str = r#"{"container":null}"#;
 
     #[test]

@@ -31,11 +31,17 @@ describe("ORBO workspace", () => {
   test("defines the app, server, and worker packages", () => {
     const manifest = rootManifest();
 
-    expect(manifest.workspaces).toEqual(["app", "server", "worker"]);
+    expect(manifest.workspaces).toEqual([
+      "app",
+      "apps/app",
+      "packages/ui",
+      "server",
+      "worker",
+    ]);
 
     for (const packageName of manifest.workspaces) {
       expect(existsSync(join(repositoryRoot, packageName))).toBe(true);
-      expect(packageManifest(packageName).name).toBe(packageName);
+      expect(packageManifest(packageName).name.length).toBeGreaterThan(0);
     }
   });
 

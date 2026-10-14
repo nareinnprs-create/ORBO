@@ -538,10 +538,7 @@ mod tests {
         })
         .expect_err("nonzero podman must fail");
 
-        assert!(
-            failure.contains("podman machine inspect orbo"),
-            "{failure}"
-        );
+        assert!(failure.contains("podman machine inspect orbo"), "{failure}");
         assert!(failure.contains("status 125"), "{failure}");
         assert!(failure.contains("stdout: stdout diagnostic"), "{failure}");
         assert!(failure.contains("stderr: stderr diagnostic"), "{failure}");
@@ -768,9 +765,7 @@ mod tests {
                 calls.push(args.iter().map(|arg| (*arg).to_string()).collect());
                 match args {
                     ["machine", "inspect", "orbo"] => Ok(inspect.clone()),
-                    ["machine", "set", "--user-mode-networking=true", "orbo"] => {
-                        Ok(String::new())
-                    }
+                    ["machine", "set", "--user-mode-networking=true", "orbo"] => Ok(String::new()),
                     ["machine", "start", "orbo"] => Ok(String::new()),
                     ["machine", "ssh", "orbo", "getent", "ahostsv4", "host.containers.internal"] => {
                         Ok("192.168.127.254 STREAM host.containers.internal\n".into())

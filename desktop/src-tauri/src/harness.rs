@@ -617,7 +617,10 @@ mod tests {
         let crate::env::PickedHarness::Installed { image, .. } = picked else {
             panic!("crewai should install a harness image");
         };
-        assert_eq!(image, "ghcr.io/nareinnprs-create/orbo-agent-crewai@sha256:abc");
+        assert_eq!(
+            image,
+            "ghcr.io/nareinnprs-create/orbo-agent-crewai@sha256:abc"
+        );
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -752,7 +755,10 @@ mod tests {
         else {
             panic!("crewai should install a harness image");
         };
-        assert_eq!(image, "ghcr.io/nareinnprs-create/orbo-agent-crewai@sha256:abc");
+        assert_eq!(
+            image,
+            "ghcr.io/nareinnprs-create/orbo-agent-crewai@sha256:abc"
+        );
         assert_eq!(port, 4202);
         assert!(!mastra);
         assert!(remote_agent_id.is_empty());

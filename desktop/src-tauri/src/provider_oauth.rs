@@ -193,8 +193,8 @@ pub fn begin(root: &Path, provider: &str) -> Result<Authorization, String> {
             )
         }
         "xai" => {
-            let client_id = configured("ORBO_XAI_MODEL_OAUTH_CLIENT_ID")
-                .unwrap_or_else(|| XAI_CLIENT.into());
+            let client_id =
+                configured("ORBO_XAI_MODEL_OAUTH_CLIENT_ID").unwrap_or_else(|| XAI_CLIENT.into());
             let body = response_json(
                 http()?
                     .post("https://auth.x.ai/oauth2/device/code")

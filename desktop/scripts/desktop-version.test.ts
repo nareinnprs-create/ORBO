@@ -200,7 +200,9 @@ test.each(["internal", "release"])(
     expect(
       JSON.parse(f.read("desktop/src-tauri/tauri.build-version.conf.json")),
     ).toEqual({
-      version,
+      // The bundle overlay must stay MSI/WiX-safe (numeric-only); the full
+      // internal identity lives in build-version.json and the plist keys.
+      version: "0.0.10",
       bundle: { macOS: { infoPlist: "build-version.plist" } },
     });
     const plist = f.read("desktop/src-tauri/build-version.plist");
