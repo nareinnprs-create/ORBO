@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="280" viewBox="0 0 720 280">
+    <defs><linearGradient id="orbital" x1="0%" y1="90%" x2="100%" y2="10%">
+      <stop offset="0%" stop-color="#8A3FFC"/>
+      <stop offset="24%" stop-color="#2F6BFF"/>
+      <stop offset="52%" stop-color="#00C2D4"/>
+      <stop offset="78%" stop-color="#F6C284"/>
+      <stop offset="100%" stop-color="#2F6BFF"/>
+    </linearGradient></defs><g transform="translate(0,5) scale(1.03)"><g transform="rotate(-12 120 120)"><ellipse cx="120" cy="120" rx="77" ry="68" fill="none" stroke="url(#orbital)" stroke-width="25" stroke-linecap="round"/><ellipse cx="120" cy="120" rx="77" ry="68" fill="none" stroke="url(#orbital)" stroke-width="25" opacity=".18" transform="translate(0 3)"/></g></g><text x="215" y="127" font-family="Montserrat, DejaVu Sans, sans-serif" font-size="72" font-weight="700" letter-spacing="1" fill="#080F14">ORBO</text><text x="220" y="184" font-family="Montserrat, DejaVu Sans, sans-serif" font-size="39" font-weight="300" letter-spacing="12" fill="#080F14">DIYA</text><rect x="220" y="208" width="126" height="4" rx="2" fill="url(#orbital)"/><text x="220" y="244" font-family="Montserrat, DejaVu Sans, sans-serif" font-size="17" letter-spacing="4" fill="#080F14">YOUR PERSONAL</text><text x="220" y="266" font-family="Montserrat, DejaVu Sans, sans-serif" font-size="17" letter-spacing="4" fill="#080F14">AI COMPANION</text></svg>

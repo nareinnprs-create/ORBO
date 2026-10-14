@@ -1,0 +1,55 @@
+# GKE. Cloud SQL, Workload Identity, Secret Manager through external-secrets, Gateway API.
+config:
+  initialAdminEmails: admin@example.com
+  intelligence:
+    apiUrl: https://api.intelligence.copilotkit.ai
+    gatewayWsUrl: wss://realtime.intelligence.copilotkit.ai
+  auth:
+    google:
+      clientId: example.apps.googleusercontent.com
+  publicUrl: https://orbo.example.com
+postgresql:
+  enabled: false
+database:
+  existingSecret: orbo-database
+serviceAccount:
+  annotations:
+    iam.gke.io/gcp-service-account: orbo@example-project.iam.gserviceaccount.com
+externalSecrets:
+  enabled: true
+  secretStoreRef:
+    name: gcp-secret-manager
+  data:
+    - secretKey: key-encryption-key
+      remoteRef:
+        key: orbo-key-encryption-key
+    # Sessions are signed with this. The server refuses to start when sign-in is configured and it
+    # is missing, so every provider store has to carry it.
+    - secretKey: better-auth-secret
+      remoteRef:
+        key: orbo-better-auth-secret
+    - secretKey: intelligence-api-key
+      remoteRef:
+        key: orbo-intelligence-api-key
+    - secretKey: google-client-secret
+      remoteRef:
+        key: orbo/google-client-secret
+    - secretKey: computer-token
+      remoteRef:
+        key: orbo/computer-token
+    - secretKey: license-token
+      remoteRef:
+        key: orbo-license-token
+# Gateway API rather than an Ingress, which the same chart supports without a second code path.
+ingress:
+  enabled: false
+httpRoute:
+  enabled: true
+  parentRefs:
+    - name: orbo-gateway
+      namespace: gateway-system
+  hostnames:
+    - orbo.example.com
+
+computers:
+  mode: shared

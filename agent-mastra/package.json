@@ -1,0 +1,12 @@
+{
+  "name": "@orbo/agent-mastra",
+  "license": "SEE LICENSE IN LICENSE",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@ai-sdk/anthropic": "*",
+    "@ai-sdk/openai": "*",
+    "@mastra/core": "*",
+    "mastra": "*"
+  }
+}

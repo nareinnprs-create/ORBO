@@ -1,0 +1,6 @@
+Montserrat — SIL Open Font License 1.1
+
+The Montserrat typeface is distributed under the SIL Open Font License, Version 1.1.
+Official project and license source: https://github.com/google/fonts/tree/main/ofl/montserrat
+
+The OFL permits use, study, modification and redistribution of the font software, including bundling and embedding with software, subject to the license terms. The fonts may not be sold by themselves. Include the full official OFL notice when redistributing these font files commercially; retrieve the current official OFL.txt from the project source above before publishing a redistributed package.

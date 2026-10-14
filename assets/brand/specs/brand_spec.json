@@ -1,0 +1,87 @@
+{
+  "brand_hierarchy": {
+    "parent": "OPRAIZ",
+    "product": "ORBO",
+    "secondary_name": "Diya"
+  },
+  "taglines": [
+    "Your Personal AI Companion.",
+    "Think. Remember. Plan. Act."
+  ],
+  "palette": {
+    "Obsidian": {
+      "hex": "#080F14",
+      "rgb": [
+        8,
+        15,
+        20
+      ]
+    },
+    "Deep Teal": {
+      "hex": "#006E7A",
+      "rgb": [
+        0,
+        110,
+        122
+      ]
+    },
+    "Rich Teal": {
+      "hex": "#00C2D4",
+      "rgb": [
+        0,
+        194,
+        212
+      ]
+    },
+    "Cinematic Blue": {
+      "hex": "#2F6BFF",
+      "rgb": [
+        47,
+        107,
+        255
+      ]
+    },
+    "Violet": {
+      "hex": "#8A3FFC",
+      "rgb": [
+        138,
+        63,
+        252
+      ]
+    },
+    "Copper": {
+      "hex": "#F6C284",
+      "rgb": [
+        246,
+        194,
+        132
+      ]
+    },
+    "Ivory": {
+      "hex": "#FFF9F1",
+      "rgb": [
+        255,
+        249,
+        241
+      ]
+    },
+    "Slate": {
+      "hex": "#667782",
+      "rgb": [
+        102,
+        119,
+        130
+      ]
+    }
+  },
+  "typography": {
+    "primary": "Montserrat",
+    "secondary": "Inter"
+  },
+  "logo_rules": {
+    "clear_space": "At least 1x visible ring stroke width",
+    "digital_icon_minimum_px": 24,
+    "print_icon_minimum_mm": 8
+  },
+  "status": "Working starter kit; reconstructed vector approximation, verify against approved master before commercial release."
+}
