@@ -41,7 +41,7 @@ const DIR_FILE_FLOORS: { dir: string; recursive: boolean; floor: number }[] = [
  * 95%, app 70% lines. A full-suite `bun test --coverage` run takes minutes and is too slow for
  * every push, so the gate does NOT measure the whole tree: one bounded `bun test --coverage` run
  * over a fixed probe set asserts per-file line floors on the files those probes are designed to
- * cover. The default gate stays fast — two small probe files, tens of tests, one extra run.
+ * cover. The default gate stays fast — three small probe files, tens of tests, one extra run.
  *
  * Bun's text reporter prints % Funcs / % Lines only; there is no branch column. The gate therefore
  * enforces lines. The branch targets (server 75%, governance 90%) are not asserted by any gate
@@ -63,7 +63,10 @@ const COVERAGE_PROBES: {
   expect: Record<string, CoverageArea>;
 }[] = [
   {
-    tests: ["server/tests/computer-gateway.test.ts"],
+    tests: [
+      "server/tests/computer-gateway.test.ts",
+      "server/tests/computer-handoff-contract.test.ts",
+    ],
     expect: {
       "server/src/computer/gateway.ts": "governance",
       "server/src/computer/client.ts": "server",

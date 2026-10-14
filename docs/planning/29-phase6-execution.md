@@ -1,9 +1,14 @@
 # 29 — Phase 6 Execution (PLAN §8.6: port OpenMuse screens into unified IA)
 
 > **Status: DRAFT pending reconciliation — research + planning only, no product code modified.**
-> Parallel workers may still be landing `27-app` / `28-gmail` and refining `23–26`;
-> this doc treats all other `docs/planning/` files as read-only snapshots taken 2026-10-14.
+> `27-phase6-app-inventory.md` + `28-phase6-gmail-calendar-inventory.md` have since landed
+> (on disk 2026-10-14 — the "absent" notes in §§2–5/N8/footer below are corrected in place);
+> this doc otherwise treats all other `docs/planning/` files as read-only snapshots taken 2026-10-14.
 > Reconcile against their FINAL versions before cutting Phase 6 work orders.
+> **Reconciliation 2026-10-14:** landed since draft — 27/28 inventories; `packages/ui` scaffold
+> (Button/Item + Dialog/Field/Input/Label/Select/Textarea/tokens); `apps/app` Expo placeholder shell;
+> DIYA `diya` seed row in `examples/orbo/agents.yaml`; coverage tripwire + floors in `scripts/test-ci.ts`.
+> Still-open owner gates: threads identity, spaces ownership, route freeze, `packages/ui` RN runtime, brand assets.
 > Phase 6 = PLAN.md §8 item 6: *"Port OpenMuse screens (Documents/Finance/Goals/Activity/Ideas)
 > into the unified IA."*
 
@@ -11,10 +16,11 @@
 (WS-04 browser/research, WS-09 work, WS-12 identity/admin, WS-13 finance slices);
 `23-phase6-documents-inventory.md`, `24-phase6-finance-inventory.md`,
 `25-phase6-goals-activity-inventory.md`, `26-phase6-openmuse-backend.md`.
-**Gaps noted explicitly:** `27-app` (OpenMuse app-screen inventory) and `28-gmail`
-(Gmail/Calendar connector inventory) **do not exist on disk yet** — §§2–5 below
-cite OpenMuse mobile/Google paths via `23/26` second-hand and must be re-verified
-once `27`/`28` land.
+**Gaps noted explicitly (STALE — corrected 2026-10-14):** `27-phase6-app-inventory.md`
+(OpenMuse app-screen inventory) and `28-phase6-gmail-calendar-inventory.md`
+(Gmail/Calendar connector inventory) now exist on disk — §§2–5 below
+cited OpenMuse mobile/Google paths via `23/26` second-hand and must be re-verified
+against landed `27`/`28` before work orders.
 
 **Unified IA homes (PLAN §3):** Home (DIYA) · Chat · **Spaces** (document library:
 Pages + Documents/PDF) · Agents · **Work** (activity + routines + goals/tracking +
@@ -72,7 +78,7 @@ P6-10→Identity/Surfaces (= 09 WS-12 single-owner slice).
 ```
 W0 design freeze (before any P6 work order)
   01 §9 #1 threads-vs-channels + #3 spaces ownership + notifications home (02 risk #11)
-  + C24 route freeze (finance/work viewer homes) + 27/28 landing check
+  + C24 route freeze (finance/work viewer homes) + 27/28 landed — re-verify check
         |
 W1 tables + auth (gates everything)
   P6-10 shim + P6-05 tables empty + P6-01 artifacts table + P6-04 monitors table
@@ -133,7 +139,7 @@ timestamp/owner mapping, R9 coverage floor). Deltas new or sharpened by 23–26:
 | N5 | Three failure counters conflated (25 R3) — new | `work_items` attempts vs routine fatigue vs monitor streak answer different questions | Keep all three counters; document ownership; regression test each threshold independently |
 | N6 | 771-line `computer.ts` interlock (26 R9) sharpens 09 R3 | Lease/stop/exec jail + stop-quarantine + receipts is the subtlest tree; clean-room rewrite loses safety | Port with `computer*.test.ts` + `prepare-lease-loss` or not at all; no partial port |
 | N7 | Sample-vs-live branching infects surfaces (26 R10) — new | `workspace.ts`/`service.ts` sample mode seeds mails/events behind the same code paths | Cut sample mode at the route boundary; ORBO fixtures replace seeded mails; demo determinism test |
-| N8 | `27-app` / `28-gmail` missing — new process risk | P6-08 card inventory and P6-09 Gmail depth (860-line client) estimated from `23/26` proxies, not the dedicated inventories | Freeze P6-08/P6-09 UI + send-path estimates as provisional; re-verify line refs once `27`/`28` land; server logic proceeds regardless |
+| N8 | `27-app` / `28-gmail` missing at draft time — **LANDED 2026-10-14** | P6-08 card inventory and P6-09 Gmail depth (860-line client) were estimated from `23/26` proxies, not the dedicated inventories | Re-verify P6-08/P6-09 UI + send-path line refs against landed `27`/`28` before work orders; server logic proceeds regardless |
 | N9 | Notifications homelessness blocks watches (25 R6, 02 risk #11) sharpens 09 W4 | Watch alerts + task-done fan-out have no resource home; P6-04 slice M6 cannot land | Decide notifications home in W0; until then watches run quiet (no fan-out) with backoff tests green |
 | N10 | pdf-lib/XFA/encrypted + font chain (23 R3–R4) — new supply risk | Third-party native dep; only text/checkbox fill; dropdown/radio inspect as `unsupported`; fill failures surface as font errors | Pin + Phase 9 license scan; preserve verbatim 422s; viewer renders (never fills) unsupported forms |
 
@@ -153,7 +159,7 @@ the per-platform picker contract (24 R1).
 3. **Notifications home** (02 risk #11) — blocks P6-04 alert fan-out (N9).
 4. **C24 route freeze**: finance home (Work artifact vs `work/finance` route, 24 Q1) + viewer routes — blocks P6-08 UI work; server logic proceeds regardless.
 5. **`records` keep-or-retire + `monitors`/`goals`/`ideas` table scope** (26 §5; 01 §8) — blocks P6-07 importer + P6-04 tables.
-6. **27/28 reconciliation sign-off** — confirm P6-08 card list and P6-09 client subset once the missing inventories land (N8).
+6. **27/28 reconciliation sign-off** — confirm P6-08 card list and P6-09 client subset against the landed inventories (N8).
 
 ### B. Defaults executing unless vetoed (PLAN §10.B)
 
@@ -171,7 +177,7 @@ native viewer parity beyond the gated split; R2 signing/store accounts; public A
 
 ---
 
-## 7. Appendix — IA mapping + test-port map (provisional pending 27/28)
+## 7. Appendix — IA mapping + test-port map (re-verify against landed 27/28)
 
 ### A. OpenMuse screen → ORBO IA home (PLAN §3; C24 confirms)
 
@@ -206,8 +212,8 @@ native viewer parity beyond the gated split; R2 signing/store accounts; public A
 | `apps/mobile/test/*` (8): keep `date-time` + `conversation-queue` logic only | `app/tests/`; drop RN-native + jev-actions | P6-08 |
 | `jev*` + `demo-model` + `telemetry` + `openbot` + `computer-e2b` + worker/computer-image | Drop — no ORBO home (26 §4) | — |
 
-Reconciliation checklist before work orders: 27 lands → confirm P6-08 card/route
-rows above; 28 lands → confirm P6-09 client-subset + send-path rows; 01 FINAL →
+Reconciliation checklist before work orders: 27 landed (2026-10-14) → confirm P6-08 card/route
+rows above; 28 landed (2026-10-14) → confirm P6-09 client-subset + send-path rows; 01 FINAL →
 threads (#1), spaces (#3), `records` (#2); 02 FINAL → canonical `/api/files` +
 alias list; 03 FINAL → `(tabs)/spaces` + `(tabs)/work` route freeze incl. finance
 home; 05 FINAL → picker + native-split scope; 06 FINAL → coverage floors + runner
@@ -218,5 +224,5 @@ rule; 22/09 deltas folded into §3 waves.
 *Provenance: `PLAN.md` §§3/6/8.6/9/10; `09-execution-plan.md` §§1–6 (WS-04/WS-09/WS-12/WS-13);
 `23-phase6-documents-inventory.md` §§1–5; `24-phase6-finance-inventory.md` §§1–6;
 `25-phase6-goals-activity-inventory.md` §§1–5; `26-phase6-openmuse-backend.md` §§1–6.
-`27-app` + `28-gmail` absent on disk 2026-10-14 — re-verify P6-08/P6-09 refs on landing.
+`27-app` + `28-gmail` landed on disk 2026-10-14 — re-verify P6-08/P6-09 refs against them before work orders.
 © Opraiz Technology Pvt Ltd · Developer: Narein Rao*

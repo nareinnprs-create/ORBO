@@ -10,13 +10,14 @@
 WS-02 agents/DIYA, WS-07 chat/threads/calls slices, waves W0–W5, risks R1–R10);
 `16-phase5-spaces-inventory.md`, `17-phase5-calls-inventory.md`,
 `18-phase5-review-inventory.md`, `19-phase5-dots-fold-mapping.md`.
-**Gaps noted explicitly:** `20-*diya*.md` and `21-*backend*.md` do **not** exist on disk
-at read time (planning dir holds 01–19 only) — DIYA-seed and backend-absorb slices
-below are therefore grounded in PLAN §3 (DIYA model, IA), §6 rows, 08 §§8/10, and
-09 WS-02/WS-10, not in dedicated inventories. Treat them as provisional until 20/21 land.
+**Gaps noted explicitly (STALE — corrected 2026-10-14):** `20-phase5-diya-seeding.md` and
+`21-phase5-opendots-backend.md` now exist on disk — DIYA-seed and backend-absorb slices
+below were grounded in PLAN §3 (DIYA model, IA), §6 rows, 08 §§8/10, and
+09 WS-02/WS-10, not in dedicated inventories. Re-verify P5-09/P5-10 against landed 20/21 before work orders.
 
 **Path convention:** PLAN §3 target names (`apps/server`, `apps/app`) map to the current
-tree (`server/src/`, `app/src/`) per 08 layout note — no `apps/` dir exists yet.
+tree (`server/src/`, `app/src/`) per 08 layout note — `apps/app` Expo placeholder shell
+has since landed (TODO stubs per 03 §5, 2026-10-14); no `apps/server` dir yet.
 Slices use current-tree paths; target names in parentheses.
 
 ---
@@ -96,7 +97,7 @@ P5-10 → Connections/Browser rows (08 §§2/8; 19 §3 `mcp_connections`/`comput
 - P5-09 — §6 Agents catalog + PLAN §3 DIYA boss model (orchestrates, opens group channels,
   owns responsibilities/goals, unified approvals/audit). Proof: 09 WS-02 acceptance (DIYA
   delegates to specialist, group-thread receipt); persona neutral, admin-editable (PLAN §10.B.18).
-  Provisional until 20 lands (seed content + catalog names need owner approval, §10.B.17).
+  `20-phase5-diya-seeding.md` has since landed (2026-10-14) — re-verify seed content + catalog names against it; owner approval per §10.B.17 still open. DIYA seed row (`diya`) also present in `examples/orbo/agents.yaml`.
 - P5-10 — §6 Connections: governed MCP + per-tool approval + read-only browser + Parallel +
   Channels Slack reach. Proof: 19 §3 (`mcp_connections`→vault, `mcp_approvals`/`mcp_actions`→
   rules+receipts) + 08 §§2/8 (browser worker, connectors). Respects 02 risk #4 (no raw routes).
@@ -170,7 +171,7 @@ contract and writes no product code, so it never blocks R1.
 | D10 | Plaintext `mcp_connections.token` cut-over (19 §6 R1; 09 R2) | Credential leak at import | Vault-first: encrypt→`credentials`, row holds pointer; assert no plaintext in storage/logs |
 | D11 | Dots/API shape collision (19 §4 C6: `GET /workspace` vs `/api/agents` envelope) | Compat mount temptation | ETL only, no `/dots/*` compat mount; canonical `GET /api/agents` unchanged |
 | D12 | Snapshot churn mid Bot→Agent rename (19 §4 C1/C6) | Roster/profile snapshots re-churn | Bot UI copy lands first; Dots strings map straight to final `Agent(s)` copy in one PR |
-| D13 | 20/21 missing at plan time (this doc header) | DIYA/backend slices rest on 09 + PLAN §3, not inventories | Mark P5-09/P5-10 provisional; reconcile against 20/21 at W0 exit before work orders |
+| D13 | 20/21 missing at plan time (this doc header) — **LANDED 2026-10-14** | DIYA/backend slices rested on 09 + PLAN §3, not inventories | Re-verify P5-09/P5-10 against landed 20/21 at W0 exit before work orders; provisional flag lifts once verified |
 
 ---
 
@@ -184,15 +185,15 @@ contract and writes no product code, so it never blocks R1.
 | G4 — Editor native shape (16 §5.1; 05 R6) | Tiptap adapter vs native editor? | A) markdown-first + Tiptap web-only (default) / B) native editor investment | P5-02 scope; P5-06 spike brief |
 | G5 — Voice caps + supervision (17 §4.1 a–c; §5.7/§5.9) | Adopt 15-min/6-turn caps + `active`/control-poll? | A) adopt with per-user scope (default lean) / B) drop with reason recorded | P5-04 contract; P5-05 supervision |
 | G6 — Instructions width (19 §6 R3) | Extend `roleDescription` to 2000 or truncate+review? | Owner picks; no silent cut | P5-08 importer |
-| G7 — DIYA catalog + persona (PLAN §10.B.17–18; 20 pending) | Agent names/roles + neutral DIYA prompt approved? | Default: neutral prompt, admin-editable; catalog draft approved | P5-09 seed content |
-| G8 — W0 reconciliation | 01–08 finals + incoming 20/21 reviewed? | 09 appendix checklist + D13 | Any Phase-5 work order |
+| G7 — DIYA catalog + persona (PLAN §10.B.17–18; 20 landed 2026-10-14 — re-verify) | Agent names/roles + neutral DIYA prompt approved? | Default: neutral prompt, admin-editable; catalog draft approved | P5-09 seed content |
+| G8 — W0 reconciliation | 01–08 finals + landed 20/21 reviewed? | 09 appendix checklist + D13 | Any Phase-5 work order |
 
 ---
 
 ## Reconciliation checklist (W0 exit)
 
 - [ ] G1–G8 recorded with owner sign-off; this doc lifted from DRAFT.
-- [ ] 20-diya + 21-backend landed; P5-09/P5-10 deltas folded.
+- [x] 20-diya + 21-backend landed (on disk 2026-10-14); still open: fold P5-09/P5-10 deltas.
 - [ ] 01 §9 #1/#3 finals match G1/G2; 03 route freeze matches G3; 08 voice home ruled (D8).
 - [ ] No product code changed by this plan; next step is work orders, not ports.
 

@@ -71,6 +71,22 @@ describe("a clone that has only run bun install", () => {
     }
   });
 
+  test("seeds the diya row with nothing set", () => {
+    // DIYA is built-in with a literal prompt: unlike the conditional rows below it, its block
+    // must not interpolate the environment, or a clone with no .env would boot without a boss.
+    const agents = readFileSync(
+      join(root, "examples/orbo/agents.yaml"),
+      "utf8",
+    );
+    const start = agents.indexOf("id: diya");
+    expect(start).toBeGreaterThan(-1);
+    const rest = agents.slice(start);
+    const nextRow = rest.indexOf("\n  - id:", 1);
+    const block = nextRow === -1 ? rest : rest.slice(0, nextRow);
+    expect(block).toContain("type: built-in");
+    expect(block).not.toContain("${");
+  });
+
   test("keeps every .env variant out of the repository", () => {
     // A backup taken beside .env carried live keys into a commit once.
     const ignored = readFileSync(join(root, ".gitignore"), "utf8");
