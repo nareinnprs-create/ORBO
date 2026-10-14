@@ -361,4 +361,4 @@ All motion must honor `prefers-reduced-motion` (existing pattern `styles.css:232
 | G9 | Accessibility target undefined (PLAN.md §10.D.37) | Compliance risk | Fix WCAG target in tokens (contrast ≥ 4.5:1) |
 | B1 | **Blocker:** `packages/ui` runtime decision (RN cross-platform vs web-only) is unstated | Blocks structure freeze | Resolve before Phase 3 UI build |
 | B2 | **Blocker:** brand assets (logo, final purple/blue-grey values, domain) not provided (PLAN.md §10.A.1) | Tokens/brand unshippable | Owner sign-off on §5 scales |
-| B3 | **Blocker:** fonts not yet vendored; OFL notice text not added to `NOTICE.md` | License/legal gate (PLAN.md §5) | Add font files + OFL entries before build |
+| B3 | **Cleared 2026-10-14:** Montserrat + Inter are vendored first-party under `assets/fonts/` (4 weights each + `LICENSE-*.txt`, SIL OFL 1.1) and `NOTICE.md` §4 carries the OFL 1.1 text. Remaining: wire Montserrat into app packaging (see G1). | — | — |

@@ -1,34 +1,49 @@
 ---
-name: agui-tauri-windows-signing
+name: orbo-tauri-windows-signing
 description: >
   Configure and troubleshoot Authenticode code signing for Tauri Windows
-  builds (.exe / .msi) using the AG-UI organization's DigiCert code-signing
-  certificate stored in Azure Key Vault (non-exportable RSA-HSM key), signed
+  builds (.exe / .msi) using an owner-provisioned code-signing
+  certificate stored in Azure Key Vault (non-exportable key), signed
   via AzureSignTool authenticated with GitHub OIDC. Covers tauri.conf.json
   signCommand wiring, the CI signing seam (mode gate: none | keyvault), the
   separation between Authenticode signing, Tauri updater (minisign) keys,
-  and NuGet package author signing, plus the Azure/Entra access model —
-  including what changes when the Tauri app lives in a DIFFERENT repository
-  than the existing NuGet signing lane. USE FOR: adding Windows signing to
-  a Tauri app, wiring the release workflow to the vault (same repo or
-  cross-repo), debugging signature, login, permission, or SmartScreen
-  failures, or answering "which cert / which key / which tool / which
-  access right signs what".
+  and NuGet package author signing, plus the Azure/Entra access model.
+  USE FOR: adding Windows signing to a Tauri app, wiring the release
+  workflow to the vault, debugging signature, login, permission, or
+  SmartScreen failures, or answering "which cert / which key / which tool /
+  which access right signs what".
 ---
 
 # Tauri Windows Signing with Azure Key Vault
 
+## Status: deferred until the owner provisions a vault
+
+ORBO is detached from its upstream origin. Windows signing is **deferred**:
+no vault, tenant, certificate, or federated credential is provisioned by
+this document. Everything below is a playbook for when the owner provisions
+them. Fill in the `<PLACEHOLDERS>` with the owner's values; do not invent
+credentials, IDs, or URLs.
+
+Conventions used in this skill:
+
+- Owner repository: `nareinnprs-create/ORBO` (private).
+- `<AZURE_KEY_VAULT_URL>` — owner's vault URL.
+- `<CODE_SIGNING_CERT_NAME>` — owner's certificate name in that vault.
+- `<AZURE_TENANT_ID>` / `<AZURE_SIGNING_CLIENT_ID>` — owner's Entra
+  tenant and federated app (client) IDs, stored as secrets/variables.
+- `<PUBLISHER_SUBJECT>` — owner's publisher subject (cert subject).
+
 ## Context: what signs what
 
-The org's signing infrastructure has **three independent mechanisms**. Never
+A typical signing setup has **up to four independent mechanisms**. Never
 conflate them — they use different keys, different tools, and different
 verification paths:
 
 | Mechanism | Key | Tool | Applies to |
 |---|---|---|---|
-| NuGet **author signature** | DigiCert cert, CN=Tawkit, Inc. — private key in Azure Key Vault (non-exportable, RSA-HSM) | `NuGetKeyVaultSignTool` | `*.nupkg` only |
-| **Authenticode** (this skill) | Same DigiCert cert, same vault | `AzureSignTool` | Windows PE binaries: `.exe`, `.dll`, `.msi` (incl. Tauri builds) |
-| Assembly strong-naming | `AGUI.snk` | MSBuild | .NET assemblies; unrelated to either signature |
+| NuGet **author signature** | Owner code-signing cert in Azure Key Vault (non-exportable key) | `NuGetKeyVaultSignTool` | `*.nupkg` only |
+| **Authenticode** (this skill) | Same owner cert, same vault | `AzureSignTool` | Windows PE binaries: `.exe`, `.dll`, `.msi` (incl. Tauri builds) |
+| Assembly strong-naming | Owner strong-name key file (e.g. `<KEY>.snk`) | MSBuild | .NET assemblies; unrelated to either signature |
 | Tauri **updater** signature | Tauri minisign key pair (NOT the vault cert) | `tauri signer` | Update manifests for `tauri-plugin-updater` |
 
 Additional facts that agents routinely get wrong:
@@ -37,18 +52,21 @@ Additional facts that agents routinely get wrong:
   The author signature is what flips a package to "signed" on the gallery;
   it is not needed for Authenticode at all.
 - Symbol packages (`*.snupkg`) are **intentionally not** author-signed.
-- The vault certificate: DigiCert Trusted G4 Code Signing RSA4096 SHA384
-  2021 CA1 issuer chain, OV validation. Because it is OV (not EV), Windows
-  SmartScreen reputation builds per-publisher over signed releases rather
-  than being granted instantly — an unsigned-looking warning on a brand-new
-  app is expected until reputation accrues, and is not a signing failure.
+- Code-signing certificates are commonly OV (not EV) validation. With OV,
+  Windows SmartScreen reputation builds per-publisher over signed releases
+  rather than being granted instantly — an unsigned-looking warning on a
+  brand-new app is expected until reputation accrues, and is not a signing
+  failure.
 - The private key **never leaves the HSM**. Every signature — NuGet or
   Authenticode — is a `keys/sign` operation executed inside the vault.
   Never attempt to export the key or generate a `.pfx`.
 
-Reference implementation for the NuGet lane (the pattern this skill mirrors):
-`.github/workflows/publish-release.yml` (signing step) and
-`sdks/dotnet/docs/signing.md` (design doc).
+ORBO reference implementation (current repo, no upstream paths): the
+protected signing job in `.github/workflows/desktop-signing.yml`, the
+`tauri.windows-signing.conf.json` overlay plus wrapper in
+`desktop/scripts/sign-windows.ps1`, and the operator doc in
+`docs/windows-signing.md`. When this skill says "the existing signing
+lane", it means that ORBO lane — not any upstream repository.
 
 ## Task: wire signing into a Tauri build
 
@@ -74,9 +92,8 @@ locally accessible key and cannot reach a Key Vault HSM.
 
 ### 2. Create the wrapper script
 
-`scripts/sign-tauri.ps1` — mirrors the NuGetKeyVaultSignTool step in
-`publish-release.yml` (same vault URL, cert name, token, digest, and
-timestamp authority):
+`scripts/sign-tauri.ps1` — mirror the existing signing lane's settings
+(same vault URL, cert name, token, digest, and timestamp authority):
 
 ```powershell
 param([string]$File)
@@ -105,7 +122,7 @@ Flag mapping from the NuGet lane (verify you kept them identical):
 ### 3. Wire the workflow with OIDC (no long-lived secrets)
 
 The release job authenticates to Azure with GitHub OIDC federation — the
-same pattern as the NuGet lane. Do not introduce a client secret.
+same pattern as the existing signing lane. Do not introduce a client secret.
 
 ```yaml
 - uses: azure/login@v2
@@ -127,13 +144,12 @@ workflow or repo.
 
 ### 4. Keep the mode gate (safe default)
 
-Follow the established `signing-mode` seam from `publish-release.yml`:
-the workflow input defaults to `none` (unsigned, safe to merge before any
-vault is provisioned) and only `keyvault` enables signing. For Tauri,
-implement the gate by either:
+Follow the established `signing-mode` seam: the workflow input defaults to
+`none` (unsigned, safe to merge before any vault is provisioned) and only
+`keyvault` enables signing. For Tauri, implement the gate by either:
 
-- merging a `tauri.windows.conf.json` overlay containing the `signCommand`
-  only in the release job, or
+- merging a signing overlay (e.g. `tauri.windows-signing.conf.json`)
+  containing the `signCommand` only in the release job, or
 - omitting `signCommand` from the base config and signing the built
   `.exe` / `.msi` as an explicit post-build step when mode = keyvault.
 
@@ -144,11 +160,13 @@ never fails (or silently signs) because the seam exists.
 
 The vault-side permission model is **identical** for NuGet signing and
 Authenticode. AzureSignTool requires exactly: **Key: Sign**, **Secret:
-Get**, **Certificate: Get** — the same three operations NuGetKeyVaultSignTool
-already performs on every release. Therefore:
+Get**, **Certificate: Get** — the same three operations a NuGet vault
+signing tool already performs on every release. Therefore, when both lanes
+share one vault and one identity:
 
 - **No new Azure RBAC role assignments** are needed (existing Key Vault
-  Crypto User, or legacy access policy, already covers the operations).
+  Crypto User / Certificate User coverage, or legacy access policy, already
+  covers the operations).
 - **No vault configuration changes** — same vault, same certificate, same
   `keys/sign` operation.
 - **No new access policies, no key export, no `.pfx` generation.**
@@ -160,24 +178,24 @@ cover.
 
 ### Same repo / same environment → change nothing
 
-If the Tauri signing job runs in `ag-ui-protocol/ag-ui` under the same
-environment or ref as the existing NuGet signing job, the existing
-federated credential covers it. The existing `AZURE_SIGNING_CLIENT_ID`
-and `AZURE_TENANT_ID` just work.
+If the Tauri signing job runs in `nareinnprs-create/ORBO` under the same
+environment or ref as the existing signing job, the existing
+federated credential covers it. The existing `<AZURE_SIGNING_CLIENT_ID>`
+and `<AZURE_TENANT_ID>` just work.
 
 ### Different repo → add one federated credential
 
 Federated credential subjects are **exact-match only** — no wildcards, no
 org-wide `repo:org/*` coverage. A credential scoped to
-`repo:ag-ui-protocol/ag-ui:...` does not cover any other repository. On
-the SAME app registration the NuGet lane uses, add a new federated
-credential:
+`repo:nareinnprs-create/ORBO:...` does not cover any other repository. On
+the SAME app registration the existing signing lane uses, add a new
+federated credential:
 
 - **Issuer:** `https://token.actions.githubusercontent.com`
 - **Audience:** `api://AzureADTokenExchange`
 - **Subject:** the new repo's token subject, e.g.
-  `repo:other-org/tauri-app:environment:release` or
-  `repo:other-org/tauri-app:ref:refs/heads/main`
+  `repo:<owner>/<tauri-repo>:environment:release` or
+  `repo:<owner>/<tauri-repo>:ref:refs/heads/main`
 
 Subject format caveat (important for 2026+): repositories created after
 July 15, 2026 emit an **immutable subject format** by default —
@@ -197,7 +215,7 @@ In the OTHER repository:
 
 1. Add the federated credential on the existing app registration (above).
 2. Set repo secrets/variables: `AZURE_TENANT_ID`, `AZURE_SIGNING_CLIENT_ID`
-   (same values as the ag-ui repo), plus `AZURE_KEY_VAULT_URL` and
+   (same values as the owner repo), plus `AZURE_KEY_VAULT_URL` and
    `CODE_SIGNING_CERT_NAME`. Secrets do NOT share across repos — either
    recreate them per repo, or hoist the non-sensitive values (tenant ID,
    client ID, vault URL, cert name) to organization-level Actions
@@ -211,23 +229,23 @@ In the OTHER repository:
 ### Blast radius: shared identity vs separate identity
 
 Adding the credential to the existing app registration means the Tauri
-repo shares the exact identity that can invoke `keys/sign` on the org's
+repo shares the exact identity that can invoke `keys/sign` on the owner's
 code-signing key: anyone who can trigger the signing job in that repo can
-sign anything with the Tawkit cert. Since the cert is OV, SmartScreen
-reputation accrues to the shared publisher — a compromised signing job in
-any repo damages the org's whole signing reputation. Mitigations that cost
-nothing in Azure:
+sign anything with the owner cert. Since the cert is typically OV,
+SmartScreen reputation accrues to the shared publisher — a compromised
+signing job in any repo damages the owner's whole signing reputation.
+Mitigations that cost nothing in Azure:
 
 - Scope the federated credential to a **protected environment** (subject
   `...:environment:release`) with required reviewers, rather than a plain
   branch ref, so signing only runs after approval.
 - Keep the `signing-mode: none | keyvault` gate in the new repo, matching
-  the ag-ui seam, so unprovisioned PRs can never trigger signing.
+  the ORBO seam, so unprovisioned PRs can never trigger signing.
 
 If isolation is required instead, create a SEPARATE app registration for
 the Tauri repo — this is the one variant that DOES require new Azure
 access rights, because the new service principal must be granted Key Vault
-Crypto User on the vault manually.
+signing/cert-read rights on the vault manually.
 
 ## Verification
 
@@ -240,8 +258,9 @@ signtool verify /pa /v /all path\to\App.exe
 # PowerShell alternative
 Get-AuthenticodeSignature path\to\App.exe | Format-List
 
-# Expected: Status Valid, SignerCertificate subject CN=Tawkit, Inc.,
-# TimeStamperCertificate from DigiCert, timestamped within the cert validity.
+# Expected: Status Valid, SignerCertificate subject <PUBLISHER_SUBJECT>,
+# TimeStamperCertificate from the timestamp authority, timestamped within
+# the cert validity.
 ```
 
 For NuGet packages (separate lane, same vault):
@@ -254,7 +273,7 @@ Bringing a new repo online, in order:
 3. `azure/login`, then read-only smoke test:
    `az keyvault certificate show --vault-name <vault> --name <cert>`.
 4. If the smoke test passes, `keys/sign` will pass too — the sign
-   permission is already proven by every NuGet release.
+   permission is already proven by every vault-backed release.
 5. Full `tauri build` with signing enabled.
 
 ## Failure modes and diagnosis
@@ -277,7 +296,7 @@ Bringing a new repo online, in order:
 - **403 on sign in a NEW repo but not the old one**: unexpected — same SPN,
   same operations. Check whether someone created a separate app registration
   for the new repo instead of reusing the existing one; if so, that SPN
-  needs Key Vault Crypto User on the vault.
+  needs signing/cert-read rights on the vault.
 - **Signature valid locally but SmartScreen still warns**: expected for OV
   certificates on new apps. It is a reputation state, not a defect — do not
   "fix" it by changing certificates or re-signing repeatedly.
