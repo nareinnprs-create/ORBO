@@ -38,7 +38,7 @@
         ]
       }
     },
-    "targets": ["dmg", "nsis", "appimage", "deb", "rpm"],
+    "targets": ["dmg", "msi", "nsis", "appimage", "deb", "rpm"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -50,5 +50,17 @@
     "category": "DeveloperTool",
     "shortDescription": "Run ORBO on your own machine",
     "longDescription": "ORBO Desktop installs the container engine, raises the stack, and keeps it running."
+  },
+  "plugins": {
+    "deep-link": {
+      "$comment": "Desktop scheme mirrors the unified app scheme in apps/app/app.json; identifier ai.orbo.desktop per PLAN.md 10.B.12.",
+      "desktop": { "schemes": ["orbo"] }
+    },
+    "updater": {
+      "active": false,
+      "pubkey": "",
+      "endpoints": [],
+      "$comment": "TODO (PLAN.md 10.B.14): updater domain undecided - add the release endpoint URL to endpoints once chosen; do not invent a URL. Keep active=false until then."
+    }
   }
 }

@@ -28,13 +28,17 @@ Internal desktop artifacts use `X.Y.Z-internal.g<commit>` so testers can identif
 revision. Both desktop CI and protected Windows signing prepare this version before compilation
 and packaging. The artifact includes `build-version.json` with the full commit and release version.
 
-To build locally, from the repository root:
+To build locally for macOS, from the repository root:
 
 ```sh
 bun desktop/scripts/desktop-version.ts internal
 cd desktop
 APPLE_SIGNING_IDENTITY=- bun run tauri build --config src-tauri/tauri.build-version.conf.json --bundles dmg
 ```
+
+Desktop CI builds per-OS bundles from the same tree: `dmg` on macOS,
+`msi` on Windows, `appimage` + `deb` on Linux. The protected Windows
+signing job instead builds `--bundles nsis` with the signing overlay.
 
 Use `release` instead of `internal` to prepare the plain release version. This only builds an
 artifact; it does not publish a release. macOS keeps numeric system version fields and stores
@@ -138,7 +142,9 @@ publish rather than the proposal, which is why the release PR arriving without i
 not matter: a pull request opened by a workflow does not trigger them.
 
 **No secrets are required to release.** CI and both release workflows use only the built-in
-`GITHUB_TOKEN`. The desktop build workflows also read `ORBO_GOOGLE_MODEL_OAUTH_CLIENT_SECRET`.
+`GITHUB_TOKEN`. The desktop build workflows additionally read the Google model OAuth
+values (`ORBO_GOOGLE_MODEL_OAUTH_CLIENT_ID` and `ORBO_GOOGLE_MODEL_OAUTH_QUOTA_PROJECT`
+variables plus the `ORBO_GOOGLE_MODEL_OAUTH_CLIENT_SECRET` secret).
 
 ## The one thing CI cannot do
 

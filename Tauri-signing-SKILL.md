@@ -1,13 +1,15 @@
 ---
 name: orbo-tauri-windows-signing
 description: >
-  Configure and troubleshoot Authenticode code signing for Tauri Windows
-  builds (.exe / .msi) using an owner-provisioned code-signing
-  certificate stored in Azure Key Vault (non-exportable key), signed
-  via AzureSignTool authenticated with GitHub OIDC. Covers tauri.conf.json
-  signCommand wiring, the CI signing seam (mode gate: none | keyvault), the
-  separation between Authenticode signing, Tauri updater (minisign) keys,
-  and NuGet package author signing, plus the Azure/Entra access model.
+   Configure and troubleshoot Authenticode code signing for Tauri Windows
+   builds (signed `orbo-desktop.exe` payload + NSIS `*-setup.exe` installer;
+   Desktop CI separately builds an unsigned `.msi`) using the provisioned
+   code-signing certificate stored in Azure Key Vault (non-exportable key),
+   signed via AzureSignTool authenticated with GitHub OIDC. Covers
+   tauri.conf.json signCommand wiring, the CI signing seam (mode gate:
+   none | keyvault), the separation between Authenticode signing, Tauri
+   updater (minisign) keys, and NuGet package author signing, plus the
+   Azure/Entra access model.
   USE FOR: adding Windows signing to a Tauri app, wiring the release
   workflow to the vault, debugging signature, login, permission, or
   SmartScreen failures, or answering "which cert / which key / which tool /
@@ -16,21 +18,28 @@ description: >
 
 # Tauri Windows Signing with Azure Key Vault
 
-## Status: deferred until the owner provisions a vault
+## Status: provisioned for ORBO — playbook for additional repos
 
-ORBO is detached from its upstream origin. Windows signing is **deferred**:
-no vault, tenant, certificate, or federated credential is provisioned by
-this document. Everything below is a playbook for when the owner provisions
-them. Fill in the `<PLACEHOLDERS>` with the owner's values; do not invent
-credentials, IDs, or URLs.
+ORBO's signing lane is **provisioned and live**: DigiCert certificate
+`code-signing` in vault `cpk-signing-kv`, GitHub environment
+`windows-signing`, federated credential
+`desktop/signing/azure-federation.json`, operator doc
+`docs/windows-signing.md`. That lane's exact values live in
+`docs/windows-signing.md` and the `windows-signing` environment variables —
+do not copy them into other repos' configs.
+
+Everything below is still a playbook, but for **additional repositories**:
+fill in the `<PLACEHOLDERS>` with that repo's values; do not invent
+credentials, IDs, or URLs, and do not reuse ORBO's environment-scoped
+federated credential subject for another repo.
 
 Conventions used in this skill:
 
 - Owner repository: `nareinnprs-create/ORBO` (private).
 - `<AZURE_KEY_VAULT_URL>` — owner's vault URL.
 - `<CODE_SIGNING_CERT_NAME>` — owner's certificate name in that vault.
-- `<AZURE_TENANT_ID>` / `<AZURE_SIGNING_CLIENT_ID>` — owner's Entra
-  tenant and federated app (client) IDs, stored as secrets/variables.
+- `<AZURE_TENANT_ID>` / `<AZURE_CLIENT_ID>` — owner's Entra
+  tenant and federated app (client) IDs, stored as environment variables.
 - `<PUBLISHER_SUBJECT>` — owner's publisher subject (cert subject).
 
 ## Context: what signs what
@@ -72,40 +81,62 @@ lane", it means that ORBO lane — not any upstream repository.
 
 ### 1. Point `signCommand` at a wrapper script
 
-In `tauri.conf.json`, override the default `signtool.exe` invocation.
-Tauri calls this command once per binary **and** once per installer,
-substituting `%1` with each file path:
+In a signing overlay (ORBO: `desktop/src-tauri/tauri.windows-signing.conf.json`,
+kept out of the base config so ordinary builds stay unsigned), override the
+default `signtool.exe` invocation. Tauri calls this command once per binary
+**and** once per installer, substituting `%1` with each file path. Paths in
+the overlay are relative to `desktop/src-tauri/`:
 
 ```json
 {
   "bundle": {
+    "targets": ["nsis"],
     "windows": {
-      "signCommand": "pwsh ./scripts/sign-tauri.ps1 %1"
+      "signCommand": {
+        "cmd": "pwsh",
+        "args": [
+          "-NoProfile",
+          "-NonInteractive",
+          "-File",
+          "../scripts/sign-windows.ps1",
+          "%1"
+        ]
+      }
     }
   }
 }
 ```
 
-Do NOT configure the legacy `certificateThumbprint` / `digestAlgorithm` /
+Do NOT name the overlay `tauri.windows.conf.json`: Tauri automatically merges
+that filename into every Windows build. Do NOT configure the legacy
+`certificateThumbprint` / `digestAlgorithm` /
 `timestampUrl` fields — those expect a locally installed certificate with a
 locally accessible key and cannot reach a Key Vault HSM.
 
 ### 2. Create the wrapper script
 
-`scripts/sign-tauri.ps1` — mirror the existing signing lane's settings
-(same vault URL, cert name, token, digest, and timestamp authority):
+`desktop/scripts/sign-windows.ps1` — the existing signing lane's wrapper
+(gated on `WINDOWS_SIGNING=keyvault`, same vault URL, cert name, digest,
+and timestamp authority). It requests a fresh Key Vault token on **each**
+invocation (Tauri may spend a long time building before it signs), masks it
+in logs, and clears it afterward — the token never lands in `GITHUB_ENV`,
+outputs, or artifacts:
 
 ```powershell
-param([string]$File)
-azuresigntool sign `
+param([Parameter(Mandatory)][string]$Path)
+if ($env:WINDOWS_SIGNING -ne 'keyvault') { throw 'Signing requires WINDOWS_SIGNING=keyvault.' }
+$env:AZURE_ACCESS_TOKEN = az account get-access-token `
+  --resource https://vault.azure.net --query accessToken --output tsv --only-show-errors
+Write-Host "::add-mask::$env:AZURE_ACCESS_TOKEN"
+AzureSignTool.exe sign `
   -fd sha256 `
   -tr http://timestamp.digicert.com `
   -td sha256 `
   -kvu $env:AZURE_KEY_VAULT_URL `
   -kvc $env:CODE_SIGNING_CERT_NAME `
   -kva $env:AZURE_ACCESS_TOKEN `
+  -d ORBO `
   $File
-if ($LASTEXITCODE -ne 0) { throw "Signing failed for $File" }
 ```
 
 Flag mapping from the NuGet lane (verify you kept them identical):
@@ -121,20 +152,24 @@ Flag mapping from the NuGet lane (verify you kept them identical):
 
 ### 3. Wire the workflow with OIDC (no long-lived secrets)
 
-The release job authenticates to Azure with GitHub OIDC federation — the
-same pattern as the existing signing lane. Do not introduce a client secret.
+The signing job authenticates to Azure with GitHub OIDC federation — the
+same pattern as the existing signing lane (ORBO:
+`.github/workflows/desktop-signing.yml` `sign` job, `azure/login` v3.1.0
+pinned by SHA, pinned AzureSignTool 7.0.1 executable verified by SHA-256).
+Do not introduce a client secret.
 
 ```yaml
-- uses: azure/login@v2
+- uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
   with:
-    client-id: ${{ secrets.AZURE_SIGNING_CLIENT_ID }}   # federated to GH OIDC
-    tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-    allow-no-subscriptions: true
-- run: dotnet tool install --global AzureSignTool
-- run: |
-    $env:AZURE_ACCESS_TOKEN = (az account get-access-token `
-      --resource https://vault.azure.net --query accessToken -o tsv)
-    npm run tauri build
+    client-id: ${{ vars.AZURE_CLIENT_ID }}   # federated to GH OIDC
+    tenant-id: ${{ vars.AZURE_TENANT_ID }}
+    subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+- run: bun scripts/desktop-version.ts internal
+  working-directory: desktop
+- run: bun run tauri build --config src-tauri/tauri.windows-signing.conf.json --config src-tauri/tauri.build-version.conf.json --bundles nsis
+  working-directory: desktop
+  env:
+    WINDOWS_SIGNING: keyvault
 ```
 
 The workflow job MUST declare `permissions: id-token: write` (with
@@ -180,8 +215,8 @@ cover.
 
 If the Tauri signing job runs in `nareinnprs-create/ORBO` under the same
 environment or ref as the existing signing job, the existing
-federated credential covers it. The existing `<AZURE_SIGNING_CLIENT_ID>`
-and `<AZURE_TENANT_ID>` just work.
+federated credential covers it. The existing `AZURE_CLIENT_ID`
+and `AZURE_TENANT_ID` just work.
 
 ### Different repo → add one federated credential
 
@@ -214,17 +249,19 @@ prefer it when a third or fourth signing repo becomes likely.
 In the OTHER repository:
 
 1. Add the federated credential on the existing app registration (above).
-2. Set repo secrets/variables: `AZURE_TENANT_ID`, `AZURE_SIGNING_CLIENT_ID`
+2. Set repo variables: `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`
    (same values as the owner repo), plus `AZURE_KEY_VAULT_URL` and
-   `CODE_SIGNING_CERT_NAME`. Secrets do NOT share across repos — either
+   `CODE_SIGNING_CERT_NAME`. Values do NOT share across repos — either
    recreate them per repo, or hoist the non-sensitive values (tenant ID,
    client ID, vault URL, cert name) to organization-level Actions
    variables so both repos read one source of truth.
 3. Create the signing environment (e.g., `release`) if the credential
    subject is environment-scoped, and apply protection rules to it.
 4. Declare `permissions: id-token: write` on the signing job.
-5. Install AzureSignTool in the job: `dotnet tool install --global AzureSignTool`.
-6. Add the `tauri.conf.json` signCommand + wrapper script (repo-local).
+5. Install AzureSignTool in the job the way the ORBO lane does: download the
+   pinned `AzureSignTool` release executable and verify its SHA-256 before use.
+6. Add the signing overlay (`tauri.windows-signing.conf.json`, never
+   `tauri.windows.conf.json`) + wrapper script (repo-local).
 
 ### Blast radius: shared identity vs separate identity
 
@@ -288,8 +325,10 @@ Bringing a new repo online, in order:
 - **"signCommand" not invoked / binaries unsigned**: check that the config
   landed under `bundle.windows` (not a v1-style top-level `windows` key),
   and that the command exits 0 — a non-zero exit fails the bundle step.
-- **AzureSignTool not found**: it must be installed as a `dotnet tool` on
-  the runner in the same job that runs the build.
+- **AzureSignTool not found**: the ORBO lane downloads the pinned
+  `AzureSignTool` release executable and verifies its SHA-256 in the same
+  job that runs the build — replicate that rather than installing a
+  floating `dotnet tool` version.
 - **401 / invalid token from the vault**: the access token must be scoped
   to `https://vault.azure.net` (Key Vault resource), not Azure Graph or
   management endpoints. Re-check the `--resource` in the token command.

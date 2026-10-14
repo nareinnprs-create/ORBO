@@ -939,6 +939,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Requires Windows SeSecurityPrivilege/elevation (Set-Acl SetOwner); privileged CI still runs it via `cargo test -- --ignored`.
     fn credential_replacement_waits_for_existing_rotation_owner() {
         let root = crate::test_support::temp_root("provider-oauth-replacement");
         let tokens = serde_json::json!({"access_token":"synthetic", "refresh_token":"synthetic-refresh", "expires_in":3600});

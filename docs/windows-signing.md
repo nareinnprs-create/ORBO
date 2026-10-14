@@ -9,9 +9,11 @@ builds ORBO and its NSIS installer with the existing DigiCert certificate in
 Azure Key Vault. It retains verified binaries and signature evidence as Actions
 artifacts for 14 days. It does not create or publish a release.
 
-Ordinary Desktop CI and fork PR builds remain unsigned. The
+Ordinary Desktop CI (which builds the Windows `msi`) and fork PR builds remain
+unsigned. The
 `tauri.windows-signing.conf.json` overlay is passed explicitly to Tauri only by
-the protected signing job. Do not rename it `tauri.windows.conf.json`: Tauri
+the protected signing job, alongside the generated `tauri.build-version.conf.json`
+overlay (`--bundles nsis`). Do not rename it `tauri.windows.conf.json`: Tauri
 automatically merges that filename into every Windows build.
 
 ## Request a signed validation build
@@ -74,7 +76,7 @@ cover these operations; Crypto User alone does not grant certificate read access
 Reuse the existing certificate and permissions where already provisioned. No
 client secret, exported private key, PFX, or Tauri updater signing key is needed.
 
-The workflow pins Azure Login and AzureSignTool 7.0.1, checks the downloaded
+The workflow pins Azure Login (v3.1.0) and AzureSignTool 7.0.1, checks the downloaded
 tool's SHA-256, and obtains Key Vault access tokens through GitHub OIDC. The
 wrapper refreshes the token for each signing invocation, registers it for log
 masking, and clears its process environment afterward. Tokens are never written
