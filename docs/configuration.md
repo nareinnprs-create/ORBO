@@ -899,7 +899,7 @@ message saying which file wanted it, rather than leaving a Bot pointed at an add
 A coworker may also be one file of its own, in an `agents/` directory beside `agents.yaml`. Both are
 read, and a package that keeps every coworker in `agents.yaml` is unchanged.
 
-The shipped package starts with two coworkers, General Assistant and Knowledge, both in `agents.yaml`.
+The shipped package starts with three coworkers, General Assistant, Knowledge and DIYA, all in `agents.yaml`.
 Its other two entries, Risk Analyst and the picked harness, register only when their endpoints are
 configured. Ten more are in `catalog/`, which is not read. Copy one into `agents/` to add it:
 
@@ -948,9 +948,10 @@ channels:
 Each channel requires `id`, `name`, `description`, `permitted_agents`, and `allowed_groups`. Every `permitted_agents` entry must match an agent id. A channel `id` declared twice, or an agent listed twice in one channel, stops the server.
 
 `allowed_groups` is validated and stored, and nothing reads it. It decides nothing today, and a
-deployment that writes one must not treat it as an access control. Both halves of that control are
-missing, not one: `users.groups` exists as a column and no sign-in path, claim mapping or admin
-screen ever populates it, so there is nothing for a channel's list to be compared against. Channel
+deployment that writes one must not treat it as an access control. `users.groups` is populated
+today only by SCIM directory provisioning, which per-group capability switches and network policies
+read — no sign-in path, claim mapping or admin screen writes it, and nothing compares a channel's
+list against it. Channel
 access is decided by membership alone — every channel route resolves the caller's row in
 `channel_memberships` and refuses without it.
 

@@ -79,7 +79,9 @@ The clone commands are:
 The helper preserves custom targets and refuses to replace an existing INTELLIGENCE_API_KEY.
 For fresh self-hosted setup, set INTELLIGENCE_API_URL to its HTTPS API origin (or HTTP on
 localhost) and run only
-bun scripts/setup-learning.ts after bun install; skip the managed npx commands. Chrome or Edge
+bun scripts/setup-learning.ts after bun install; skip the managed npx commands. It writes
+the API URL, the key and the container, not INTELLIGENCE_GATEWAY_WS_URL, so set that one
+to the same deployment yourself. Chrome or Edge
 must be installed. Sign in through the isolated browser window and choose an accessible project;
 the helper creates or reuses orbo and writes that project's new runtime key and assignment.
 Existing key-only setups use authenticated Intelligence administration to create a container and
@@ -146,7 +148,7 @@ WHAT YOU MUST NOT DO FOR THEM
 FAILURES YOU WILL ACTUALLY SEE
 The server refuses to start rather than running half-configured. The message names the variable.
 
-- "CopilotKit Intelligence is required and is not configured. Missing: ..."
+- "ORBO Intelligence is required and is not configured. Missing: ..."
   Almost always INTELLIGENCE_API_KEY was skipped.
 
 - "No identity provider is configured. Set GOOGLE_OAUTH_* ... or set ORBO_SINGLE_USER=true"
@@ -174,10 +176,10 @@ not enough for the main path because it does not prove browser tools or componen
 
 WHEN THEY WANT TO MAKE IT THEIRS
 
-The Bots, channels and skills are configuration: `examples/fintech` is a worked example pointed at
+The Bots, channels and skills are configuration: `examples/orbo` is a worked example pointed at
 by TENANT_PACKAGE_DIR. Copy it, edit `agents.yaml`, and point TENANT_PACKAGE_DIR at the copy.
 The server runs from `server/`, so TENANT_PACKAGE_DIR is relative to that; the default is
-`../examples/fintech`, not `examples/fintech`.
+`../examples/orbo`, not `examples/orbo`.
 
 Further reading: README.md, docs/development.md, docs/deployment.md, and docs/configuration.md for
 every variable.

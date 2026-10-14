@@ -52,7 +52,8 @@ cannot be renamed without rewriting the runtime; they are documented here as req
 - **CopilotKit Intelligence** — durable threads and memory persistence. Closed managed service.
   https://www.copilotkit.ai · https://intelligence.copilotkit.ai
 - **CopilotKit SDKs** — `@copilotkit/runtime`, `@copilotkit/react-core`, `@copilotkit/react-native`,
-  `@copilotkit/a2ui-renderer`, `@copilotkit/channels`, `@copilotkit/aimock`.
+  `@copilotkit/a2ui-renderer`, `@copilotkit/aimock` (direct), plus `@copilotkit/channels-{core,slack,teams,intelligence,ui}`
+  (transitive via `@copilotkit/runtime`; no first-party manifest declares them).
 - **AG-UI protocol** — `@ag-ui/core`, `@ag-ui/client` (https://github.com/ag-ui-protocol/ag-ui).
 - **Parallel Search MCP** — public-web research (https://search.parallel.ai/mcp).
 - **Composio** — brokered app integrations (https://composio.dev).
@@ -158,6 +159,111 @@ GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL DAMAGES, WHETHER IN AN 
 CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF THE USE OR INABILITY TO USE THE FONT
 SOFTWARE OR FROM OTHER DEALINGS IN THE FONT SOFTWARE.
 ```
+
+---
+
+## 5. Direct dependency license inventory
+
+This section is the dependency license audit required by the product plan
+(PLAN.md §10.D.31). It enumerates the direct, first-party-shipped dependencies
+behind the §3 summary. Convention follows §3: attributions with the license
+name — no new full texts are needed because every direct dependency is
+permissively licensed (MIT / Apache-2.0 / ISC / Unlicense / OFL-1.1, or
+dual-licensed with a permissive option); the MIT and OFL full texts already
+appear in §1 and §4.
+
+Method: each npm license below is the `license` field from the package's
+published metadata, read from the installed `node_modules` store backing
+`bun.lock` (or from the public npm registry for the `mobile/` set, which is
+declared but not part of the bun workspace install). Each Rust crate license
+is the `license` field from crates.io metadata. A full transitive scan of the
+installed store (1,590 packages) found no GPL/AGPL/LGPL-only packages; the
+copyleft-adjacent transitive cases are recorded under §5.7 with their
+permissive option or build-time-only status. All transitive licenses accompany
+their installed packages per §3.
+
+### 5.1 Web app (`app/`)
+
+- **React / React DOM** 19 (MIT).
+- **AG-UI** — `@ag-ui/core` (MIT).
+- **CopilotKit** — `@copilotkit/react-core`, `@copilotkit/a2ui-renderer` (MIT).
+- **TanStack** — Router, Query, Form, Hotkeys (MIT).
+- **Auth** — `better-auth`, `@better-auth/sso` (MIT).
+- **UI** — `@base-ui/react`, `@shadcn/react`, `shadcn`,
+  `@tabler/icons-react`, `boring-avatars`, `embla-carousel-react`, `motion`,
+  `react-use-measure`, `clsx`, `tailwind-merge`, `tw-animate-css` (MIT);
+  `class-variance-authority` (Apache-2.0).
+- **Content** — `streamdown` (Apache-2.0); `prompt-area` (MIT).
+- **Fonts** — `@fontsource-variable/inter` (OFL-1.1; covered by the §4 license text).
+- **Validation** — `zod` (MIT).
+
+### 5.2 Server (`server/`)
+
+- **HTTP** — `hono` (MIT).
+- **AG-UI** — `@ag-ui/client`, `@ag-ui/core` (MIT); `@ag-ui/mastra` (Apache-2.0).
+- **CopilotKit runtime** — `@copilotkit/runtime` (MIT).
+- **Mastra** — `@mastra/core`, `@mastra/client-js` (Apache-2.0).
+- **Auth** — `better-auth` and `@better-auth/*` adapters (`drizzle-adapter`,
+  `electron`, `expo`, `scim`, `sso`) (MIT).
+- **Integrations** — `@modelcontextprotocol/sdk`, `twilio` (MIT);
+  `@composio/core` (ISC).
+- **Data** — `drizzle-orm` (Apache-2.0); `postgres` driver (Unlicense).
+- **Policy / scheduling** — `cel-js`, `cron-parser` (MIT).
+- **Infra** — `@opentelemetry/*` (`api-logs`, `exporter-logs-otlp-http`,
+  `resources`, `sdk-logs`), `rxjs` (Apache-2.0); `eventsource`, `zod` (MIT);
+  `yaml` (ISC).
+
+### 5.3 Mobile / Expo app (`mobile/`, `apps/app/`)
+
+- **Expo** — `expo`, `expo-constants`, `expo-linking`, `expo-router`,
+  `expo-secure-store` (plus `mobile/`-only `expo-crypto`, `expo-dev-client`,
+  `expo-device`, `expo-network`, `expo-notifications`, `expo-web-browser`) (MIT).
+- **React Native** — `react-native`, `react-native-screens`,
+  `react-native-safe-area-context` (MIT); `react`, `react-dom` (MIT).
+- **Auth** — `better-auth`, `@better-auth/core`, `@better-auth/expo`,
+  `@better-auth/sso`, `@better-fetch/fetch` (MIT).
+
+### 5.4 Shared UI (`packages/ui/`)
+
+- `clsx`, `tailwind-merge` (MIT); `class-variance-authority` (Apache-2.0);
+  peer `react` (MIT).
+
+### 5.5 Root runtime (`package.json`)
+
+- **Playwright** — `playwright-core` (Apache-2.0; §3).
+
+### 5.6 Desktop (`desktop/src-tauri/`, Rust)
+
+- **Tauri** — `tauri`, `tauri-build`, `tauri-plugin-shell`,
+  `tauri-plugin-opener`, `tauri-plugin-dialog`,
+  `tauri-plugin-single-instance` (Apache-2.0 OR MIT).
+- **Utilities** — `serde`, `serde_json`, `rand`, `base64`, `reqwest`, `flate2`,
+  `sha2`, `tar`, `libc` (Apache-2.0 OR MIT); `zip`, `portable-pty` (MIT).
+
+### 5.7 Transitive copyleft-adjacent packages (verified)
+
+- **None under strong copyleft.** No GPL/AGPL/LGPL-only packages in the
+  installed tree.
+- **node-forge** (BSD-3-Clause OR GPL-2.0) — the permissive BSD option applies;
+  required by `@expo/cli` (build tooling, not shipped).
+- **dompurify** (MPL-2.0 OR Apache-2.0) — the permissive Apache option applies;
+  required by `mermaid` (diagram rendering).
+- **lightningcss** and its platform binaries (MPL-2.0) — file-level weak
+  copyleft; build-time CSS compiler only (via tailwindcss / Vite / Metro), not
+  distributed with the product and not affecting compiled output.
+- Also present transitively under permissive terms: BlueOak-1.0.0 utilities
+  (`glob`, `lru-cache`, …), `caniuse-lite` data (CC-BY-4.0), `argparse`
+  (Python-2.0). Their notices accompany the installed packages per §3.
+
+### Scope notes
+
+- `worker/` declares no dependencies.
+- Dev-only tooling that never ships is excluded, matching this file's scope:
+  TypeScript, Biome, Vite and its plugins, the Tailwind compiler, test
+  libraries, `drizzle-kit`, `@copilotkit/aimock`, Expo CLI / EAS build tooling,
+  `@tauri-apps/cli`.
+- Out of this audit's scope (not in the bun workspace install): `supervisor/`,
+  `desktop/` npm (`@tauri-apps/api`), and `agent-*` / `examples/` manifests.
 
 ---
 

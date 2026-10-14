@@ -158,9 +158,10 @@ A group conversation holds several Bots. An Intelligence thread admits exactly o
 
 Who may reach one is decided by membership: every channel route resolves the caller in
 `channel_memberships` and refuses without a row. `channels.allowed_groups` is declared in the
-tenant package and stored, and is not part of that decision — `users.groups` is never populated by
-any sign-in path, so a group-based rule has nothing to evaluate. Treat it as a declaration waiting
-on group membership from the identity provider, not as a control that is running.
+tenant package and stored, and is not part of that decision — `users.groups` arrives only through
+SCIM directory provisioning (read by per-group capability switches and network policies), so a
+group-based channel rule still has nothing evaluated against it. Treat it as a declaration waiting
+on channel enforcement, not as a control that is running.
 
 See [coworkers.md](coworkers.md).
 
