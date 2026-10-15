@@ -1,4 +1,12 @@
-import { afterAll, afterEach, beforeAll, expect, mock, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import {
   act,
@@ -10,6 +18,8 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StrictMode } from "react";
+import * as TauriCore from "@tauri-apps/api/core";
+import * as TauriEvent from "@tauri-apps/api/event";
 
 type Invoke = (command: string, args?: unknown) => Promise<unknown>;
 type ProgressEvent = {
@@ -33,36 +43,49 @@ const progressListeners = new Set<
   (event: { payload: ProgressEvent }) => void
 >();
 
-mock.module("@tauri-apps/api/core", () => ({
-  invoke: (command: string, args?: unknown) => {
-    invokeCalls.push({ command, args });
-    return invokeHandler(command, args);
-  },
-}));
+/**
+ * Restorable namespace spies rather than `mock.module`: bun has no way to unregister a module
+ * mock, so a stubbed module outlives this file and reaches every test file walked into the same
+ * process afterwards. A namespace spy is put back by `mockRestore`, so the real modules survive
+ * for every other file (docs/planning/06-test-strategy.md §5).
+ */
+const invokeSpy = spyOn(TauriCore, "invoke");
+const listenSpy = spyOn(TauriEvent, "listen");
 
-mock.module("@tauri-apps/api/event", () => ({
-  listen: async (
-    name: string,
-    listener: (event: { payload: ProgressEvent }) => void,
-  ) => {
-    if (name === "setup:progress") progressListeners.add(listener);
-    return () => progressListeners.delete(listener);
-  },
-}));
-
+// `./Mark` stays a `mock.module`: it loads `./marks`, which is Vite-only (`import.meta.glob`)
+// and cannot even be evaluated under `bun test`, so there is no module namespace for `spyOn`
+// to patch. It is leaf-local to these setup screens; the Tauri stubs above are the ones that
+// used to leak process-globally.
 mock.module("./Mark", () => ({
   Mark: ({ name }: { name: string }) => <span>{name}</span>,
 }));
 
 const { App } = await import("./App");
 
-beforeAll(() => GlobalRegistrator.register());
+beforeAll(() => {
+  GlobalRegistrator.register();
+  invokeSpy.mockImplementation(((command: string, args?: unknown) => {
+    invokeCalls.push({ command, args });
+    return invokeHandler(command, args);
+  }) as never);
+  listenSpy.mockImplementation((async (
+    name: string,
+    listener: (event: { payload: ProgressEvent }) => void,
+  ) => {
+    if (name === "setup:progress") progressListeners.add(listener);
+    return () => progressListeners.delete(listener);
+  }) as never);
+});
 afterEach(() => {
   invokeCalls = [];
   cleanup();
   progressListeners.clear();
 });
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(() => {
+  invokeSpy.mockRestore();
+  listenSpy.mockRestore();
+  GlobalRegistrator.unregister();
+});
 
 async function renderApp(strictMode = false) {
   let view!: ReturnType<typeof render>;

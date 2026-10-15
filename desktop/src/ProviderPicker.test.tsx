@@ -1,4 +1,12 @@
-import { afterAll, afterEach, beforeAll, expect, mock, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { act, cleanup, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -7,6 +15,8 @@ import type {
   ModelChoice,
   Provider,
 } from "./ProviderPicker";
+import * as TauriCore from "@tauri-apps/api/core";
+import * as TauriEvent from "@tauri-apps/api/event";
 
 const providers: Provider[] = [
   {
@@ -77,33 +87,44 @@ let invokeHandler: Invoke = async () => {
   throw new Error("invoke handler was not installed");
 };
 
-mock.module("@tauri-apps/api/core", () => ({
-  invoke: (command: string, args?: unknown) => {
-    invokeCalls.push({ command, args });
-    return invokeHandler(command, args);
-  },
-}));
+/**
+ * Restorable namespace spies rather than `mock.module`: bun has no way to unregister a module
+ * mock, so a stubbed module outlives this file and reaches every test file walked into the same
+ * process afterwards. A namespace spy is put back by `mockRestore`, so the real modules survive
+ * for every other file (docs/planning/06-test-strategy.md §5).
+ */
+const invokeSpy = spyOn(TauriCore, "invoke");
+const listenSpy = spyOn(TauriEvent, "listen");
 
-mock.module("@tauri-apps/api/event", () => ({
-  listen: async () => () => {},
-}));
-
+// `./Mark` stays a `mock.module`: it loads `./marks`, which is Vite-only (`import.meta.glob`)
+// and cannot even be evaluated under `bun test`, so there is no module namespace for `spyOn`
+// to patch. It is leaf-local to these setup screens; the Tauri stubs above are the ones that
+// used to leak process-globally.
 mock.module("./Mark", () => ({
   Mark: ({ name }: { name: string }) => <span>{name}</span>,
 }));
 
 const { ProviderPicker } = await import("./ProviderPicker");
 
-beforeAll(() =>
+beforeAll(() => {
   GlobalRegistrator.register({
     settings: { navigation: { disableChildPageNavigation: true } },
-  }),
-);
+  });
+  invokeSpy.mockImplementation(((command: string, args?: unknown) => {
+    invokeCalls.push({ command, args });
+    return invokeHandler(command, args);
+  }) as never);
+  listenSpy.mockImplementation((async () => () => {}) as never);
+});
 afterEach(() => {
   invokeCalls = [];
   cleanup();
 });
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(() => {
+  invokeSpy.mockRestore();
+  listenSpy.mockRestore();
+  GlobalRegistrator.unregister();
+});
 
 function deferred<T>() {
   let resolve!: (value: T) => void;

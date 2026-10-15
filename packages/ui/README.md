@@ -1,7 +1,7 @@
 # @orbo/ui
 
-Canonical ORBO design-system package (Phase 3, WS-01 first + second + third
-+ fourth + fifth slice).
+Canonical ORBO design-system package (Phase 3, WS-01 first through sixth
+slice — all 34 canonical primitives per 04 §4 are implemented).
 Proposed structure: `docs/planning/04-design-system.md` §4.
 Token values: `04-design-system.md` §5. Nothing here is consumed by the
 `app/` workspace yet — the port happens in a later WS-01 slice.
@@ -40,6 +40,16 @@ Token values: `04-design-system.md` §5. Nothing here is consumed by the
 - `src/dropdown-menu.tsx` — canonical DropdownMenu family.
 - `src/context-menu.tsx` — canonical ContextMenu family.
 - `src/utils.ts` — `cn()` (clsx + tailwind-merge, same as app).
+- `src/message-scroller.tsx` — canonical MessageScroller family (static shells).
+- `src/composer.tsx` — canonical Composer frame (no `autoFocus`; focus via ref).
+- `src/tool-line.tsx` — canonical ToolLine (near-verbatim port).
+- `src/live-waveform.tsx` — canonical LiveWaveform (static bars, stable keys).
+- `src/page-shell.tsx` — canonical PageShell (+ `PageShellWidth`).
+- `src/page-section.tsx` — canonical PageSection.
+- `src/page-rows.tsx` — canonical PageRows.
+- `src/page-empty.tsx` — canonical PageEmpty.
+- `src/detail-panel.tsx` — canonical DetailPanel (static side pane).
+- `src/sidebar.tsx` — canonical SidebarShell + Toggle + ToggleBar.
 - `src/index.ts` — public exports.
 
 ## Token usage
@@ -256,10 +266,28 @@ token table, so no class churn is needed at port time.
   `bubbleReactionsVariants` stay module-private (the app exports neither,
   same call as the canonical `Empty`/`InputGroup` variants).
 
+- `MessageScroller` is styled shells: provider/viewport/content/item/button
+  keep names, slots, and scale with static rendering (no auto-scroll
+  scheduling, no visibility observers; scroll button takes an explicit
+  `active` prop; hooks are static stubs so call sites typecheck).
+- `Composer` keeps the frame scale, send/stop/call button rule, and plain-text
+  `value`/`onChange`/`onSubmit(text)` API with no `autoFocus` (focus the
+  editor programmatically via ref instead); triggers, attachments, dictation,
+  and queue machinery stay out as documented above.
+- `ToolLine` is a near-verbatim port (native `div`/`details`/`summary`).
+- `LiveWaveform` renders a fixed deterministic 48-bar set with stable
+  `live-waveform-bar-*` keys (never index keys); `stream` is accepted but
+  never opened; `processing` drives a CSS pulse honoring reduced-motion.
+- `PageShell`/`PageSection`/`PageRows`/`PageEmpty` mirror the app layouts
+  (verbatim except additive `data-slot`s); `DetailPanel` is a static side
+  pane (no breakpoint `Sheet` swap, no resize animation — compose the
+  canonical `Sheet` for that); `SidebarShell` is a plain div (no provider,
+  persistence, or viewport branches) with `SidebarToggle`/`SidebarToggleBar`.
+
 ## Follow-ups (not this slice)
 
-Remaining 8 canonical primitives per 04 §4 + §6 mapping; RN-port
-decision (04 G2/B1); Montserrat vendoring + OFL notice (04 G1/B3);
+All 34 canonical primitives per 04 §4 + §6 mapping are now implemented;
+RN-port decision (04 G2/B1); Montserrat vendoring + OFL notice (04 G1/B3);
 `packages/ui` biome a11y overrides if `role="list"`-style markup needs
 the same relaxations `app/src/components/ui/**` already has (would retire
 the `Field`/`ItemGroup` role omissions and the `Label` ignore above).

@@ -1,27 +1,33 @@
-import { afterAll, afterEach, beforeAll, expect, mock, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, expect, spyOn, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import * as TauriCore from "@tauri-apps/api/core";
 
 let invokeCalls: Array<{ command: string; args?: unknown }> = [];
 let invokeFailure: string | null = null;
 
-mock.module("@tauri-apps/api/core", () => ({
-  invoke: (command: string, args?: unknown) => {
-    invokeCalls.push({ command, args });
-    if (invokeFailure) return Promise.reject(invokeFailure);
-    return Promise.resolve(null);
-  },
-}));
+/**
+ * A restorable namespace spy rather than `mock.module`: bun has no way to unregister a module
+ * mock, so a stubbed module outlives this file and reaches every test file walked into the same
+ * process afterwards. The spy is put back by `mockRestore`, so the real module survives for
+ * every other file (docs/planning/06-test-strategy.md §5).
+ */
+const invokeSpy = spyOn(TauriCore, "invoke");
 
 const { Failure, InlineFailure } = await import("./Problem");
 
 const previousSupportUrl = process.env.VITE_ORBO_SUPPORT_URL;
 
-beforeAll(() =>
+beforeAll(() => {
   GlobalRegistrator.register({
     settings: { navigation: { disableChildPageNavigation: true } },
-  }),
-);
+  });
+  invokeSpy.mockImplementation(((command: string, args?: unknown) => {
+    invokeCalls.push({ command, args });
+    if (invokeFailure) return Promise.reject(invokeFailure);
+    return Promise.resolve(null);
+  }) as never);
+});
 afterEach(() => {
   invokeCalls = [];
   invokeFailure = null;
@@ -30,7 +36,10 @@ afterEach(() => {
   else process.env.VITE_ORBO_SUPPORT_URL = previousSupportUrl;
   cleanup();
 });
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(() => {
+  invokeSpy.mockRestore();
+  GlobalRegistrator.unregister();
+});
 
 test("problem_ui_has_no_credential_restore_action", () => {
   const view = render(

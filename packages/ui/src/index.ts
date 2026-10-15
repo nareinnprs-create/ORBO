@@ -200,3 +200,32 @@ export {
   TooltipProvider,
   TooltipTrigger,
 } from "./tooltip";
+export {
+  MessageScrollerProvider,
+  MessageScroller,
+  MessageScrollerViewport,
+  MessageScrollerContent,
+  MessageScrollerItem,
+  MessageScrollerButton,
+  useMessageScroller,
+  useMessageScrollerScrollable,
+  useMessageScrollerVisibility,
+  type MessageScrollerScrollOptions,
+} from "./message-scroller";
+export {
+  Composer,
+  type ComposerProps,
+  type ComposerVoiceCall,
+} from "./composer";
+export { ToolLine } from "./tool-line";
+export { LiveWaveform } from "./live-waveform";
+export { PageShell, type PageShellWidth } from "./page-shell";
+export { PageSection } from "./page-section";
+export { PageRows } from "./page-rows";
+export { PageEmpty } from "./page-empty";
+export { DetailPanel } from "./detail-panel";
+export {
+  SidebarShell,
+  SidebarToggle,
+  SidebarToggleBar,
+} from "./sidebar";

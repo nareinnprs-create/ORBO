@@ -427,10 +427,18 @@ describe("group conversations in PostgreSQL", () => {
       replies: {
         [ada]: async (input) => {
           input.onText?.("Hal");
-          await new Promise((resolve) => setTimeout(resolve, 30));
-          seenMidRun =
-            (await conversations.list(owner.id, channelId)).messages.at(-1)
-              ?.text ?? "";
+          // The partial-text write is an async DB update racing this read; poll until it is
+          // visible instead of assuming one fixed sleep covers a loaded CI database.
+          const deadline = Date.now() + 10_000;
+          let last = "";
+          for (;;) {
+            last =
+              (await conversations.list(owner.id, channelId)).messages.at(-1)
+                ?.text ?? "";
+            if (last === "Hal" || Date.now() > deadline) break;
+            await new Promise((resolve) => setTimeout(resolve, 10));
+          }
+          seenMidRun = last;
           return "Hallo";
         },
         [grace]: () => {
