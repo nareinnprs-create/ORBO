@@ -350,7 +350,11 @@ jobs:
     uses: $/.github/workflows/desktop.yml
     permissions:
       contents: read
-    secrets: inherit
+    # Explicit, not inherit: desktop.yml declares exactly this one optional
+    # secret (zizmor secrets-inherit). Empty when unconfigured, which the
+    # called workflow tolerates (required: false).
+    secrets:
+      ORBO_GOOGLE_MODEL_OAUTH_CLIENT_SECRET: ${{ secrets.ORBO_GOOGLE_MODEL_OAUTH_CLIENT_SECRET }}
 
   # The tag and the release, last, so nothing is announced that was not built. The manifest is the
   # useful artefact: it pins the digest, so a deploy or a rollback names an exact image rather than a
