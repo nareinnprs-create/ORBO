@@ -117,7 +117,7 @@ a design doc; the gap is execution, not design.
 | Id4 | Personal context (tone, avatar, memories, accounts, passwords) | DONE | `server/src/user-{preferences,instructions}.ts` + routes; memory routes | UI port into Settings (WS-01/WS-12) |
 | Id5 | Memory: user-managed prefs usable by permitted agents | DONE | `server/src/memory/` (store/routes/tools/ingestion) | Intelligence billing owner input (10.A.6) |
 | F1 | Finance: CSV import, spending summary, savings-goal action | PLANNED | Design doc 24; no finance module in `server/src` | WS-13 (slice 1: CSV→summary; goal action deferred) |
-| Su1 | **One UI**: Expo Router → web+iOS+Android; Tauri desktop | BLOCKED | Scaffold only (`apps/app` TODO stubs, `packages/ui` Button/Item); R6 RN-runtime + R10 desktop-role + R7 media open | W0 decisions (R6/R10), then WS-01 + ref screen A1 native proof |
+| Su1 | **One UI**: Expo Router → web+iOS+Android; Tauri desktop | BLOCKED | Scaffold only (`apps/app` TODO stubs, `packages/ui` 14 primitives); R6 RN-runtime + R10 desktop-role + R7 media open | W0 decisions (R6/R10), then WS-01 + ref screen A1 native proof |
 | Su2 | Docker/compose, embedded Postgres, Helm, `/api/health` | DONE | `docker-compose.yml`; `tests/compose.test.ts`; `/api/health` in `server/src/app.ts` | R1 one-line install docs (10.E.40) |
 | Su3 | Single-owner + multi-user modes | DONE | `account-mode.integration.test.ts`; `server/src/auth/organization*` | Bootstrap single-owner→`users` row rule (R8) |
 
@@ -138,13 +138,13 @@ a design doc; the gap is execution, not design.
    `MINIMUM_TESTS`/coverage floors (`scripts/test-ci.ts`) · compose boot + D3a–D3c smokes
    (incl. DIYA delegation — seed row `diya` in `examples/orbo/agents.yaml:75` ships, journey
    test pending per doc 20 + WS-02) · §6 100% checked · origin sweep zero · R1 unsigned
-   installers (MSI/DMG/AppImage+deb); R2 store path deferred to accounts (10.A.5/7).
+   installers (MSI/DMG/AppImage+deb) per-OS via desktop CI wired into release (`publish-release.yml` desktop job ships exactly what desktop CI proved); R2 store path deferred to accounts (10.A.5/7).
 
 ## Risks to the critical path (from 09 §5)
 
 - R1 conversation-identity ambiguity gates threads, approvals continuation, pages, routines.
 - R2 OpenDots plaintext-token import is highest severity; vault-first cut-over rides WS-05.
 - R3 ungoverned browser/computer routes must go through `computerGateway`, never aliased.
-- R6 `packages/ui` RN-port stall: scaffold landed, RN-runtime decision + A1 proof open.
+- R6 `packages/ui` RN-port stall: 14 primitives landed, RN-runtime decision + A1 proof open.
 - R10 desktop role confusion (supervisor vs wrapper) needs the R10 W0 decision before Su1.
 - R8 timestamp/key conversion + single-owner→`users` bootstrap rule apply to every importer.

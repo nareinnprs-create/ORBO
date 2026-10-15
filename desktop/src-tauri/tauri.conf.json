@@ -52,15 +52,6 @@
     "longDescription": "ORBO Desktop installs the container engine, raises the stack, and keeps it running."
   },
   "plugins": {
-    "deep-link": {
-      "$comment": "Desktop scheme mirrors the unified app scheme in apps/app/app.json; identifier ai.orbo.desktop per PLAN.md 10.B.12.",
-      "desktop": { "schemes": ["orbo"] }
-    },
-    "updater": {
-      "active": false,
-      "pubkey": "",
-      "endpoints": [],
-      "$comment": "TODO (PLAN.md 10.B.14): updater domain undecided - add the release endpoint URL to endpoints once chosen; do not invent a URL. Keep active=false until then."
-    }
+    "$comment": "TODO (PLAN.md 10.B.14; docs/planning/31-phase8-wrapper-plan.md G3/G4; 05 R7): deep-link (orbo scheme) and updater blocks removed - the keys are inert in Tauri v2 without their crates and there are no handlers/endpoints yet. Re-add alongside tauri-plugin-deep-link + route map once the orbo scheme is owner-confirmed, and tauri-plugin-updater + Builder::plugin init once the release endpoint domain and signing exist; do not invent a URL."
   }
 }

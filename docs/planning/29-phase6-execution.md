@@ -6,7 +6,7 @@
 > this doc otherwise treats all other `docs/planning/` files as read-only snapshots taken 2026-10-14.
 > Reconcile against their FINAL versions before cutting Phase 6 work orders.
 > **Reconciliation 2026-10-14:** landed since draft — 27/28 inventories; `packages/ui` scaffold
-> (Button/Item + Dialog/Field/Input/Label/Select/Textarea/tokens); `apps/app` Expo placeholder shell;
+> (14 primitives: button/checkbox/dialog/empty/field/input-group/input/item/label/select/separator/skeleton/switch/textarea + tokens); `apps/app` Expo placeholder shell;
 > DIYA `diya` seed row in `examples/orbo/agents.yaml`; coverage tripwire + floors in `scripts/test-ci.ts`.
 > Still-open owner gates: threads identity, spaces ownership, route freeze, `packages/ui` RN runtime, brand assets.
 > Phase 6 = PLAN.md §8 item 6: *"Port OpenMuse screens (Documents/Finance/Goals/Activity/Ideas)
@@ -68,7 +68,7 @@ Size: S = days, M = 1–2 weeks, L = 2+ weeks / cross-cutting.
 
 Traceability: P6-01/P6-02→Documents; P6-03→Finance (= 09 WS-13); P6-04/P6-05/P6-06→Work
 (= 09 WS-09 split three ways); P6-07→backend carriers (= 26 absorb/rewrite); P6-08→app
-surfaces (pending 27); P6-09→Connections (= 09 WS-04/WS-10 Google part, pending 28);
+surfaces (27 landed 2026-10-14 — re-verify P6-08 against it); P6-09→Connections (= 09 WS-04/WS-10 Google part, 28 landed 2026-10-14 — re-verify P6-09 against it);
 P6-10→Identity/Surfaces (= 09 WS-12 single-owner slice).
 
 ---

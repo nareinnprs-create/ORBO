@@ -1,0 +1,19 @@
+{
+  "name": "ORBO",
+  "short_name": "ORBO",
+  "description": "Your Personal AI Companion.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#080F14",
+  "theme_color": "#080F14",
+  "icons": [
+    {
+      "src": "/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

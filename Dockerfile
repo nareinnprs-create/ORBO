@@ -57,7 +57,11 @@ COPY apps/app/package.json apps/app/package.json
 COPY packages/ui/package.json packages/ui/package.json
 COPY server/package.json server/package.json
 COPY worker/package.json worker/package.json
-RUN bun install --frozen-lockfile
+# Only the workspaces this image builds. `@orbo/app` is the Expo mobile client: nothing the app
+# build or the server imports, but hundreds of packages that every full install downloads and keeps
+# in this layer. That bloat is what left the `image` job with no disk for the Chromium download
+# above. The manifests above still include it, so `--frozen-lockfile` keeps pinning the whole tree.
+RUN bun install --frozen-lockfile --filter app --filter server --filter worker --filter '@orbo/ui'
 
 # The lockfile travels with the manifest, because `--frozen-lockfile` with no lockfile in the context
 # is not an error: bun resolves afresh, succeeds, and the flag has decorated nothing. With both files
@@ -69,6 +73,13 @@ RUN cd agent-computer && bun install --frozen-lockfile
 
 # A second tree with the build-time dependencies left out, for the runtime stage to take. Vite,
 # biome and the test tooling are a gigabyte that nothing in a running container imports.
+#
+# Scoped to the one workspace that runs here. The runtime serves the prebuilt `app/dist` statically
+# and executes `server/` (plus `agent-computer/`, which is a separate install root below, and the one
+# composio script, which only imports `server/`): every bare import in those files is declared in
+# `server/package.json`, so the app frontend, the Expo client, worker and ui trees buy resolution
+# nothing and ship hundreds of megabytes. They stay out of this install the same way the Expo tree
+# stays out of the build install above.
 RUN mkdir -p /prod && cp package.json bun.lock /prod/ \
   && cd /prod && mkdir -p app server worker apps/app packages/ui \
   && cp /src/app/package.json app/package.json \
@@ -76,7 +87,7 @@ RUN mkdir -p /prod && cp package.json bun.lock /prod/ \
   && cp /src/packages/ui/package.json packages/ui/package.json \
   && cp /src/server/package.json server/package.json \
   && cp /src/worker/package.json worker/package.json \
-  && bun install --frozen-lockfile --production
+  && bun install --frozen-lockfile --production --filter server
 
 
 FROM deps AS app-build

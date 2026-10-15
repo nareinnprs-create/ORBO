@@ -340,12 +340,25 @@ jobs:
           path: manifests/
           retention-days: 1
 
+  # The per-OS installers, built from the same commit as everything else above. A call, not a
+  # rebuild: this is the unsigned `bundle` desktop CI proves on every change (dmg on macOS, msi on
+  # Windows, AppImage and deb on Linux), so the release ships exactly what was proved. Signing stays
+  # where it is, in the separate on-demand desktop-signing workflow, which this does not touch.
+  desktop:
+    needs: [metadata, verify, checks]
+    if: needs.metadata.outputs.is_release == 'true'
+    uses: $/.github/workflows/desktop.yml
+    permissions:
+      contents: read
+    secrets: inherit
+
   # The tag and the release, last, so nothing is announced that was not built. The manifest is the
   # useful artefact: it pins the digest, so a deploy or a rollback names an exact image rather than a
-  # tag somebody could move.
+  # tag somebody could move. The installers join it as release assets, so a release is the images,
+  # the manifest, and the things people install.
   github-release:
     name: tag and release
-    needs: [metadata, verify, checks, image, component-manifests]
+    needs: [metadata, verify, checks, image, component-manifests, desktop]
     if: needs.metadata.outputs.is_release == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -362,6 +375,12 @@ jobs:
           pattern: manifest-*
           path: manifests
           merge-multiple: true
+      # One directory per platform (`installers/orbo-desktop-macos`, ...). Not merged: every
+      # artifact carries its own `build-version.json`, and merging would overwrite all but one.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: orbo-desktop-*
+          path: installers
       - name: Write the image manifest
         env:
           VERSION: ${{ needs.metadata.outputs.version }}
@@ -427,10 +446,23 @@ jobs:
               -f "ref=refs/tags/$VERSION" -f "sha=$GITHUB_SHA" >/dev/null
           fi
 
+          # The bundles the desktop workflow built, and only the bundles: the `build-version.json`
+          # files travelling alongside them describe the build and are not things to install.
+          mapfile -t bundles < <(find installers -type f \( \
+            -name '*.dmg' -o -name '*.msi' -o -name '*.AppImage' -o -name '*.deb' \) | sort)
+          for pattern in '*.dmg' '*.msi' '*.AppImage' '*.deb'; do
+            found="$(find installers -type f -name "$pattern" | wc -l | tr -d ' ')"
+            if [ "$found" -eq 0 ]; then
+              echo "::error::No installer matching $pattern."
+              exit 1
+            fi
+          done
+          printf 'Attaching installer(s):\n%s\n' "${bundles[@]}"
+
           if gh release view "$VERSION" >/dev/null 2>&1; then
             gh release edit "$VERSION" --title "$VERSION" --notes-file notes.md
-            gh release upload "$VERSION" container-images.json --clobber
+            gh release upload "$VERSION" container-images.json "${bundles[@]}" --clobber
           else
-            gh release create "$VERSION" container-images.json \
+            gh release create "$VERSION" container-images.json "${bundles[@]}" \
               --title "$VERSION" --notes-file notes.md
           fi
