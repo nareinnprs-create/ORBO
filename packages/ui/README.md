@@ -1,6 +1,6 @@
 # @orbo/ui
 
-Canonical ORBO design-system package (Phase 3, WS-01 first + second + third slice).
+Canonical ORBO design-system package (Phase 3, WS-01 first + second + third + fourth slice).
 Proposed structure: `docs/planning/04-design-system.md` §4.
 Token values: `04-design-system.md` §5. Nothing here is consumed by the
 `app/` workspace yet — the port happens in a later WS-01 slice.
@@ -26,6 +26,12 @@ Token values: `04-design-system.md` §5. Nothing here is consumed by the
 - `src/skeleton.tsx` — canonical Skeleton.
 - `src/empty.tsx` — canonical Empty family.
 - `src/item.tsx` — canonical Item row family (+ `itemVariants`).
+- `src/combobox.tsx` — canonical Combobox family.
+- `src/badge.tsx` — canonical Badge (+ `badgeVariants`, `BadgeTone`).
+- `src/tooltip.tsx` — canonical Tooltip family.
+- `src/sheet.tsx` — canonical Sheet family.
+- `src/dropdown-menu.tsx` — canonical DropdownMenu family.
+- `src/context-menu.tsx` — canonical ContextMenu family.
 - `src/utils.ts` — `cn()` (clsx + tailwind-merge, same as app).
 - `src/index.ts` — public exports.
 
@@ -126,10 +132,65 @@ token table, so no class churn is needed at port time.
   (local `cn` import only; `emptyMediaVariants` stays module-private as in
   the app, and `EmptyDescription` keeps the app's `ComponentProps<"p">`
   typing over a `<div>`).
+- `Combobox` is styled shells, not behaviour: plain `<div>` wrapper (no Root
+  context, no value/multiple/open state, no filtering), native `<input>` /
+  trigger / clear buttons (`type="button"`, chevron/X inline SVG, no
+  Tabler), `ComboboxInput` composes the local canonical `InputGroup` and
+  keeps `showTrigger`/`showClear`. `Content` is statically rendered (no
+  Portal/Positioner, no `side`/`align` props, no open/close animation
+  attributes — the app `anchor` prop survives only as a `withChips` flag for
+  the min-width rule); `Item` is a `<div>` with optional `value` (no
+  highlight state); `Separator` is a native `<hr>` (with `border-0`, same
+  call as `SelectSeparator`); `Collection` renders as a fragment (no
+  filtering); `Chip` keeps `showRemove`/`removeLabel` with the remove control
+  on the local `Button` (`ghost`, `icon-sm`). `ComboboxClear` is exported
+  (additive — defined but unexported in the app).
+- `Badge` is a native `<span>` + `badgeVariants` (`tone`: `neutral` |
+  `positive` | `caution` | `negative`, `data-tone`). There is no
+  `ui/badge.tsx` in the app — the tone API mirrors `gallery/frame.tsx`
+  `Badge`/`Tone` (the canonical badge per 04 §3). Tint backgrounds derive
+  from `--orbo-*` tokens with hex fallbacks (grey scale for neutral, state
+  colors via `color-mix` for the rest); text keeps the gallery's
+  contrast-tested emerald/amber/red scale.
+- `Tooltip` is styled shells, not behaviour: plain `<div>` `Tooltip`/`Provider`
+  wrappers (no Root context, no open state — `delay` is accepted and reflected
+  as `data-delay` but schedules nothing), `Trigger` a native button
+  (`type="button"`), `Content` a statically rendered `<div>`
+  (`role="tooltip"`, no Portal/Positioner, no `side`/`align` props — renders
+  the app's default `side="top"` placement with a non-positioned diamond
+  arrow, no Arrow primitive). Base UI `data-open`/`data-closed`/
+  `data-[state=...]` animation attributes are dropped (layout classes kept).
+- `Sheet` is styled shells, not behaviour (same category as `Dialog`):
+  plain `<div>` wrapper (no Root context, no `open` state, no focus trap /
+  scroll lock / escape), `Portal` a plain `<div>` (no portal),
+  `Trigger`/`Close` native buttons (`type="button"`), `Title`/`Description`
+  native `<h2>`/`<p>`, close control is the local `Button` (`ghost`,
+  `icon-sm`) with an inline SVG X. `Content` keeps the app `side` +
+  `showCloseButton` API and always renders its own backdrop div; Base UI
+  `data-ending-style`/`data-starting-style` animation attributes are dropped
+  (transition classes kept). `SheetPortal`/`SheetOverlay` stay module-private,
+  matching the app (the canonical `Dialog` exports its Portal/Overlay because
+  the app dialog does too).
+- `DropdownMenu`/`ContextMenu` are styled shells, not behaviour: plain
+  `<div>` wrappers (no Root context, no open state, no keyboard/focus
+  management, no menu roles — same lint-driven call as the `Field`/`ItemGroup`
+  role omissions), `Portal` a plain `<div>` (no portal),
+  `DropdownMenuTrigger` a native button (`type="button"`;
+  `ContextMenuTrigger` stays a plain `<div>` area wrapper — the app trigger
+  is the right-click region, not a button — with no `contextmenu` behavior),
+  `Content` statically rendered (no Positioner, no `side`/`align` props),
+  `Item` keeps the app `inset` + `variant` (`default` | `destructive`) API,
+  `checked` maps to `data-checked` (the check mark renders when set — no
+  indicator state machine), `Separator` a native `<hr>` (with `border-0`,
+  same call as `SelectSeparator`), chevron/check icons inline SVG (no Tabler
+  dependency). Base UI `data-open`/`data-closed`/`data-popup-open`/
+  `data-[side=...]` slide-in animation attributes are dropped (layout classes
+  kept). `RadioItem` gains an optional `checked` (additive — the app derives
+  it from the radio group, which has no state here).
 
 ## Follow-ups (not this slice)
 
-Remaining 20 canonical primitives per 04 §4 + §6 mapping; RN-port
+Remaining 14 canonical primitives per 04 §4 + §6 mapping; RN-port
 decision (04 G2/B1); Montserrat vendoring + OFL notice (04 G1/B3);
 `packages/ui` biome a11y overrides if `role="list"`-style markup needs
 the same relaxations `app/src/components/ui/**` already has (would retire

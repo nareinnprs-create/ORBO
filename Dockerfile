@@ -35,7 +35,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl unzip xz-utils \
   && ln -s bun /usr/local/bin/bunx \
   && bunx --bun "playwright@${PLAYWRIGHT_VERSION}" install --with-deps chromium \
-  && rm -rf /root/.cache /tmp/* /var/lib/apt/lists/* \
+  && rm -rf /root/.cache /root/.bun/install/cache /tmp/* /var/cache/apt/archives/* /var/lib/apt/lists/* \
   # PINNED, BECAUSE THE CHART NAMES THESE NUMBERS. `computers.podSecurityContext` runs a computer
   # pod as 1001, and without `--uid` that is only where these happen to land today: `ubuntu:24.04`
   # ships its own `ubuntu` user at 1000, so the next two are 1001 and 1002. Let the base add one
@@ -61,7 +61,8 @@ COPY worker/package.json worker/package.json
 # build or the server imports, but hundreds of packages that every full install downloads and keeps
 # in this layer. That bloat is what left the `image` job with no disk for the Chromium download
 # above. The manifests above still include it, so `--frozen-lockfile` keeps pinning the whole tree.
-RUN bun install --frozen-lockfile --filter app --filter server --filter worker --filter '@orbo/ui'
+RUN bun install --frozen-lockfile --filter app --filter server --filter worker --filter '@orbo/ui' \
+  && rm -rf /root/.bun/install/cache /root/.cache /tmp/*
 
 # The lockfile travels with the manifest, because `--frozen-lockfile` with no lockfile in the context
 # is not an error: bun resolves afresh, succeeds, and the flag has decorated nothing. With both files
@@ -69,7 +70,12 @@ RUN bun install --frozen-lockfile --filter app --filter server --filter worker -
 # pinned twenty-odd lines above for the same reason; this is the install below it.
 COPY agent-computer/package.json agent-computer/package.json
 COPY agent-computer/bun.lock agent-computer/bun.lock
-RUN cd agent-computer && bun install --frozen-lockfile
+# Production-only, into /prod-computer. The runtime executes `bun src/index.ts`, which needs
+# `playwright`, `spiffe` and `yaml`, not the `typescript` devDependency, so the dev tree never
+# enters a layer the final image copies — the same prune /prod does for the server below.
+RUN mkdir -p /prod-computer && cp agent-computer/package.json agent-computer/bun.lock /prod-computer/ \
+  && cd /prod-computer && bun install --frozen-lockfile --production \
+  && rm -rf /root/.bun/install/cache /root/.cache /tmp/*
 
 # A second tree with the build-time dependencies left out, for the runtime stage to take. Vite,
 # biome and the test tooling are a gigabyte that nothing in a running container imports.
@@ -87,7 +93,8 @@ RUN mkdir -p /prod && cp package.json bun.lock /prod/ \
   && cp /src/packages/ui/package.json packages/ui/package.json \
   && cp /src/server/package.json server/package.json \
   && cp /src/worker/package.json worker/package.json \
-  && bun install --frozen-lockfile --production --filter server
+  && bun install --frozen-lockfile --production --filter server \
+  && rm -rf /root/.bun/install/cache /root/.cache /tmp/*
 
 
 FROM deps AS app-build
@@ -136,12 +143,14 @@ WORKDIR /app
 # present and broken.
 COPY --from=deps /prod/node_modules node_modules
 COPY --from=deps /prod/server/node_modules server/node_modules
-COPY --from=deps /src/package.json package.json
-COPY --from=deps /src/bun.lock bun.lock
+# From /prod, not /src, so the manifests beside the installed tree describe that pruned tree
+# rather than the full dev tree. Same package.json bytes either way; one source of truth.
+COPY --from=deps /prod/package.json package.json
+COPY --from=deps /prod/bun.lock bun.lock
 # The browser's tree is a separate install root with its own lockfile rather than a workspace of the
-# one above, so there is no /prod half of it to take and it ships as resolved, `typescript` included.
-# Pruning it would mean a second `--production` install in the stage above.
-COPY --from=deps /src/agent-computer/node_modules agent-computer/node_modules
+# one above, so its pruned half is /prod-computer, installed `--production` in the stage above:
+# nothing `bun src/index.ts` executes imports the `typescript` devDependency left out of it.
+COPY --from=deps /prod-computer/node_modules agent-computer/node_modules
 
 COPY server server
 COPY shared shared
@@ -175,11 +184,20 @@ COPY docker/s6 /etc/s6-overlay
 # `DATABASE_URL` points wherever you like. The trade is the one you would expect: a database inside
 # a container lives and dies with that container unless /var/lib/postgresql is a mounted volume, and
 # the audit trail is the thing you would be losing.
+#
+# One RUN with the sudo install below: both package sets share a single `apt-get update` and a
+# single layer, rather than two updates and two layers holding the same archives.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      postgresql-16 postgresql-16-pgvector \
-  && rm -rf /var/lib/apt/lists/* \
+      postgresql-16 postgresql-16-pgvector sudo \
+  && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/* /tmp/* \
   && mkdir -p /var/lib/postgresql/data /var/run/postgresql \
-  && chown -R postgres:postgres /var/lib/postgresql /var/run/postgresql
+  && chown -R postgres:postgres /var/lib/postgresql /var/run/postgresql \
+  && printf '%s\n' \
+    'pwuser ALL=(root) NOPASSWD: /usr/bin/apt-get, /usr/bin/apt, /usr/bin/dpkg, /usr/bin/apt-key, /usr/bin/apt-cache' \
+    'Defaults!/usr/bin/apt-get env_keep += "DEBIAN_FRONTEND"' \
+    > /etc/sudoers.d/pwuser \
+  && chmod 0440 /etc/sudoers.d/pwuser \
+  && visudo -cf /etc/sudoers.d/pwuser
 
 # A Bot can install what a task needs, and nothing else as root.
 #
@@ -201,14 +219,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # which is why per-Bot computers and gVisor are not optional extras next to this feature. Run the
 # image with `--security-opt no-new-privileges` where the platform allows, which turns setuid off
 # entirely for anything not named here.
-RUN apt-get update && apt-get install -y --no-install-recommends sudo \
-  && rm -rf /var/lib/apt/lists/* \
-  && printf '%s\n' \
-    'pwuser ALL=(root) NOPASSWD: /usr/bin/apt-get, /usr/bin/apt, /usr/bin/dpkg, /usr/bin/apt-key, /usr/bin/apt-cache' \
-    'Defaults!/usr/bin/apt-get env_keep += "DEBIAN_FRONTEND"' \
-    > /etc/sudoers.d/pwuser \
-  && chmod 0440 /etc/sudoers.d/pwuser \
-  && visudo -cf /etc/sudoers.d/pwuser
+#
+# Installed in the single RUN above, alongside PostgreSQL, so both package sets share one
+# `apt-get update` and one layer. The sudoers file it writes is unchanged.
 
 # THE PACKAGE MANAGER AND THE SHELL STAY. Both were removed here once as hardening, which was
 # backwards: a Bot being able to open a shell and install what a task needs is a requested feature,

@@ -483,6 +483,20 @@ jobs:
       github.event_name != 'pull_request' ||
       contains(github.event.pull_request.labels.*.name, 'full-ci')
     steps:
+      # The runners this job lands on carry ~14GB free and multi-GB toolchains it never touches
+      # (dotnet, the Android SDK, GHC, CodeQL) plus whatever the daemon already holds. This job died
+      # three times with no space left: twice writing layers, and once materializing the final image
+      # on export after the Expo tree had already left the installs. Reclaim the disk before the
+      # build rather than during it. No third-party action: this is the documented set of
+      # preinstalled hogs plus a daemon prune, and nothing below depends on what it removes.
+      - name: Free runner disk
+        run: |
+          set -euo pipefail
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL 2>/dev/null || true
+          docker system prune -af 2>/dev/null || true
+          sudo apt-get clean 2>/dev/null || true
+          df -h /
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
