@@ -1,13 +1,20 @@
 import { expect, test } from "bun:test";
+import { getTableConfig, type Table } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import type { AuthenticatedActor } from "../src/auth/guards";
+import type { Database } from "../src/db/client";
 import type { MemoryIngestion } from "../src/memory/ingestion";
 import {
   normalizeConnectorRecords,
   quoteMemoryContext,
 } from "../src/memory/ingestion";
 import { createMemoryRoutes } from "../src/memory/routes";
-import type { MemoryStore } from "../src/memory/store";
+import {
+  createMemoryStore,
+  digestMemoryContent,
+  type MemoryStore,
+  normalizeMemoryContent,
+} from "../src/memory/store";
 import { memoryTools } from "../src/memory/tools";
 import {
   parseMemoryInput,
@@ -161,4 +168,228 @@ test("a source sync a connector's policy refuses answers 400 with the reason, no
   });
   expect(response.status).toBe(400);
   expect(await response.json()).toEqual({ error: "Tool refused by policy." });
+});
+
+type FakeMemoryCall = {
+  op: "select" | "insert" | "update" | "delete";
+  table: string;
+  values?: unknown;
+  set?: unknown;
+  conflict?: unknown;
+};
+type FakeMemoryBuilder = {
+  from: (table: Table) => FakeMemoryBuilder;
+  where: () => FakeMemoryBuilder;
+  orderBy: () => FakeMemoryBuilder;
+  limit: () => FakeMemoryBuilder;
+  for: () => FakeMemoryBuilder;
+  values: (value: unknown) => FakeMemoryBuilder;
+  set: (value: unknown) => FakeMemoryBuilder;
+  returning: () => FakeMemoryBuilder;
+  onConflictDoNothing: () => FakeMemoryBuilder;
+  onConflictDoUpdate: () => FakeMemoryBuilder;
+} & PromiseLike<unknown>;
+/**
+ * A scripted stand-in for the store's database handle. The Postgres-backed suite cannot run
+ * while Docker is down, so this fake answers each awaited query from a FIFO of scripted results
+ * and records every call. That proves the store asks the right sequence — dedupe lookup before
+ * insert, restore update instead of insert, tombstone read before sync writes — without a live
+ * database.
+ */
+function fakeMemoryDatabase(results: unknown[]) {
+  const calls: FakeMemoryCall[] = [];
+  const tableName = (table: Table) => getTableConfig(table).name;
+  const builder = (call: FakeMemoryCall): FakeMemoryBuilder => {
+    const next: FakeMemoryBuilder = {
+      from: (table) => {
+        call.table = tableName(table);
+        return next;
+      },
+      where: () => next,
+      orderBy: () => next,
+      limit: () => next,
+      for: () => next,
+      values: (value) => {
+        call.values = value;
+        return next;
+      },
+      set: (value) => {
+        call.set = value;
+        return next;
+      },
+      returning: () => next,
+      onConflictDoNothing: () => {
+        call.conflict = "nothing";
+        return next;
+      },
+      onConflictDoUpdate: () => {
+        call.conflict = "update";
+        return next;
+      },
+      // biome-ignore lint/suspicious/noThenProperty: awaited like a drizzle builder.
+      then: (onfulfilled, onrejected) => {
+        calls.push(call);
+        const result = results.shift();
+        if (result === undefined)
+          throw new Error("The memory fake ran out of scripted results.");
+        return Promise.resolve(result).then(onfulfilled, onrejected);
+      },
+    };
+    return next;
+  };
+  const database = {
+    select: () => builder({ op: "select", table: "" }),
+    insert: (table: Table) =>
+      builder({ op: "insert", table: tableName(table) }),
+    update: (table: Table) =>
+      builder({ op: "update", table: tableName(table) }),
+    delete: (table: Table) =>
+      builder({ op: "delete", table: tableName(table) }),
+    transaction: <T>(work: (transaction: unknown) => Promise<T>) =>
+      work(database),
+  };
+  return { database, calls };
+}
+
+test("memory folding treats case, punctuation and spacing as the same fact", () => {
+  expect(normalizeMemoryContent("  I prefer MORNING meetings!  ")).toBe(
+    "i prefer morning meetings",
+  );
+  expect(digestMemoryContent("I prefer morning meetings.")).toBe(
+    digestMemoryContent("i  prefer MORNING meetings!"),
+  );
+  expect(digestMemoryContent("I prefer morning meetings.")).not.toBe(
+    digestMemoryContent("I prefer evening meetings."),
+  );
+});
+
+test("creating a near-duplicate returns the live row instead of storing twice", async () => {
+  const live = {
+    id: "live-1",
+    ownerUserId: "owner",
+    content: "I prefer morning meetings.",
+    deletedAt: null,
+  };
+  const { database, calls } = fakeMemoryDatabase([[live]]);
+  const store = createMemoryStore(database as unknown as Database);
+  const result = await store.create("owner", {
+    content: "i  prefer MORNING meetings!",
+  });
+  expect(result.id).toBe("live-1");
+  expect(calls.filter((call) => call.op === "insert")).toHaveLength(0);
+});
+
+test("re-adding a forgotten fact restores its tombstone instead of duplicating", async () => {
+  const tombstone = {
+    id: "tomb-1",
+    ownerUserId: "owner",
+    content: "",
+    importDigest: digestMemoryContent("Prefers morning meetings"),
+    deletedAt: new Date("2026-09-01T09:00:00Z"),
+  };
+  const { database, calls } = fakeMemoryDatabase([
+    [tombstone],
+    [{ ...tombstone, content: "x", deletedAt: null, enabled: true }],
+  ]);
+  const store = createMemoryStore(database as unknown as Database);
+  const result = await store.create("owner", {
+    content: "prefers MORNING meetings!",
+  });
+  expect(result.id).toBe("tomb-1");
+  expect(calls.filter((call) => call.op === "insert")).toHaveLength(0);
+  const updates = calls.filter((call) => call.op === "update");
+  expect(updates).toHaveLength(1);
+  const set = (updates[0]?.set ?? {}) as Record<string, unknown>;
+  expect(set.deletedAt).toBeNull();
+  expect(set.enabled).toBe(true);
+  expect(set.content).toBe("prefers MORNING meetings!");
+});
+
+test("forgetting leaves a digest tombstone: re-add restores, re-observe stays forgotten", async () => {
+  const content = "Quarterly review is in Lisbon";
+  const remover = fakeMemoryDatabase([[{ id: "m-1" }]]);
+  await createMemoryStore(remover.database as unknown as Database).remove(
+    "owner",
+    "m-1",
+  );
+  const tombstoned = remover.calls.find((call) => call.op === "update");
+  const tombstoneSet = (tombstoned?.set ?? {}) as Record<string, unknown>;
+  expect(tombstoneSet.deletedAt).toBeInstanceOf(Date);
+  expect(tombstoneSet.enabled).toBe(false);
+  expect("importDigest" in tombstoneSet).toBe(false);
+
+  const digest = digestMemoryContent(content);
+  const adder = fakeMemoryDatabase([
+    [{ id: "m-1", importDigest: digest, deletedAt: new Date() }],
+    [{ id: "m-1", content, deletedAt: null }],
+  ]);
+  const restored = await createMemoryStore(
+    adder.database as unknown as Database,
+  ).create("owner", { content });
+  expect(restored.id).toBe("m-1");
+  expect(adder.calls.filter((call) => call.op === "insert")).toHaveLength(0);
+
+  const observer = fakeMemoryDatabase([[{ id: "m-1", deletedAt: new Date() }]]);
+  const observed = await createMemoryStore(
+    observer.database as unknown as Database,
+  ).formMemory("owner", {
+    agentId: "bot",
+    content,
+    sourceApp: "Docs",
+  });
+  expect(observed).toEqual({ id: "m-1", duplicate: true, forgotten: true });
+  expect(observer.calls.filter((call) => call.op === "insert")).toHaveLength(0);
+});
+
+test("a Bot re-phrasing an observed fact dedupes instead of storing twice", async () => {
+  const { database, calls } = fakeMemoryDatabase([
+    [],
+    [{ id: "m-9" }],
+    [{ id: "m-9", deletedAt: null }],
+  ]);
+  const store = createMemoryStore(database as unknown as Database);
+  const first = await store.formMemory("owner", {
+    agentId: "bot",
+    content: "Prefers morning meetings",
+    sourceApp: "Calendar",
+  });
+  const second = await store.formMemory("owner", {
+    agentId: "bot",
+    content: "prefers MORNING meetings!",
+    sourceApp: "Calendar",
+  });
+  expect(first).toEqual({ id: "m-9", duplicate: false, forgotten: false });
+  expect(second).toEqual({ id: "m-9", duplicate: true, forgotten: false });
+  expect(calls.filter((call) => call.op === "insert")).toHaveLength(1);
+});
+
+test("sync skips re-importing content that matches a delete tombstone", async () => {
+  const forgotten = "Project launch is Tuesday";
+  const { database, calls } = fakeMemoryDatabase([
+    [{ id: "s-1", ownerUserId: "owner", enabled: true }],
+    [{ digest: digestMemoryContent(forgotten) }],
+    [],
+    [],
+  ]);
+  const store = createMemoryStore(database as unknown as Database);
+  await store.completeSync("owner", "s-1", [
+    {
+      externalId: "doc-9",
+      content: forgotten,
+      provenance: "Roadmap",
+      digest: "connector-raw-digest",
+    },
+    {
+      externalId: "doc-10",
+      content: "Brand new roadmap fact",
+      provenance: "Roadmap",
+      digest: "connector-raw-new",
+    },
+  ]);
+  const inserts = calls.filter((call) => call.op === "insert");
+  expect(inserts).toHaveLength(1);
+  const values = (inserts[0]?.values ?? {}) as Record<string, unknown>;
+  expect(values.externalId).toBe("doc-10");
+  // The surviving row still goes through the upsert that preserves edited and deleted rows.
+  expect(inserts[0]?.conflict).toBe("update");
 });

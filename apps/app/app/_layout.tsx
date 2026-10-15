@@ -1,14 +1,19 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { useColorScheme } from "react-native";
 
-// TODO(phase-4): QueryClient — @tanstack/react-query is not a declared dep of
-// @orbo/app and is not resolvable from apps/app (isolated bun install), and
-// package.json is out of scope for WS-01, so no QueryClientProvider yet.
-// Follow-up: add "@tanstack/react-query": "5.102.2" to apps/app/package.json,
-// run bun install, then wrap the stack in
-// <QueryClientProvider client={queryClient}> with the web-app defaults from
-// app/src/query-client.ts (retry: 1, refetchOnWindowFocus: false).
+// QueryClient mirrors the web-app defaults from app/src/query-client.ts
+// (retry: 1, refetchOnWindowFocus: false).
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
+
 // TODO(phase-4): session/auth bootstrap (better-auth + SecureStore) plus
 // deep-link + push wiring per docs/planning/03-route-tree.md §5.
 // Explicitly out of scope for WS-01 — screens stay placeholders.
@@ -68,8 +73,10 @@ function ThemeProvider({ children }: { children: ReactNode }) {
 
 export default function RootLayout() {
   return (
-    <ThemeProvider>
-      <Stack screenOptions={{ headerBackTitle: "Back" }} />
-    </ThemeProvider>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <Stack screenOptions={{ headerBackTitle: "Back" }} />
+      </ThemeProvider>
+    </QueryClientProvider>
   );
 }

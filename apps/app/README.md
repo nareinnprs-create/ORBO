@@ -40,13 +40,35 @@ Stack/group layouts (`_layout.tsx` under `(auth)`, `(app)`, `(tabs)`,
 are stubs. The remaining §5 leaf routes (thread views, space/page detail,
 agent profile subsections, settings/admin subtrees) do not exist yet.
 
+## EAS builds (skeleton — org account pending)
+
+`eas.json` mirrors `mobile/eas.json` (EAS CLI `>= 16.0.0`) with three
+profiles: `development` (dev client, internal distribution), `preview`
+(internal distribution), `production` (defaults). No builds can run yet —
+this file carries **no** owner-dependent values by design.
+
+What's configured: profile names/shape, CLI floor, bundle IDs
+`ai.orbo.app` (iOS + Android) already in `app.json`.
+
+What's pending (TODO — do not invent; wire up once the org account exists):
+
+- TODO: org EAS account + `owner` slug (PLAN.md §10.A.5).
+- TODO: EAS `projectId` wiring (`extra.eas.projectId`, cf.
+  `mobile/app.config.ts` `EXPO_PUBLIC_EAS_PROJECT_ID` pattern).
+- TODO: any bundle identifier beyond `ai.orbo.app`, if the org requires it.
+- TODO: APNs (iOS) / FCM (Android) credentials + build signing
+  (PLAN.md §10.E.38).
+- Push stays gated until then: `registerPush` throws without an EAS
+  project + APNs/FCM — see `mobile/src/notifications.ts` and
+  `docs/planning/05-mobile-web-parity.md` R3.
+
 ## Follow-ups
 
 - **Install**: run `bun install` from the repo root once `apps/app` is
   added to root `workspaces` (deliberately NOT done in this scaffold).
 - **Wiring**: root providers (QueryClient, theme, session bootstrap),
-  deep-link + push-notification wiring, EAS project config, `react-native-web`
-  + Tauri web-export setup.
+  deep-link + push-notification wiring (see EAS section above),
+  `react-native-web` + Tauri web-export setup.
 - **First real screen**: implement `(tabs)/index.tsx` (Home — DIYA default
   conversation + composer) per 03 §5, then port in PLAN.md §8 phase order
   with parity-matrix tracking.

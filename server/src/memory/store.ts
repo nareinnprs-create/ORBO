@@ -1,5 +1,15 @@
 import { createHash, randomUUID } from "node:crypto";
-import { and, desc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 import type { Database } from "../db/client";
 import { memorySources, personalMemories } from "../db/schema/memory";
 import {
@@ -12,6 +22,24 @@ import {
   parseMemoryPatch,
   parseMemorySourceInput,
 } from "./types";
+
+/**
+ * Near-duplicate folding for the write path. Case, punctuation and run-together whitespace carry
+ * no meaning, so "I prefer morning meetings." and "i  prefer MORNING meetings!" share a digest
+ * and the second write dedupes against the first instead of storing twice.
+ */
+export function normalizeMemoryContent(content: string): string {
+  return content
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+export function digestMemoryContent(content: string): string {
+  return createHash("sha256")
+    .update(normalizeMemoryContent(content))
+    .digest("hex");
+}
 
 export function createMemoryStore(database: Database) {
   const getSource = async (ownerUserId: string, id: string) => {
@@ -42,13 +70,53 @@ export function createMemoryStore(database: Database) {
         .limit(500);
     },
     async create(ownerUserId: string, input: unknown) {
+      const parsed = parseMemoryInput(input);
+      const digest = digestMemoryContent(parsed.content);
+      // Near-duplicates land on one row, deleted rows included: the tombstone `remove` leaves is
+      // matched by digest, so re-adding a forgotten fact restores it instead of storing twice.
+      const candidates = await database
+        .select()
+        .from(personalMemories)
+        .where(
+          and(
+            eq(personalMemories.ownerUserId, ownerUserId),
+            eq(personalMemories.importDigest, digest),
+          ),
+        )
+        .orderBy(desc(personalMemories.updatedAt))
+        .limit(5);
+      const live = candidates.find((row) => row.deletedAt === null);
+      if (live) return live;
+      const tombstone = candidates[0];
+      if (tombstone) {
+        const [restored] = await database
+          .update(personalMemories)
+          .set({
+            content: parsed.content,
+            provenance: parsed.provenance,
+            enabled: true,
+            reviewState: "confirmed",
+            deletedAt: null,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(personalMemories.id, tombstone.id),
+              eq(personalMemories.ownerUserId, ownerUserId),
+            ),
+          )
+          .returning();
+        if (!restored) throw new Error("Memory restore returned no row.");
+        return restored;
+      }
       const [row] = await database
         .insert(personalMemories)
         .values({
           id: randomUUID(),
           ownerUserId,
-          ...parseMemoryInput(input),
+          ...parsed,
           reviewState: "confirmed",
+          importDigest: digest,
         })
         .returning();
       if (!row) throw new Error("Memory insert returned no row.");
@@ -57,8 +125,10 @@ export function createMemoryStore(database: Database) {
     /**
      * A memory a Bot formed from something it observed, awaiting the person's review.
      *
-     * Deduplicated on content, deleted rows included: a memory the person forgot stays forgotten
-     * even when the Bot reads the same record again tomorrow.
+     * Deduplicated on near-duplicate content, deleted rows included: a memory the person forgot
+     * stays forgotten even when the Bot reads the same record again tomorrow. A re-observed
+     * tombstone is reported, never restored; only the person re-adding the fact (`create`)
+     * restores it.
      */
     async formMemory(ownerUserId: string, input: FormedMemoryInput) {
       const parsed = formedMemorySchema.safeParse({
@@ -71,9 +141,7 @@ export function createMemoryStore(database: Database) {
         throw new MemoryRefusedError(
           parsed.error.issues[0]?.message ?? "Invalid memory.",
         );
-      const digest = createHash("sha256")
-        .update(parsed.data.content.toLocaleLowerCase())
-        .digest("hex");
+      const digest = digestMemoryContent(parsed.data.content);
       const [existing] = await database
         .select({
           id: personalMemories.id,
@@ -294,7 +362,30 @@ export function createMemoryStore(database: Database) {
           )
           .for("update");
         if (!source) throw new MemoryNotFoundError();
+        // Tombstones survive sync: a fact the person deleted stays forgotten even when the vendor
+        // re-issues it under a new external id. Both digests are checked because imported rows
+        // carry the connector's raw digest while newer tombstones carry the folded one.
+        const tombstoned = await transaction
+          .select({ digest: personalMemories.importDigest })
+          .from(personalMemories)
+          .where(
+            and(
+              eq(personalMemories.ownerUserId, ownerUserId),
+              isNotNull(personalMemories.deletedAt),
+              isNotNull(personalMemories.importDigest),
+            ),
+          );
+        const suppressed = new Set(
+          tombstoned
+            .map((row) => row.digest)
+            .filter((digest): digest is string => digest !== null),
+        );
         for (const record of records) {
+          if (
+            suppressed.has(record.digest) ||
+            suppressed.has(digestMemoryContent(record.content))
+          )
+            continue;
           await transaction
             .insert(personalMemories)
             .values({
@@ -318,7 +409,9 @@ export function createMemoryStore(database: Database) {
                 importDigest: record.digest,
                 updatedAt: new Date(),
               },
-              setWhere: sql`${personalMemories.importDigest} IS DISTINCT FROM ${record.digest}`,
+              // Edited and deleted rows are frozen, digest included, so a later sync can neither
+              // rewrite the person's words nor erode the tombstone that blocks re-import.
+              setWhere: sql`${personalMemories.importDigest} IS DISTINCT FROM ${record.digest} AND ${personalMemories.deletedAt} IS NULL AND ${personalMemories.reviewState} <> 'edited'`,
             });
         }
         await transaction

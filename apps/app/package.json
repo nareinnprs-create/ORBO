@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@orbo/ui": "workspace:*",
+    "@tanstack/react-query": "5.102.2",
     "expo": "~55.0.0",
     "expo-constants": "~55.0.7",
     "expo-linking": "~55.0.7",
