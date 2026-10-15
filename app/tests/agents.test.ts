@@ -78,7 +78,7 @@ describe("coworker form validation", () => {
     expect(
       agentFormSchema.safeParse({
         ...valid,
-        roleDescription: "r".repeat(1001),
+        roleDescription: "r".repeat(2001),
       }).success,
     ).toBe(false);
     expect(

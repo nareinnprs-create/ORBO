@@ -9,6 +9,7 @@
 > (14 primitives: button/checkbox/dialog/empty/field/input-group/input/item/label/select/separator/skeleton/switch/textarea + tokens); `apps/app` Expo placeholder shell;
 > DIYA `diya` seed row in `examples/orbo/agents.yaml`; coverage tripwire + floors in `scripts/test-ci.ts`.
 > Still-open owner gates: threads identity, spaces ownership, route freeze, `packages/ui` RN runtime, brand assets.
+> Wave-1 (verified on disk 2026-10-15): `threads` + `notifications` tables + `0053` migration exist; `roleDescription` 2000 in form (`app/src/lib/agents/form.ts`) + server parser (`server/src/agents/routes.ts`); diya-first rule in-flight in parallel (not asserted landed). Owner gates stay open (reversible per decision).
 > Phase 6 = PLAN.md §8 item 6: *"Port OpenMuse screens (Documents/Finance/Goals/Activity/Ideas)
 > into the unified IA."*
 
@@ -140,7 +141,7 @@ timestamp/owner mapping, R9 coverage floor). Deltas new or sharpened by 23–26:
 | N6 | 771-line `computer.ts` interlock (26 R9) sharpens 09 R3 | Lease/stop/exec jail + stop-quarantine + receipts is the subtlest tree; clean-room rewrite loses safety | Port with `computer*.test.ts` + `prepare-lease-loss` or not at all; no partial port |
 | N7 | Sample-vs-live branching infects surfaces (26 R10) — new | `workspace.ts`/`service.ts` sample mode seeds mails/events behind the same code paths | Cut sample mode at the route boundary; ORBO fixtures replace seeded mails; demo determinism test |
 | N8 | `27-app` / `28-gmail` missing at draft time — **LANDED 2026-10-14** | P6-08 card inventory and P6-09 Gmail depth (860-line client) were estimated from `23/26` proxies, not the dedicated inventories | Re-verify P6-08/P6-09 UI + send-path line refs against landed `27`/`28` before work orders; server logic proceeds regardless |
-| N9 | Notifications homelessness blocks watches (25 R6, 02 risk #11) sharpens 09 W4 | Watch alerts + task-done fan-out have no resource home; P6-04 slice M6 cannot land | Decide notifications home in W0; until then watches run quiet (no fan-out) with backoff tests green |
+| N9 | Notifications homelessness blocks watches (25 R6, 02 risk #11) sharpens 09 W4 | Watch alerts + task-done fan-out have no resource home; P6-04 slice M6 cannot land | `notifications` table landed via `0053` (verified on disk; reversible per decision) — decide notifications home in W0; until signed watches run quiet (no fan-out) with backoff tests green |
 | N10 | pdf-lib/XFA/encrypted + font chain (23 R3–R4) — new supply risk | Third-party native dep; only text/checkbox fill; dropdown/radio inspect as `unsupported`; fill failures surface as font errors | Pin + Phase 9 license scan; preserve verbatim 422s; viewer renders (never fills) unsupported forms |
 
 09 R6 (RN-port stall) and R7 (voice/media) are unchanged but bite P6-02/P6-08
@@ -154,9 +155,9 @@ the per-platform picker contract (24 R1).
 
 ### A. Required before W1 work orders (block tables/API/UI)
 
-1. **Threads vs channels authority** (01 §9 #1) — blocks P6-01 reply/thread binding, P6-05 review linkage, P6-04 alert keys. Build P6-01 steps 1–4 + P6-05 tables first; defer bindings (same deferral as 16 §5 #4).
+1. **Threads vs channels authority** (01 §9 #1) — blocks P6-01 reply/thread binding, P6-05 review linkage, P6-04 alert keys (`threads` table landed via `0053`, verified on disk; sign-off still open, reversible). Build P6-01 steps 1–4 + P6-05 tables first; defer bindings (same deferral as 16 §5 #4).
 2. **Spaces ownership** (01 §9 #3: flatten vs container) — blocks P6-01 `artifacts` bytes decision (N1) and P6-02/P6-08 viewer homes.
-3. **Notifications home** (02 risk #11) — blocks P6-04 alert fan-out (N9).
+3. **Notifications home** (02 risk #11) — blocks P6-04 alert fan-out (N9) (`notifications` table landed via `0053`, verified on disk; sign-off still open, reversible).
 4. **C24 route freeze**: finance home (Work artifact vs `work/finance` route, 24 Q1) + viewer routes — blocks P6-08 UI work; server logic proceeds regardless.
 5. **`records` keep-or-retire + `monitors`/`goals`/`ideas` table scope** (26 §5; 01 §8) — blocks P6-07 importer + P6-04 tables.
 6. **27/28 reconciliation sign-off** — confirm P6-08 card list and P6-09 client subset against the landed inventories (N8).

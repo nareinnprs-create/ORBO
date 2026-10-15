@@ -372,6 +372,13 @@
       "when": 1791396757748,
       "tag": "0052_shared_brokered_accounts",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1792075367203,
+      "tag": "0053_futuristic_the_fury",
+      "breakpoints": true
     }
   ]
 }

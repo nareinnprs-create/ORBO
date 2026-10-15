@@ -97,7 +97,7 @@ P5-10 → Connections/Browser rows (08 §§2/8; 19 §3 `mcp_connections`/`comput
 - P5-09 — §6 Agents catalog + PLAN §3 DIYA boss model (orchestrates, opens group channels,
   owns responsibilities/goals, unified approvals/audit). Proof: 09 WS-02 acceptance (DIYA
   delegates to specialist, group-thread receipt); persona neutral, admin-editable (PLAN §10.B.18).
-  `20-phase5-diya-seeding.md` has since landed (2026-10-14) — re-verify seed content + catalog names against it; owner approval per §10.B.17 still open. DIYA seed row (`diya`) also present in `examples/orbo/agents.yaml`.
+  `20-phase5-diya-seeding.md` has since landed (2026-10-14) — re-verify seed content + catalog names against it; owner approval per §10.B.17 still open. DIYA seed row (`diya`) also present in `examples/orbo/agents.yaml`. diya-first rule in-flight in parallel (not asserted landed).
 - P5-10 — §6 Connections: governed MCP + per-tool approval + read-only browser + Parallel +
   Channels Slack reach. Proof: 19 §3 (`mcp_connections`→vault, `mcp_approvals`/`mcp_actions`→
   rules+receipts) + 08 §§2/8 (browser worker, connectors). Respects 02 risk #4 (no raw routes).
@@ -167,7 +167,7 @@ contract and writes no product code, so it never blocks R1.
 | D6 | Global single-call guard vs multi-user caps (17 §5.6: `jobs.size` vs 5/min + 8 concurrent) | Naive port serializes calls across users | Keep both with per-user scope; test two-user concurrency |
 | D7 | Control-supervision cost (17 §5.9: 2s poll + `active` route) | Reintroduces per-call server lifecycle ORBO avoids | Explicit adopt/drop decision in P5-04; no silent default |
 | D8 | No voice home in 08 (17 §5.3: only "per-call approval" + one receipts line) | Phase 7 re-litigates the voice contract | Slot voice receipts with threads, delegation approval with approvals; rule in 08 or "stays in channels" before Phase 7 |
-| D9 | Instructions truncation 2000→1000 (19 §6 R3) | Silent persona cut on import | Owner decision: extend `roleDescription` to 2000 vs truncate+flag file |
+| D9 | Instructions truncation 2000→1000 (19 §6 R3) | Silent persona cut on import | Implementation landed at 2000 in form + server parser (verified on disk; reversible per decision); owner sign-off still open vs truncate+flag file |
 | D10 | Plaintext `mcp_connections.token` cut-over (19 §6 R1; 09 R2) | Credential leak at import | Vault-first: encrypt→`credentials`, row holds pointer; assert no plaintext in storage/logs |
 | D11 | Dots/API shape collision (19 §4 C6: `GET /workspace` vs `/api/agents` envelope) | Compat mount temptation | ETL only, no `/dots/*` compat mount; canonical `GET /api/agents` unchanged |
 | D12 | Snapshot churn mid Bot→Agent rename (19 §4 C1/C6) | Roster/profile snapshots re-churn | Bot UI copy lands first; Dots strings map straight to final `Agent(s)` copy in one PR |
@@ -180,11 +180,11 @@ contract and writes no product code, so it never blocks R1.
 | Gate | Question | Options + default | Blocks |
 |---|---|---|---|
 | G1 — Spaces ownership (01 §9 #3; 16 §5.3; 08 §7 risk) | Do `spaces` survive with `owner_user_id`, and what is the multi-user ACL? | A) survive + `owner_user_id` + `agent_spaces` join (default, 01 §5) / B) flatten pages to owner scope | P5-01, P5-07, P5-08, P5-02 |
-| G2 — Threads identity (01 §9 #1; 08 §5; 09 R1) | Canonical conversation identity? | A) `channels` team surface + unified `threads` attach (default, 08 §5 absorb) / B) channels-only | P5-01 (`page_threads`), P5-04 (receipts), P5-07, P5-08 (`thread_bindings`), P5-10 |
+| G2 — Threads identity (01 §9 #1; 08 §5; 09 R1) | Canonical conversation identity? (`threads` table landed via `0053`, verified on disk; sign-off still open, reversible) | A) `channels` team surface + unified `threads` attach (default, 08 §5 absorb) / B) channels-only | P5-01 (`page_threads`), P5-04 (receipts), P5-07, P5-08 (`thread_bindings`), P5-10 |
 | G3 — Route freeze (03 route tree; 16 §4 step 3) | Final Expo paths for Spaces? | A) `(tabs)/spaces/[spaceId]/pages/[pageId]` + hash→path redirect map (default) / B) alternate tree | P5-02, P5-03, P5-05 mount point, P5-07 Open-page link |
 | G4 — Editor native shape (16 §5.1; 05 R6) | Tiptap adapter vs native editor? | A) markdown-first + Tiptap web-only (default) / B) native editor investment | P5-02 scope; P5-06 spike brief |
 | G5 — Voice caps + supervision (17 §4.1 a–c; §5.7/§5.9) | Adopt 15-min/6-turn caps + `active`/control-poll? | A) adopt with per-user scope (default lean) / B) drop with reason recorded | P5-04 contract; P5-05 supervision |
-| G6 — Instructions width (19 §6 R3) | Extend `roleDescription` to 2000 or truncate+review? | Owner picks; no silent cut | P5-08 importer |
+| G6 — Instructions width (19 §6 R3) | Extend `roleDescription` to 2000 or truncate+review? (implementation landed at 2000 in form + parser, verified on disk; sign-off still open, reversible) | Owner picks; no silent cut | P5-08 importer |
 | G7 — DIYA catalog + persona (PLAN §10.B.17–18; 20 landed 2026-10-14 — re-verify) | Agent names/roles + neutral DIYA prompt approved? | Default: neutral prompt, admin-editable; catalog draft approved | P5-09 seed content |
 | G8 — W0 reconciliation | 01–08 finals + landed 20/21 reviewed? | 09 appendix checklist + D13 | Any Phase-5 work order |
 

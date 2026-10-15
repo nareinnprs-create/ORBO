@@ -30,7 +30,7 @@ port sequencing.
 **Options:** A. Freeze now with redirect map — one re-check cycle against `03` when C24 lands, then build starts. / B. Keep tree open — every port phase re-derives paths from TanStack sources, deferring deep-link and tab contracts.
 **Recommendation:** A — because `07` V5/V12 already flags routes as targets-not-paths and `03` §7 ships the redirect-map mitigation (param churn, hash `#/spaces/…` migration), so freezing bounds Finance/work-viewer placement instead of rediscovering it per phase.
 **Blocked work:** Phase 3 Expo `(app)`/`(tabs)` scaffold; `03` §6 mapping execution (bots→agents folds, `[key]/bots/[agentId]` split); push/deep-link route join (`05` F7); `07` §4 Wave 0 reference screen + Waves 1–7 screen builds.
-**Status:** OPEN
+**Status:** IN PROGRESS — executing on recommended slate per owner start directive (reversible per decision; overrides welcome)
 Context: `03` §5 defines one Expo app (root `_layout`, `+not-found`, `(auth)`
 sign-in/callback/onboarding, `(app)` shell with `(tabs)` Home/Chat/Spaces/
 Work/Agents plus connections/computer/approvals/memory/settings/admin
@@ -65,7 +65,7 @@ merge section (`07` V11).
 **Options:** A. RN cross-platform single source (`react-native` + `react-native-web`) — one primitive set for web/iOS/Android, gallery + Tiptap editor stay web-only. / B. Web-only kit — ship DOM/Base-UI primitives now, fork or rewrite a native kit later.
 **Recommendation:** A — because `04` §4 sets the RN+web runtime rule, `04` B1/G2 names this the structure-freeze blocker, and `15` §§1–8 prices the alternative (16 `ui` files carry `@base-ui`/`@shadcn` imports with no RN runtime; ADAPT rows hang off `05` §3 split leaves), so web-only just schedules the `15` §7 rewrites twice.
 **Blocked work:** `packages/ui` scaffold completion (tokens, primitives, layout, chat per `04` §§4–5); `15` §7 build order items 1–6 (composer, chat scroll, sidebar chrome, voice/media); `05` R6 visual-parity assertion; `07` V4 token/primitive convergence before Wave 0.
-**Status:** OPEN
+**Status:** IN PROGRESS — executing on recommended slate per owner start directive (reversible per decision; overrides welcome)
 Context: `04` §4 proposes `packages/ui` (tokens, primitives, layout, chat,
 gallery, editor, brand) with 34 canonical primitives and the runtime rule
 that primitives are authored on RN + `react-native-web` while gallery and
@@ -97,7 +97,7 @@ render + Record→Item / Notice→state-row / charts→text-summary fallbacks pe
 **Options:** A. Lock tokens now (wordmark/headings Montserrat, Inter body, royal-purple + blue-grey ramps) behind a monogram placeholder, swap art when owner assets land. / B. Wait for final art — hold tokens, icons, splash, and purple-contrast verification until the full kit arrives.
 **Recommendation:** A — because `04` G1/B2 + `07` V2/V3 already define the placeholder path (monogram behind one `brand` module, purple token fixed before any screen uses it for WCAG AA per `07` §5), so Wave 0 (`07` §4: tokens + A1 reference screen) can proceed while art is pending.
 **Blocked work:** `packages/ui` tokens (`04` §§5.1–5.3, `07` §3.1–§3.2); `brand/` Logo/Wordmark/BrandMark (`04` §4, `04` §6 REPLACE avatar/mascot rows); dark-mode + contrast audit (`07` §5 step 2); empty-state/icon pass (`07` Wave 8 items 32–34).
-**Status:** OPEN
+**Status:** IN PROGRESS — executing on recommended slate per owner start directive (reversible per decision; overrides welcome)
 Context: brand kit is PLAN §1/§4 locked (Montserrat wordmark/headlines +
 Inter body, royal purple AI accents, deep blue-grey base) but owner art is
 pending (`07` V2, PLAN §10.A.1). `04` §5 defines the full token ramps
@@ -137,7 +137,7 @@ a separate decision.
 **Options:** A. Unify on `orbo:` — migrate mobile + server off `orbomobile:` with a compat window, one scheme in Expo `app.json`, Tauri config, and server trust lists. / B. Keep both — `orbo:` (unified `apps/app/app.json:6`, desktop `tauri.conf.json` `["orbo"]`) alongside legacy `orbomobile:` (`mobile/app.config.ts:8`, `mobile/src/auth.ts`, `server/src/auth/index.ts` trust).
 **Recommendation:** A — because `03` §7 + `05` F7/F10 require one joined route map (chat `[channelId]`, approvals, spaces pages) and the current split already forks auth redirects (`orbomobile://` callbacks), push URLs (`server/src/delivery/push.ts`), and link parsing (`mobile/src/links.ts`, tested in `mobile-links.test.ts`), so two schemes double every deep-link test.
 **Blocked work:** `(auth)` callback + `(app)` session-guard wiring (`03` §5); `05` F6/F7 notification-routing parity; desktop deep-link registration in both `tauri.conf.json` and Expo `app.json` (`03`:450–451); EAS/push credential pass (`05` R3).
-**Status:** OPEN
+**Status:** IN PROGRESS — executing on recommended slate per owner start directive (reversible per decision; overrides welcome)
 Context: `05` F7 records the implemented native scheme as `orbomobile:`
 (`mobile/src/links.ts` → `/conversation`, `/approvals`; `mobile/app/_layout.tsx`
 handler) while the unified successor declares `orbo` (`apps/app/app.json:6`,
@@ -170,7 +170,7 @@ server trust lists reference `orbo:` only.
 **Options:** A. Full parity — all `07` §2 screens (58: Chat 6, Spaces 5, Work 5, Connections 5, Agents 11, Admin 14, Settings 9, Identity 3) on iOS/Android from Phase 3. / B. Tiered scope — native ships Chat/Agents/Work-core + approvable surfaces first; admin console, playground, components gallery, and editors stay web/desktop until parity-matrix sign-off.
 **Recommendation:** B — because `05` R12 marks the 11-screen mobile shell vs 60 web route files as the undecided scope question, `15` R8 prices full parity as scope creep over the §7 rewrite list, and `07` V8 + §4 waves already order Chat/Agents/Settings first with admin reusing the config pattern later.
 **Blocked work:** `05` §4 parity-checklist execution (F1/F3–F9 native leaves: picker, recorder, WebRTC, clipboard, storage, PDF); `15` §7 items 1–6 gating native builds; `07` Waves 1–7 sequencing; Phase 3 delete-gate for the Vite + mobile shells (`03` §7: delete only after parity).
-**Status:** OPEN
+**Status:** IN PROGRESS — executing on recommended slate per owner start directive (reversible per decision; overrides welcome)
 Context: `05` R12 states the coverage fact (mobile 10 screens + layout vs web
 60 route files per `03` §1) with scope unknown: which web surfaces the unified
 Expo app must port in Phase 3 vs leave web-only. `07` §2 answers with a

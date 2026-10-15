@@ -54,7 +54,7 @@ export const chart = {
 
 export const typography = {
   families: {
-    /** Wordmark/headlines. NOT vendored yet — see 04 G1. */
+    /** Wordmark/headlines. Vendored in app via @fontsource-variable/montserrat (04 G1). */
     display: "Montserrat",
     /** UI/body. Shipped via @fontsource-variable/inter. */
     body: "Inter",

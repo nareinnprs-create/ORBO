@@ -6,8 +6,8 @@ import { cn } from "./utils";
  * Canonical BrandMark (`BrandMark` + `Wordmark`).
  *
  * There is no brand-mark source in the app — per 04-design-system.md §3/§6
- * every upstream avatar/mascot (boring-avatars, OpenMuse capybara, OpenDots
- * mascot) is REPLACED by the ORBO brand mark, and §5.3 fixes the wordmark to
+ * every legacy avatar set (boring-avatars and other upstream marks)
+ * is REPLACED by the ORBO brand mark, and §5.3 fixes the wordmark to
  * Montserrat 700. The orb here is a static inline-SVG disc in the
  * royal-purple token scale (hex fallbacks), not the motion-driven
  * `agents/orb/agent-orb.tsx` (no `motion`, no audio/amplitude/state — a

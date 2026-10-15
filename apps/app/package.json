@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@orbo/ui": "workspace:*",
     "expo": "~55.0.0",
     "expo-constants": "~55.0.7",
     "expo-linking": "~55.0.7",

@@ -1,12 +1,14 @@
 import type { AgentProfile } from "./queries";
 
 export const PICKED_HARNESS_AGENT_ID = "picked-harness";
+export const DIYA_AGENT_ID = "diya";
 
 export function defaultAgentProfile(
   agents: readonly AgentProfile[] | undefined,
   fallback?: AgentProfile,
 ): AgentProfile | undefined {
   return (
+    agents?.find((candidate) => candidate.id === DIYA_AGENT_ID) ??
     agents?.find((candidate) => candidate.id === PICKED_HARNESS_AGENT_ID) ??
     fallback ??
     agents?.[0]

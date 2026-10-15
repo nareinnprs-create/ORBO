@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   defaultAgentId,
   defaultAgentProfile,
+  DIYA_AGENT_ID,
   PICKED_HARNESS_AGENT_ID,
 } from "@/lib/agents/default-agent";
 import type { AgentProfile } from "@/lib/agents/queries";
@@ -59,5 +60,43 @@ describe("default agent selection", () => {
 
   test("returns undefined when the roster is still absent", () => {
     expect(defaultAgentId(undefined)).toBeUndefined();
+  });
+
+  test("prefers diya when present, even over the picked harness", () => {
+    const chosen = defaultAgentProfile([
+      agent("general-assistant", "General Assistant"),
+      agent(PICKED_HARNESS_AGENT_ID, "LangGraph"),
+      agent(DIYA_AGENT_ID, "DIYA"),
+    ]);
+
+    expect(chosen?.id).toBe(DIYA_AGENT_ID);
+    expect(
+      defaultAgentId([agent(PICKED_HARNESS_AGENT_ID), agent(DIYA_AGENT_ID)]),
+    ).toBe(DIYA_AGENT_ID);
+  });
+
+  test("prefers diya over a route-specific fallback", () => {
+    const shared = agent("shared-agent", "Shared Agent");
+
+    expect(
+      defaultAgentProfile(
+        [agent("general-assistant"), agent(DIYA_AGENT_ID), shared],
+        shared,
+      )?.id,
+    ).toBe(DIYA_AGENT_ID);
+  });
+
+  test("keeps the old chain unchanged when diya is absent", () => {
+    const general = agent("general-assistant", "General Assistant");
+    const harness = agent(PICKED_HARNESS_AGENT_ID, "LangGraph");
+    const shared = agent("shared-agent", "Shared Agent");
+
+    expect(defaultAgentProfile([general, harness])?.id).toBe(
+      PICKED_HARNESS_AGENT_ID,
+    );
+    expect(defaultAgentProfile([general, shared], shared)?.id).toBe(
+      "shared-agent",
+    );
+    expect(defaultAgentId([general, shared])).toBe("general-assistant");
   });
 });

@@ -17,6 +17,8 @@ One line per decision (copy the slate, change letters as needed):
 D1:A D2:A D3:A D4:A D5:A D6:A D7:A D7.1:A D7.3:B D7.4:A D8:B D9:A D10:A D11:A D12:A D13:A D14:A D16:A U1:B
 ```
 
+> Status: IN PROGRESS — executing on recommended slate per owner start directive (reversible per decision; overrides welcome). Nothing marked SIGNED.
+
 Per-decision format: `D<n>: <A|B> — <conditions, if any>`. A `B` (or redirect)
 must name the follow-up doc amendment it requires. `INPUTS-1..7` are supplied
 values, not votes — reply `INPUTS-5: EAS org = <value>` style, or `DEFER`.

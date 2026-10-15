@@ -26,6 +26,7 @@
         "@copilotkit/a2ui-renderer": "1.77.0",
         "@copilotkit/react-core": "1.77.0",
         "@fontsource-variable/inter": "^5.3.0",
+        "@fontsource-variable/montserrat": "^5.3.0",
         "@shadcn/react": "^0.3.0",
         "@tabler/icons-react": "^3.36.1",
         "@tanstack/react-form": "^1.33.5",
@@ -67,6 +68,7 @@
       "name": "@orbo/app",
       "version": "0.1.0",
       "dependencies": {
+        "@orbo/ui": "workspace:*",
         "expo": "~55.0.0",
         "expo-constants": "~55.0.7",
         "expo-linking": "~55.0.7",
@@ -636,6 +638,8 @@
     "@floating-ui/utils": ["@floating-ui/utils@0.2.12", "", {}, "sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww=="],
 
     "@fontsource-variable/inter": ["@fontsource-variable/inter@5.3.0", "", {}, "sha512-OupL48va4JNofb97w6NYeF9S7W/kHNKM0Er8Dem5nqi4jeOLrVJDoE8tZEpnMJmtkvNbB1EIPPwHcdkF6b1oUA=="],
+
+    "@fontsource-variable/montserrat": ["@fontsource-variable/montserrat@5.3.0", "", {}, "sha512-7PaZoxaxrWLAyrhO46v65An9LhUhfkTExWLhfbywYZCnZEgg/W1rEHnlNmZKjNZ3nJTVYyicqxlJt10z/26yTA=="],
 
     "@graphql-tools/executor": ["@graphql-tools/executor@2.0.0", "", { "dependencies": { "@graphql-tools/utils": "^12.0.0", "@graphql-typed-document-node/core": "^3.2.0", "@repeaterjs/repeater": "^3.1.0", "@whatwg-node/disposablestack": "^0.0.6", "@whatwg-node/promise-helpers": "^1.0.0", "tslib": "^2.4.0" }, "peerDependencies": { "graphql": "^14.0.0 || ^15.0.0 || ^16.0.0 || ^17.0.0" } }, "sha512-BjoqO5UfcV3BUqamGtHNm4ITBk040VOmWql/MrUefPo30x6t4v1+engfjgAjWikMsRPLU4ZC6e2QjICLucnOTA=="],
 

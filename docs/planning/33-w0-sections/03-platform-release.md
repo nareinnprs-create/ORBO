@@ -23,7 +23,7 @@
 **Options:** A. Setup-shell-first-run wrapping `app/dist` at runtime via the existing `show_orbo` loopback navigation — days, zero Rust risk, first-run UX untouched (31 §4 Option A) / B. Pure wrapper: wizard dissolved into web-app first-run routes (`(auth)/onboarding` per 03:375), `frontendDist` repointed at the export — closes R7 fully, costs weeks plus Tauri-conditional code in the web bundle (31 §4 Option B)
 **Recommendation:** A — because the `show_orbo` navigation seam already works (`main.rs:2405-2483`), no Rust logic changes, and 13's deletion checklist can run in parallel; PLAN §3 "no separate UI" stays open as tracked debt, not silent drift.
 **Blocked work:** P8 wrapper build (G1 repoint, G2 setup relocation, G6 serving-shape call); P4 export-swap handoff (A-step-6/B-step-7); docs loop (`architecture.md`, `configuration.md`, `deployment.md`, 05 R7 row).
-**Status:** OPEN
+**Status:** IN PROGRESS — executing on recommended slate per owner start directive (reversible per decision; overrides welcome)
 Context: 30 §5 finds the desktop tree is a setup/onboarding shell that installs an
 engine, fetches a deployment, raises a local stack (Compose `postgres`,
 `supervisor`, `agent-computer` + conditional bots; host processes server/app/worker),
@@ -45,7 +45,7 @@ gate text + smoke + docs); B ≈ M–L (1–3 weeks, routes + bindings + tests +
 **Options:** A. Yes: `app/dist` interim → `apps/app` export at 13-checklist completion, same `frontendDist` + command seam, second swap is config-only — matches what exists on disk / B. Target `apps/app` output directly — blocked: no export script (`apps/app/package.json:7-13`), placeholder `_layout.tsx` (TODO phase-4), 13 §2–§3 gates the cutover (31 §2 table)
 **Recommendation:** A — because `app/dist` exists and is served today while the Expo export does not exist yet; a direct target would gate Phase 8 on Phase 4's deletion checklist.
 **Blocked work:** P8 A-step-1 build coupling (`beforeBuildCommand` freshness / `serve-or-build.ts` reuse, 13 C12); P4 baton swap (one repoint + smoke).
-**Status:** OPEN
+**Status:** IN PROGRESS — executing on recommended slate per owner start directive (reversible per decision; overrides welcome)
 Context: 31 §2 stages the cutover explicitly — (a) make Tauri a true wrapper around
 `app/dist` now, then (b) swap the wrapped root to the `apps/app` export when 13's
 deletion checklist completes, re-using the same `frontendDist` + command seam so
@@ -63,7 +63,7 @@ new CORS surface) unless the owner picks bundle + explicit origin.
 **Options:** A. Confirm `orbo:` — aligns with the mobile `orbomobile:` precedent (05 F7) and the existing `single-instance` argv-forwarding seam (`Cargo.toml:33`); work becomes crate + route map only / B. Pick a different scheme — renames both configs plus the `chat/[channelId]` + approvals + spaces hash-link redirect map (03 migration notes)
 **Recommendation:** A — because the config placeholder and the Expo `app.json` entry already agree on `orbo:`, and `single-instance` forwarding exists; remaining work is the missing `tauri-plugin-deep-link` crate + handlers, not a naming debate.
 **Blocked work:** P8 G3 (deep-link crate registration, route map, `#/spaces/…` redirect map); P3 route-port order for linkable screens (08 merge order).
-**Status:** OPEN
+**Status:** IN PROGRESS — executing on recommended slate per owner start directive (reversible per decision; overrides welcome)
 Context: 31 G3 is precise about the gap — the scheme is registered as config but
 there is NO `tauri-plugin-deep-link` crate in `Cargo.toml`, so second-launch argv
 forwarding exists (`single-instance` present) while scheme handling does not.
@@ -82,7 +82,7 @@ lands on real wrapped routes from day one (31 §4).
 **Options:** A. Claim PDF/documents at install (bundle `fileAssociations`, opener wiring already present) — matches the §6 Documents pipeline, small config / B. Claim nothing in v1 (config-only placeholder, no handlers) — zero OS-claim review surface until the Documents pipeline and G6 serving shape settle
 **Recommendation:** B — because G5 is handler-greenfield (one window, no associations in `tauri.conf.json:25-53`) and OS claims invite store/review friction; file the association list as config-only per 31 A-step-4 and activate with the pipeline.
 **Blocked work:** P8 G5 (window policy + per-OS association claims + opener wiring); §6 Documents PDF view/paging/zoom/share parity (05 F13/F15).
-**Status:** OPEN
+**Status:** IN PROGRESS — executing on recommended slate per owner start directive (reversible per decision; overrides welcome)
 Context: 31 G5 scopes this as small config with an owner call attached — window
 policy (size/title per surface?) plus PDF/document associations per OS, with the
 `opener` plugin already present so invocation plumbing exists but claims do not.
@@ -100,7 +100,7 @@ native `react-native-pdf`) shows the reader itself is still a platform split.
 **Options:** A. Yes, placeholder — no endpoint (domain unset), no key to distribute, per-OS signed artifacts not yet flowing (30 R1; PLAN B14 verbatim) / B. Wire the updater now — requires domain endpoint + pubkey + signed `dmg/msi/nsis/appimage/deb/rpm` pipeline first (31 G4)
 **Recommendation:** A — because the updater has no crate, no config, and no endpoint today, and §10.B.14 explicitly defers it to "an ORBO endpoint (placeholder until domain set)"; wiring it now manufactures a key-distribution decision the owner has not made.
 **Blocked work:** P8 G4 (updater crate + endpoint + signed-artifact flow); §10.E.38 signing wiring; release distribution channel choice.
-**Status:** OPEN
+**Status:** IN PROGRESS — executing on recommended slate per owner start directive (reversible per decision; overrides welcome)
 Context: 30 R1 states the no-auto-update finding flatly — no updater plugin,
 config, or endpoint — and 30 §4 records that the only updater-key mention in the
 tree (`docs/windows-signing.md:75`) exists to say none is needed. 31 G4 adds the
@@ -117,7 +117,7 @@ domain is set and `plugins.updater` stays `active: false` (31 §5).
 **Options:** A. Server-mediated caps in v1: WS fallback transport + transcription endpoint over the shared contract, supervision server-owned (05 F16 shared), native WebRTC/recorder modules deferred — ships §6 "realtime calls" functionally without native media crates / B. Full native media parity in v1: add `react-native-webrtc` + recorder modules, resolve TURN/STUN, ship per-platform splits (`recording.{web,native}`, screen-transport contract per 05 §3) — true parity, needs credentials + weeks
 **Recommendation:** A — because R1/R2 mark the native modules as missing (not chosen), R3 gates store release on credentials not held (EAS/APNs/FCM, PLAN §10.A.5 + §10.E.38), and every divergent feature already calls the same Hono API so a server-mediated path is shippable while B's inputs are pending.
 **Blocked work:** P3 native splits (recorder, voice transport, notifier per 05 §3 table); P-release push onboarding (05 R3 → INPUTS EAS + cert accounts); TURN/STUN provisioning answer; CopilotKit native parity check (05 R5).
-**Status:** OPEN
+**Status:** IN PROGRESS — executing on recommended slate per owner start directive (reversible per decision; overrides welcome)
 Context: 05 §2 makes parity a client-side concern — the web client
 (`app/src/lib/client.ts`) and the native client (`mobile/src/api.ts`) call the same
 ORBO Hono `/api/...`, so a server-mediated voice/dictation path (WS fallback the

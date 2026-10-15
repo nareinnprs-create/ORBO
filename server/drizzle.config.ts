@@ -39,6 +39,8 @@ export default defineConfig({
     "./src/db/schema/passwords.ts",
     "./src/db/schema/team-bots.ts",
     "./src/db/schema/shared-use.ts",
+    "./src/db/schema/threads.ts",
+    "./src/db/schema/notifications.ts",
   ],
   out: "./drizzle",
   dbCredentials: {

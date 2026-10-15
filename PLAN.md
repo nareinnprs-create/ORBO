@@ -3,7 +3,7 @@
 > **Product:** ORBO
 > **Boss agent:** DIYA (the primary orchestrator inside ORBO)
 > **Owner:** Opraiz Technology Pvt Ltd · **Developer:** Narein Rao
-> **Status:** Phases 1–2 complete and pushed; Phase 3 designs in `docs/planning/01–09`; Phase 4 kickoff done (10–15 + `apps/app` scaffold); Phase 5 kickoff done (16–22); Phase 6 kickoff done (23–29); Phase 7 executing; Phase 8 kickoff done (30–31); Phase 9 executing; approved fixes pushed incl. image-disk round 2 (free runner disk, prune agent-computer dev tree, merge apt layers) + ui 20 primitives — awaiting green CI; threads-identity owner decision still gates core merges; W0 decision packet 33 (+4 parts) ready for sign-off.
+> **Status:** Phases 1–2 complete and pushed; Phase 3 designs in `docs/planning/01–09`; Phase 4 kickoff done (10–15 + `apps/app` scaffold); Phase 5 kickoff done (16–22); Phase 6 kickoff done (23–29); Phase 7 executing; Phase 8 kickoff done (30–31); Wave 1 executing on recommended slate: threads/notifications tables + 0053, roleDescription 2000 end-to-end, vault proof, Montserrat wired, apps/app theme + A1 screen, diya-first rule, @orbo/ui linked — awaiting green CI; owner overrides welcome anytime.
 
 This document is the single source of truth for merging three upstream products into one
 unified product, **ORBO**, with a single interface and no visible origin traces. Upstream
