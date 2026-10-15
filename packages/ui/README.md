@@ -1,6 +1,7 @@
 # @orbo/ui
 
-Canonical ORBO design-system package (Phase 3, WS-01 first + second + third + fourth slice).
+Canonical ORBO design-system package (Phase 3, WS-01 first + second + third
++ fourth + fifth slice).
 Proposed structure: `docs/planning/04-design-system.md` §4.
 Token values: `04-design-system.md` §5. Nothing here is consumed by the
 `app/` workspace yet — the port happens in a later WS-01 slice.
@@ -20,6 +21,12 @@ Token values: `04-design-system.md` §5. Nothing here is consumed by the
 - `src/select.tsx` — canonical Select family.
 - `src/dialog.tsx` — canonical Dialog family.
 - `src/input-group.tsx` — canonical InputGroup family.
+- `src/carousel.tsx` — canonical Carousel family.
+- `src/questionnaire.tsx` — canonical Questionnaire family.
+- `src/avatar.tsx` — canonical Avatar family.
+- `src/brand-mark.tsx` — canonical BrandMark (+ `Wordmark`).
+- `src/message.tsx` — canonical Message family.
+- `src/bubble.tsx` — canonical Bubble family.
 - `src/checkbox.tsx` — canonical Checkbox.
 - `src/switch.tsx` — canonical Switch.
 - `src/separator.tsx` — canonical Separator.
@@ -187,10 +194,71 @@ token table, so no class churn is needed at port time.
   `data-[side=...]` slide-in animation attributes are dropped (layout classes
   kept). `RadioItem` gains an optional `checked` (additive — the app derives
   it from the radio group, which has no state here).
+- `Carousel` is styled shells + native scrolling, not Embla: no
+  `embla-carousel-react` dependency (`opts`/`plugins` are not accepted — the
+  axis follows `orientation`), `setApi` receives a minimal
+  `{ scrollPrev, scrollNext }` handle (not the Embla API), prev/next page
+  the viewport via `scrollBy`, and `canScrollPrev`/`canScrollNext` derive
+  from the viewport scroll position instead of Embla `select`/`reInit`
+  events. The root is a native `<section>` keeping the app `role="region"`
+  + `aria-roledescription`, and `CarouselItem` is a plain `<div>` (no
+  `role="group"`) — same lint-driven call as the `Field`/`ItemGroup` role
+  omissions. Previous/Next are the
+  local `Button` (`outline`, `icon-sm`) with inline SVG chevrons (no Tabler).
+  `carouselKeyboardAction` is a verbatim port (pure helper).
+- `Questionnaire` is styled shells, not behaviour: native
+  form/fieldset/legend/label/input/p/buttons, no
+  `@shadcn/react/questionnaire`, no Tabler (inline SVG check,
+  `buttonVariants` from the local canonical `Button` for the nav buttons).
+  No step/item state — `items`/`item`/`defaultItem`/`onItemChange`/
+  `shortcuts` are not accepted and every Item renders (the consumer controls
+  visibility); no keyboard/shortcut handling (same category as the canonical
+  `Select`'s dropped keyboard behavior). `Item` keeps
+  `name`/`multiple`/`required`/`disabled`/`invalid` (`required` maps to
+  `data-required` — a fieldset carries no `required` attribute; `invalid`
+  maps to `aria-invalid` + `data-invalid`); `Choice` keeps
+  `value`/`checked`/`defaultChecked`/`disabled` and gains an explicit `type`
+  (`radio` | `checkbox`, reflected as `data-type` — the app derives it from
+  the Item's `multiple` via context); `ChoiceShortcut` gains an explicit
+  `shortcut`; `Error` gains an explicit `invalid` driving `hidden` +
+  `role="alert"` (same additive call as the `DropdownMenu` `RadioItem`
+  `checked`); `Submit` defaults to `type="submit"`, the other nav buttons to
+  `type="button"`, matching the app. The choice `<input>` is inlined in
+  `Choice` (rather than composed via a `ChoiceInput` piece, which the app
+  file does not export either) so the nested control stays statically
+  associated with its `<label>` for `a11y/noLabelWithoutControl`;
+  `QuestionnaireChoiceLabel` stays module-private (same call as the
+  canonical `Empty`/`InputGroup` variants);
+  `QuestionnaireChoiceShortcut` is exported (additive).
+- `Avatar`/`AvatarGroup` replace the app's `boring-avatars` sources
+  (`agents/abstract-avatar.tsx`, `channels/avatar.tsx`) with the ORBO brand
+  mark per 04 §3/§6: no generated art, no new dependency. A face is
+  deterministic initials on a contrast-paired royal-purple / blue-grey token
+  pair (hex fallbacks) hashed from `seed ?? name`, in a rounded-full shell
+  (`role="img"` + `aria-label`, same announcement shape as
+  `AbstractAvatar`). `AvatarGroup` keeps the `ChannelAvatar` overlap layout
+  (first three faces, mask cutouts) and `typing` keeps the roster working
+  indicator; the badge sits outside the clipped face (minor structural
+  difference, so it is never cut off).
+- `BrandMark` (+ `Wordmark`) has no app source: a static inline-SVG orb in
+  the royal-purple token scale with an optional Montserrat wordmark (04
+  §5.3), no `motion`/audio/amplitude/state (static divergence from
+  `agents/orb/agent-orb.tsx`, same category as the other styled shells). No
+  image assets, no font packaging (Montserrat with Inter/sans-serif
+  fallback until G1 vendors the face). The mark is decorative
+  (`aria-hidden` SVG); the wordmark text carries the name when shown.
+- `Message` was already plain `<div>`s in the app and is a verbatim port
+  (local `cn` import only; same `align` API).
+- `Bubble` keeps the app export names, `data-slot`s, `variant`/`align`/
+  `side` API, and Tailwind scale. One deliberate divergence: `BubbleContent`
+  is a native `<div>` (the app composes Base UI `useRender` with a `render`
+  prop — same call as the canonical `Button`); `bubbleVariants`/
+  `bubbleReactionsVariants` stay module-private (the app exports neither,
+  same call as the canonical `Empty`/`InputGroup` variants).
 
 ## Follow-ups (not this slice)
 
-Remaining 14 canonical primitives per 04 §4 + §6 mapping; RN-port
+Remaining 8 canonical primitives per 04 §4 + §6 mapping; RN-port
 decision (04 G2/B1); Montserrat vendoring + OFL notice (04 G1/B3);
 `packages/ui` biome a11y overrides if `role="list"`-style markup needs
 the same relaxations `app/src/components/ui/**` already has (would retire

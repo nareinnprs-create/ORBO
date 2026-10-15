@@ -1,5 +1,22 @@
+export { Avatar, AvatarGroup } from "./avatar";
 export { Badge, badgeVariants, type BadgeTone } from "./badge";
+export { BrandMark, Wordmark } from "./brand-mark";
+export {
+  Bubble,
+  BubbleContent,
+  BubbleGroup,
+  BubbleReactions,
+} from "./bubble";
 export { Button, buttonVariants } from "./button";
+export {
+  type CarouselApi,
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+  useCarousel,
+} from "./carousel";
 export { Checkbox } from "./checkbox";
 export {
   Combobox,
@@ -137,6 +154,33 @@ export {
   InputGroupText,
   InputGroupTextarea,
 } from "./input-group";
+export {
+  Message,
+  MessageAvatar,
+  MessageContent,
+  MessageFooter,
+  MessageGroup,
+  MessageHeader,
+} from "./message";
+export {
+  Questionnaire,
+  QuestionnaireActions,
+  QuestionnaireChoice,
+  QuestionnaireChoiceDescription,
+  QuestionnaireChoiceShortcut,
+  QuestionnaireChoices,
+  QuestionnaireDescription,
+  QuestionnaireError,
+  QuestionnaireInput,
+  type QuestionnaireInputType,
+  QuestionnaireItem,
+  QuestionnaireNext,
+  QuestionnairePrevious,
+  QuestionnaireProgress,
+  QuestionnaireSkip,
+  QuestionnaireSubmit,
+  QuestionnaireTitle,
+} from "./questionnaire";
 export { Separator } from "./separator";
 export {
   Sheet,
