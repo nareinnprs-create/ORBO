@@ -15,6 +15,8 @@ import type { MemoryStore } from "../memory/store";
 import { REFUSAL_MARKER } from "../plugins/tools";
 import type { TurnRunner } from "../routines/runner";
 import type { WorkQueue } from "../work/queue";
+import type { TaskLedger } from "../work/tasks";
+import { acceptSuggestionAsTask } from "./accept";
 import {
   proactiveInitiator,
   proactiveRunIdOf,
@@ -74,6 +76,12 @@ export type ProactiveEngineDeps = {
   deniedToolNames?(ownerUserId: string, agentId: string): Promise<string[]>;
   mintThreadId(): string;
   now?: () => Date;
+  /**
+   * The unified task ledger. When present, accepting a suggestion mints its
+   * task through the offer pattern (see `./accept.ts`); dismissing never
+   * touches it. Absent in older callers, whose queue-only path is unchanged.
+   */
+  tasks?: TaskLedger;
 };
 
 export function researchInstruction(setting: Pick<ProactiveSetting, "focus">) {
@@ -419,6 +427,13 @@ export function createProactiveEngine(deps: ProactiveEngineDeps) {
         suggestionId,
         "started",
       );
+      if (deps.tasks) {
+        acceptSuggestionAsTask({
+          suggestion: started,
+          ledger: deps.tasks,
+          scheduledFor: now(),
+        });
+      }
       await deps.queue.offer({
         kind: PROACTIVE_TASK_KIND,
         key: suggestionId,

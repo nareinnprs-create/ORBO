@@ -6,10 +6,10 @@
 > this doc otherwise treats all other `docs/planning/` files as read-only snapshots taken 2026-10-14.
 > Reconcile against their FINAL versions before cutting Phase 6 work orders.
 > **Reconciliation 2026-10-14:** landed since draft — 27/28 inventories; `packages/ui` scaffold
-> (14 primitives: button/checkbox/dialog/empty/field/input-group/input/item/label/select/separator/skeleton/switch/textarea + tokens); `apps/app` Expo placeholder shell;
+> (14 primitives at the time: button/checkbox/dialog/empty/field/input-group/input/item/label/select/separator/skeleton/switch/textarea + tokens — grown to 36 primitives, verified on disk 2026-10-16); `apps/app` Expo placeholder shell;
 > DIYA `diya` seed row in `examples/orbo/agents.yaml`; coverage tripwire + floors in `scripts/test-ci.ts`.
 > Still-open owner gates: threads identity, spaces ownership, route freeze, `packages/ui` RN runtime, brand assets.
-> Wave-1 (verified on disk 2026-10-15): `threads` + `notifications` tables + `0053` migration exist; `roleDescription` 2000 in form (`app/src/lib/agents/form.ts`) + server parser (`server/src/agents/routes.ts`); diya-first rule in-flight in parallel (not asserted landed). Owner gates stay open (reversible per decision).
+> Wave-1 (verified on disk 2026-10-16): `threads` + `notifications` tables + `0053` migration plus `monitors` table + `0054` migration exist; `roleDescription` 2000 in form (`app/src/lib/agents/form.ts`) + server parser (`server/src/agents/routes.ts`); diya-first rule LANDED (`diya`-first clause in `app/src/lib/agents/default-agent.ts`). Owner gates stay open (reversible per decision).
 > Phase 6 = PLAN.md §8 item 6: *"Port OpenMuse screens (Documents/Finance/Goals/Activity/Ideas)
 > into the unified IA."*
 
@@ -155,7 +155,7 @@ the per-platform picker contract (24 R1).
 
 ### A. Required before W1 work orders (block tables/API/UI)
 
-1. **Threads vs channels authority** (01 §9 #1) — blocks P6-01 reply/thread binding, P6-05 review linkage, P6-04 alert keys (`threads` table landed via `0053`, verified on disk; sign-off still open, reversible). Build P6-01 steps 1–4 + P6-05 tables first; defer bindings (same deferral as 16 §5 #4).
+1. **Threads vs channels authority** (01 §9 #1) — blocks P6-01 reply/thread binding, P6-05 review linkage, P6-04 alert keys (`threads` + `notifications` tables landed via `0053`, `monitors` via `0054`, verified on disk 2026-10-16; sign-off still open, reversible). Build P6-01 steps 1–4 + P6-05 tables first; defer bindings (same deferral as 16 §5 #4).
 2. **Spaces ownership** (01 §9 #3: flatten vs container) — blocks P6-01 `artifacts` bytes decision (N1) and P6-02/P6-08 viewer homes.
 3. **Notifications home** (02 risk #11) — blocks P6-04 alert fan-out (N9) (`notifications` table landed via `0053`, verified on disk; sign-off still open, reversible).
 4. **C24 route freeze**: finance home (Work artifact vs `work/finance` route, 24 Q1) + viewer routes — blocks P6-08 UI work; server logic proceeds regardless.

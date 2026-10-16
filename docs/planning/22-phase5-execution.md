@@ -97,7 +97,7 @@ P5-10 → Connections/Browser rows (08 §§2/8; 19 §3 `mcp_connections`/`comput
 - P5-09 — §6 Agents catalog + PLAN §3 DIYA boss model (orchestrates, opens group channels,
   owns responsibilities/goals, unified approvals/audit). Proof: 09 WS-02 acceptance (DIYA
   delegates to specialist, group-thread receipt); persona neutral, admin-editable (PLAN §10.B.18).
-  `20-phase5-diya-seeding.md` has since landed (2026-10-14) — re-verify seed content + catalog names against it; owner approval per §10.B.17 still open. DIYA seed row (`diya`) also present in `examples/orbo/agents.yaml`. diya-first rule in-flight in parallel (not asserted landed).
+   `20-phase5-diya-seeding.md` has since landed (2026-10-14) — re-verify seed content + catalog names against it; owner approval per §10.B.17 still open. DIYA seed row (`diya`) also present in `examples/orbo/agents.yaml`. diya-first rule LANDED (`diya`-first clause in `app/src/lib/agents/default-agent.ts`, verified on disk 2026-10-16).
 - P5-10 — §6 Connections: governed MCP + per-tool approval + read-only browser + Parallel +
   Channels Slack reach. Proof: 19 §3 (`mcp_connections`→vault, `mcp_approvals`/`mcp_actions`→
   rules+receipts) + 08 §§2/8 (browser worker, connectors). Respects 02 risk #4 (no raw routes).
@@ -180,7 +180,7 @@ contract and writes no product code, so it never blocks R1.
 | Gate | Question | Options + default | Blocks |
 |---|---|---|---|
 | G1 — Spaces ownership (01 §9 #3; 16 §5.3; 08 §7 risk) | Do `spaces` survive with `owner_user_id`, and what is the multi-user ACL? | A) survive + `owner_user_id` + `agent_spaces` join (default, 01 §5) / B) flatten pages to owner scope | P5-01, P5-07, P5-08, P5-02 |
-| G2 — Threads identity (01 §9 #1; 08 §5; 09 R1) | Canonical conversation identity? (`threads` table landed via `0053`, verified on disk; sign-off still open, reversible) | A) `channels` team surface + unified `threads` attach (default, 08 §5 absorb) / B) channels-only | P5-01 (`page_threads`), P5-04 (receipts), P5-07, P5-08 (`thread_bindings`), P5-10 |
+| G2 — Threads identity (01 §9 #1; 08 §5; 09 R1) | Canonical conversation identity? (`threads` + `notifications` tables landed via `0053`, `monitors` via `0054`, verified on disk 2026-10-16; sign-off still open, reversible) | A) `channels` team surface + unified `threads` attach (default, 08 §5 absorb) / B) channels-only | P5-01 (`page_threads`), P5-04 (receipts), P5-07, P5-08 (`thread_bindings`), P5-10 |
 | G3 — Route freeze (03 route tree; 16 §4 step 3) | Final Expo paths for Spaces? | A) `(tabs)/spaces/[spaceId]/pages/[pageId]` + hash→path redirect map (default) / B) alternate tree | P5-02, P5-03, P5-05 mount point, P5-07 Open-page link |
 | G4 — Editor native shape (16 §5.1; 05 R6) | Tiptap adapter vs native editor? | A) markdown-first + Tiptap web-only (default) / B) native editor investment | P5-02 scope; P5-06 spike brief |
 | G5 — Voice caps + supervision (17 §4.1 a–c; §5.7/§5.9) | Adopt 15-min/6-turn caps + `active`/control-poll? | A) adopt with per-user scope (default lean) / B) drop with reason recorded | P5-04 contract; P5-05 supervision |

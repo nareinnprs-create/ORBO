@@ -3,7 +3,7 @@
 > Research + status only. No product code modified. Snapshot of the tree at Phase 9 kickoff:
 > Phases 1–2 merged; Phase 7 executing; Phase 8 kicked off (docs 30–31); Phases 4–6 port
 > merges have **not** run. Source: full read of PLAN.md §6 + spot-checks of `server/src`,
-> `server/tests` (295 files), `apps/app`, `examples/orbo`, `desktop`, `docs/planning/01–31`.
+> `server/tests` (313 files, verified on disk 2026-10-16), `apps/app`, `examples/orbo`, `desktop`, `docs/planning/01–31`.
 > Status rule: DONE = shipped in tree with file+test evidence (cited). PLANNED = design doc +
 > execution slice, not yet merged. BLOCKED = gated on a W0 owner decision (cited). ABSENT = no
 > design. Nothing is marked DONE without both.
@@ -24,7 +24,7 @@ Conn = Connections · Sk = Skills · Id = Identity · F = Finance · Su = Surfac
 
 1. Read PLAN.md §6 in full (50 checkboxes across 10 areas).
 2. Spot-checked the tree rather than trusting docs: `rg --files server/src` for module
-   presence; `server/tests` listing (295 test files) for backing evidence; `apps/app`
+   presence; `server/tests` listing (313 test files, verified on disk 2026-10-16) for backing evidence; `apps/app`
    routes for UI reality (TODO-stub shell per doc 03 §5); `examples/orbo/agents.yaml`
    for the DIYA seed row (ships at line 75 — landed after doc 20's "no diya id" finding);
    `desktop/` + docs 30–31 for the Tauri wrapper state.
@@ -117,7 +117,7 @@ a design doc; the gap is execution, not design.
 | Id4 | Personal context (tone, avatar, memories, accounts, passwords) | DONE | `server/src/user-{preferences,instructions}.ts` + routes; memory routes | UI port into Settings (WS-01/WS-12) |
 | Id5 | Memory: user-managed prefs usable by permitted agents | DONE | `server/src/memory/` (store/routes/tools/ingestion) | Intelligence billing owner input (10.A.6) |
 | F1 | Finance: CSV import, spending summary, savings-goal action | PLANNED | Design doc 24; no finance module in `server/src` | WS-13 (slice 1: CSV→summary; goal action deferred) |
-| Su1 | **One UI**: Expo Router → web+iOS+Android; Tauri desktop | BLOCKED | Scaffold only (`apps/app` TODO stubs, `packages/ui` 14 primitives); R6 RN-runtime + R10 desktop-role + R7 media open | W0 decisions (R6/R10), then WS-01 + ref screen A1 native proof |
+| Su1 | **One UI**: Expo Router → web+iOS+Android; Tauri desktop | BLOCKED | Scaffold only (`apps/app` TODO stubs, `packages/ui` 36 primitives verified on disk 2026-10-16); R6 RN-runtime + R10 desktop-role + R7 media open | W0 decisions (R6/R10), then WS-01 + ref screen A1 native proof |
 | Su2 | Docker/compose, embedded Postgres, Helm, `/api/health` | DONE | `docker-compose.yml`; `tests/compose.test.ts`; `/api/health` in `server/src/app.ts` | R1 one-line install docs (10.E.40) |
 | Su3 | Single-owner + multi-user modes | DONE | `account-mode.integration.test.ts`; `server/src/auth/organization*` | Bootstrap single-owner→`users` row rule (R8) |
 
@@ -145,6 +145,6 @@ a design doc; the gap is execution, not design.
 - R1 conversation-identity ambiguity gates threads, approvals continuation, pages, routines.
 - R2 OpenDots plaintext-token import is highest severity; vault-first cut-over rides WS-05.
 - R3 ungoverned browser/computer routes must go through `computerGateway`, never aliased.
-- R6 `packages/ui` RN-port stall: 14 primitives landed, RN-runtime decision + A1 proof open.
+- R6 `packages/ui` RN-port stall: 36 primitives landed (verified on disk 2026-10-16), RN-runtime decision + A1 proof open.
 - R10 desktop role confusion (supervisor vs wrapper) needs the R10 W0 decision before Su1.
 - R8 timestamp/key conversion + single-owner→`users` bootstrap rule apply to every importer.

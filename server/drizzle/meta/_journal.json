@@ -379,6 +379,13 @@
       "when": 1792075367203,
       "tag": "0053_futuristic_the_fury",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1792115005865,
+      "tag": "0054_fine_hitman",
+      "breakpoints": true
     }
   ]
 }
