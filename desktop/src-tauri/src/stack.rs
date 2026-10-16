@@ -1,8 +1,8 @@
 //! Raising the stack: the Compose services, then the three processes that are not containers.
 //!
-//! `docker-compose.yml` has no `app`, `server` or `worker` service, and the root `Dockerfile` leaves
+//! `deploy/compose/docker-compose.yml` has no `app`, `server` or `worker` service, and the root `Dockerfile` leaves
 //! out the supervisor because it needs a socket no serverless platform grants. So the shape is not a
-//! choice: containers for postgres, the supervisor, `agent-computer`, the Bots and a one-shot
+//! choice: containers for postgres, the supervisor, `orbo-computer`, the Bots and a one-shot
 //! `migrate`, and three host processes for the rest. `scripts/start.sh` does exactly this for a
 //! developer. This does it for somebody who double-clicked.
 //!
@@ -22,7 +22,7 @@ use crate::problem::Problem;
 
 /// The services Compose owns. `migrate` is deliberately absent: it is run once, to completion,
 /// rather than raised, and treating it as a long-lived service makes it look like a crash loop.
-const SERVICES: [&str; 3] = ["postgres", "supervisor", "agent-computer"];
+const SERVICES: [&str; 3] = ["postgres", "supervisor", "orbo-computer"];
 
 /**
 The Bots that ship with ORBO, which only run on an API key.
@@ -36,8 +36,8 @@ never chose.
 Started when a key exists and left alone when it does not. The Bot the person actually picked speaks
 its plan and answers either way, which is what the last screen proves.
 */
-const AGENT_BOT: &str = "agent-bot";
-const AGENT_LANGGRAPH: &str = "agent-langgraph";
+const AGENT_BOT: &str = "orbo-bot";
+const AGENT_LANGGRAPH: &str = "orbo-langgraph";
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct BundledBots {
     pub agent_bot: bool,
@@ -90,7 +90,7 @@ pub fn selected_services(harness: bool, bots: BundledBots) -> Vec<&'static str> 
         services.push(AGENT_LANGGRAPH);
     }
     if harness {
-        services.push("agent-harness");
+        services.push("orbo-harness");
     }
     services
 }
@@ -429,7 +429,7 @@ fn harness_port_overlay(root: &Path, ipv4_only: bool) -> Result<Option<String>, 
     if host == target {
         return Ok(None);
     }
-    let mut overlay = format!("services:\n  agent-harness:\n    ports: !override\n      - \"127.0.0.1:{host}:{target}\"\n");
+    let mut overlay = format!("services:\n  orbo-harness:\n    ports: !override\n      - \"127.0.0.1:{host}:{target}\"\n");
     if !ipv4_only {
         overlay.push_str(&format!("      - \"[::1]:{host}:{target}\"\n"));
     }
@@ -521,18 +521,18 @@ fn compose_files(root: &Path, environment: &str) -> Result<Vec<String>, Problem>
             .map(|name| (*name).to_owned())
     };
     let base = first(&[
-        "compose.yaml",
-        "compose.yml",
-        "docker-compose.yml",
-        "docker-compose.yaml",
+        "deploy/compose/compose.yaml",
+        "deploy/compose/compose.yml",
+        "deploy/compose/docker-compose.yml",
+        "deploy/compose/docker-compose.yaml",
     ])
     .ok_or_else(|| Problem::plain("The selected installation has no Compose file."))?;
     let mut files = vec![base];
     if let Some(existing) = first(&[
-        "compose.override.yml",
-        "compose.override.yaml",
-        "docker-compose.override.yml",
-        "docker-compose.override.yaml",
+        "deploy/compose/compose.override.yml",
+        "deploy/compose/compose.override.yaml",
+        "deploy/compose/deploy/compose/docker-compose.override.yml",
+        "deploy/compose/docker-compose.override.yaml",
     ]) {
         files.push(existing);
     }
@@ -628,7 +628,7 @@ pub fn up(
     /*
      * The picked harness rides in on its profile.
      *
-     * `agent-harness` is profile-gated so a deployment that picked nothing does not try to start
+     * `orbo-harness` is profile-gated so a deployment that picked nothing does not try to start
      * it: its image comes from `.env`, and unset that is a request to pull the empty string, which
      * fails the whole `up` rather than the one service nobody asked for. The flag comes before
      * `up`, because `--profile` is an option of `compose` itself and not of the subcommand.
@@ -699,7 +699,7 @@ const SUPERVISOR_FILTER: &str = "label=orbo.supervisor=true";
 /// interpolation, env-file quoting and defaults; parsing .env independently can select a different
 /// deployment. Never include the resolved configuration (which can contain secrets) in an error.
 fn computer_namespace(engine: &Address, root: &Path) -> Result<Option<String>, String> {
-    let config = root.join("docker-compose.yml");
+    let config = root.join("deploy/compose/docker-compose.yml");
     match std::fs::metadata(&config) {
         Ok(metadata) if metadata.is_file() => {}
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
@@ -711,12 +711,12 @@ fn computer_namespace(engine: &Address, root: &Path) -> Result<Option<String>, S
                 // a parent directory for a file belonging to another installation.
                 return Ok(None);
             }
-            return Err("could not resolve computer namespace: installed deployment is missing docker-compose.yml".into());
+            return Err("could not resolve computer namespace: installed deployment is missing deploy/compose/docker-compose.yml".into());
         }
         _ => return Err("could not resolve computer namespace: selected deployment configuration is not readable".into()),
     }
     let output = compose_command(engine, root, &Secrets::new())
-        .args(["-f", "docker-compose.yml", "config", "--format", "json"])
+        .args(["-f", "deploy/compose/docker-compose.yml", "config", "--format", "json"])
         .output()
         .map_err(|error| format!("could not resolve computer namespace: {error}"))?;
     if !output.status.success() {
@@ -751,7 +751,7 @@ fn computer_namespace(engine: &Address, root: &Path) -> Result<Option<String>, S
 
 /// Stop the computers the supervisor made, which Compose does not know about.
 ///
-/// A Bot's computer is created at runtime, not declared in `docker-compose.yml`, so `compose down`
+/// A Bot's computer is created at runtime, not declared in `deploy/compose/docker-compose.yml`, so `compose down`
 /// leaves it running: an idle Ubuntu container per Bot, with the application gone and nothing on
 /// screen to stop it from. Stopped rather than removed, because the supervisor starts an existing
 /// owned container back up and the Bot keeps the profile and workspace volumes attached to it.
@@ -764,7 +764,7 @@ pub fn stop_computers(engine: &Address, root: &Path) -> Result<bool, String> {
     // Validate ownership before stopping anything, then wait for the creator to exit. A list taken
     // while the supervisor is active can miss a new computer or one it restarts after being stopped.
     let supervisor = compose_command(engine, root, &Secrets::new())
-        .args(["-f", "docker-compose.yml", "stop", "supervisor"])
+        .args(["-f", "deploy/compose/docker-compose.yml", "stop", "supervisor"])
         .output()
         .map_err(|error| format!("could not stop the supervisor: {error}"))?;
     if !supervisor.status.success() {
@@ -821,7 +821,7 @@ pub fn down(engine: &Address, root: &Path) -> Result<(), String> {
     /*
      * WITH THE PROFILE, OR THE PICKED BOT KEEPS RUNNING.
      *
-     * Measured: after pressing Stop, `compose ps` still listed `agent-harness`. Compose only acts
+     * Measured: after pressing Stop, `compose ps` still listed `orbo-harness`. Compose only acts
      * on a profiled service when the profile is named, so Stop was leaving the one container the
      * person actually chose running on their laptop, still holding its port. The next Start then
      * refused because something was listening on it.
@@ -830,7 +830,7 @@ pub fn down(engine: &Address, root: &Path) -> Result<(), String> {
      * earlier run started, and whether that run picked one is not something a Stop can know.
      */
     let output = compose_command(engine, root, &Secrets::new())
-        .args(["-f", "docker-compose.yml", "--profile", "harness", "down"])
+        .args(["-f", "deploy/compose/docker-compose.yml", "--profile", "harness", "down"])
         .output()
         .map_err(|error| format!("could not stop the stack: {error}"))?;
 
@@ -2907,9 +2907,9 @@ pub fn deployment_problem(root: &Path) -> Option<String> {
             root.display()
         ));
     }
-    if !root.join("docker-compose.yml").exists() {
+    if !root.join("deploy/compose/docker-compose.yml").exists() {
         return Some(format!(
-            "{} is not an ORBO deployment: it has no docker-compose.yml.",
+            "{} is not an ORBO deployment: it has no deploy/compose/docker-compose.yml.",
             root.display()
         ));
     }
@@ -4853,7 +4853,7 @@ fn main() {
     }
     match (scenario.as_str(), joined.as_str()) {
         ("exit17", args) if args.starts_with("compose ps ") => {
-            print!("agent-computer\tUp\n");
+            print!("orbo-computer\tUp\n");
             eprint!("compose ps refused\n");
             std::process::exit(17);
         }
@@ -4865,10 +4865,10 @@ fn main() {
             print!("\tExited\n");
         }
         ("empty-state", args) if args.starts_with("compose ps ") => {
-            print!("agent-computer\t \n");
+            print!("orbo-computer\t \n");
         }
         ("mixed", args) if args.starts_with("compose ps ") => {
-            print!("agent-computer\tUp\nmigrate\tExited\nserver\tExited\n");
+            print!("orbo-computer\tUp\nmigrate\tExited\nserver\tExited\n");
         }
         ("mixed", args) if args == "compose logs --tail 3 server" => {
             print!("line one\nlast reason\n");
@@ -5141,7 +5141,7 @@ fn main() {
             "{detail}"
         );
         assert!(detail.contains("compose ps refused"), "{detail}");
-        assert!(detail.contains("agent-computer\tUp"), "{detail}");
+        assert!(detail.contains("orbo-computer\tUp"), "{detail}");
         std::fs::remove_dir_all(root).unwrap();
     }
 
@@ -6572,9 +6572,10 @@ fn main() {
         std::fs::create_dir_all(&dir).unwrap();
 
         let problem = deployment_problem(&dir).expect("an empty directory is not a deployment");
-        assert!(problem.contains("docker-compose.yml"), "{problem}");
+        assert!(problem.contains("deploy/compose/docker-compose.yml"), "{problem}");
 
-        std::fs::write(dir.join("docker-compose.yml"), "services: {}\n").unwrap();
+        std::fs::create_dir_all(dir.join("deploy/compose")).unwrap();
+        std::fs::write(dir.join("deploy/compose/docker-compose.yml"), "services: {}\n").unwrap();
         let problem = deployment_problem(&dir).expect("still missing the three processes");
         assert!(problem.contains("server"), "{problem}");
 
@@ -6587,7 +6588,8 @@ fn main() {
         for part in ["server", "app", "worker"] {
             std::fs::create_dir_all(dir.join(part)).unwrap();
         }
-        std::fs::write(dir.join("docker-compose.yml"), "services: {}\n").unwrap();
+        std::fs::create_dir_all(dir.join("deploy/compose")).unwrap();
+        std::fs::write(dir.join("deploy/compose/docker-compose.yml"), "services: {}\n").unwrap();
         // What v0.0.7 shipped: a dev script and nothing to serve a build with.
         std::fs::write(
             dir.join("app").join("package.json"),
@@ -6605,7 +6607,8 @@ fn main() {
     fn a_complete_deployment_has_no_problem() {
         let dir = temp_root("complete");
         std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join("docker-compose.yml"), "services: {}\n").unwrap();
+        std::fs::create_dir_all(dir.join("deploy/compose")).unwrap();
+        std::fs::write(dir.join("deploy/compose/docker-compose.yml"), "services: {}\n").unwrap();
         for directory in ["server", "app", "worker"] {
             std::fs::create_dir_all(dir.join(directory)).unwrap();
         }
@@ -6689,7 +6692,7 @@ fn main() {
         assert!(anthropic.contains(&AGENT_LANGGRAPH));
 
         let picked = selected_services(true, BundledBots::none());
-        assert!(picked.contains(&"agent-harness"));
+        assert!(picked.contains(&"orbo-harness"));
     }
 
     /// Stop has to name the profile, or the one Bot the person picked keeps running.
@@ -6698,8 +6701,8 @@ fn main() {
         let source = include_str!("stack.rs");
         assert!(
             source
-                .contains(r#".args(["-f", "docker-compose.yml", "--profile", "harness", "down"])"#),
-            "compose down without the profile leaves agent-harness running"
+                .contains(r#".args(["-f", "deploy/compose/docker-compose.yml", "--profile", "harness", "down"])"#),
+            "compose down without the profile leaves orbo-harness running"
         );
     }
 
@@ -6871,18 +6874,19 @@ fn main() {
     fn compose_port_overlay_preserves_discovery_and_explicit_file_selection() {
         let root = temp_root("compose-file-selection");
         std::fs::create_dir_all(&root).unwrap();
-        for file in ["docker-compose.yml", "docker-compose.override.yml"] {
+        for file in ["deploy/compose/docker-compose.yml", "deploy/compose/deploy/compose/docker-compose.override.yml"] {
+            std::fs::create_dir_all(root.join("deploy/compose")).unwrap();
             std::fs::write(root.join(file), "services: {}\n").unwrap();
         }
         assert_eq!(
             compose_files(&root, "").unwrap(),
-            ["docker-compose.yml", "docker-compose.override.yml"]
+            ["deploy/compose/docker-compose.yml", "deploy/compose/deploy/compose/docker-compose.override.yml"]
         );
-        std::fs::write(root.join("compose.yaml"), "services: {}\n").unwrap();
-        std::fs::write(root.join("compose.override.yml"), "services: {}\n").unwrap();
+        std::fs::write(root.join("deploy/compose/compose.yaml"), "services: {}\n").unwrap();
+        std::fs::write(root.join("deploy/compose/compose.override.yml"), "services: {}\n").unwrap();
         assert_eq!(
             compose_files(&root, "").unwrap(),
-            ["compose.yaml", "compose.override.yml"]
+            ["deploy/compose/compose.yaml", "deploy/compose/compose.override.yml"]
         );
         assert_eq!(
             compose_files(
@@ -6928,11 +6932,12 @@ fn main() {
     fn dynamic_harness_port_is_applied_by_real_compose_without_changing_container_ports() {
         let root = temp_root("dynamic-harness-compose");
         std::fs::create_dir_all(&root).unwrap();
-        let source = include_str!("../../../docker-compose.yml");
-        std::fs::write(root.join("docker-compose.yml"), source).unwrap();
+        std::fs::create_dir_all(root.join("deploy/compose")).unwrap();
+        let source = include_str!("../../../deploy/compose/docker-compose.yml");
+        std::fs::write(root.join("deploy/compose/docker-compose.yml"), source).unwrap();
         std::fs::write(
-            root.join("docker-compose.override.yml"),
-            "services:\n  agent-harness:\n    labels:\n      regression: preserved\n",
+            root.join("deploy/compose/docker-compose.override.yml"),
+            "services:\n  orbo-harness:\n    labels:\n      regression: preserved\n",
         )
         .unwrap();
         std::fs::write(root.join(".env"), "PICKED_HARNESS_IMAGE=synthetic:local\nPICKED_HARNESS_PORT=4206\nPICKED_HARNESS_HOST_PORT=52106\nPOSTGRES_PORT=55432\n").unwrap();
@@ -6956,7 +6961,7 @@ fn main() {
             String::from_utf8_lossy(&output.stderr)
         );
         let config: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-        let harness = &config["services"]["agent-harness"];
+        let harness = &config["services"]["orbo-harness"];
         assert_eq!(harness["labels"]["regression"], "preserved");
         let ports = harness["ports"].as_array().unwrap();
         assert_eq!(ports.len(), 2);
@@ -6973,7 +6978,7 @@ fn main() {
             assert_eq!(port["target"], 5432);
         }
         assert_eq!(
-            std::fs::read_to_string(root.join("docker-compose.yml")).unwrap(),
+            std::fs::read_to_string(root.join("deploy/compose/docker-compose.yml")).unwrap(),
             source
         );
         std::fs::remove_dir_all(root).unwrap();
@@ -6986,10 +6991,11 @@ fn main() {
     fn macos_podman_port_overlay_replaces_all_six_ports_and_preserves_other_settings() {
         let root = temp_root("compose-ports-merge");
         std::fs::create_dir_all(&root).unwrap();
-        let source = include_str!("../../../docker-compose.yml");
-        std::fs::write(root.join("docker-compose.yml"), source).unwrap();
+        std::fs::create_dir_all(root.join("deploy/compose")).unwrap();
+        let source = include_str!("../../../deploy/compose/docker-compose.yml");
+        std::fs::write(root.join("deploy/compose/docker-compose.yml"), source).unwrap();
         std::fs::write(root.join(MACOS_PODMAN_PORTS_FILE), MACOS_PODMAN_PORTS).unwrap();
-        std::fs::write(root.join("docker-compose.override.yml"), "services:\n  supervisor:\n    environment:\n      ORBO_COMPUTER_NAMESPACE: regression-kept\n    labels:\n      regression: kept\n").unwrap();
+        std::fs::write(root.join("deploy/compose/docker-compose.override.yml"), "services:\n  supervisor:\n    environment:\n      ORBO_COMPUTER_NAMESPACE: regression-kept\n    labels:\n      regression: kept\n").unwrap();
         let docker =
             std::env::var_os("ORBO_TEST_COMPOSE_DOCKER").unwrap_or_else(|| "docker".into());
         let config = |overlay: bool| {
@@ -7002,9 +7008,9 @@ fn main() {
             if overlay {
                 command.args([
                     "-f",
-                    "docker-compose.yml",
+                    "deploy/compose/docker-compose.yml",
                     "-f",
-                    "docker-compose.override.yml",
+                    "deploy/compose/docker-compose.override.yml",
                     "-f",
                     MACOS_PODMAN_PORTS_FILE,
                 ]);
@@ -7039,7 +7045,7 @@ fn main() {
             assert_eq!(published, 6, "all published services must be covered");
             assert_eq!(after, before, "only the duplicate IPv6 loopback mappings may change");
             assert_eq!(std::fs::read_to_string(root.join(".env")).unwrap(), settings);
-            assert_eq!(std::fs::read_to_string(root.join("docker-compose.yml")).unwrap(), source);
+            assert_eq!(std::fs::read_to_string(root.join("deploy/compose/docker-compose.yml")).unwrap(), source);
         }
         std::fs::remove_dir_all(root).unwrap();
     }
@@ -7054,11 +7060,11 @@ fn main() {
         let original = "services: {}\n";
         let settings = "POSTGRES_PORT=5544\nPICKED_HARNESS_PORT=4206\n";
         std::fs::write(root.join(".env"), settings).unwrap();
-        std::fs::write(root.join("docker-compose.override.yml"), "services: {}\n").unwrap();
+        std::fs::write(root.join("deploy/compose/docker-compose.override.yml"), "services: {}\n").unwrap();
         let services = up(&podman, &root, true, BundledBots::none(), &Secrets::new()).unwrap();
         assert_eq!(
             services,
-            ["postgres", "supervisor", "agent-computer", "agent-harness"]
+            ["postgres", "supervisor", "orbo-computer", "orbo-harness"]
         );
         migrate(&podman, &root, &Secrets::new()).unwrap();
         let log = std::fs::read_to_string(&record).unwrap();
@@ -7067,13 +7073,13 @@ fn main() {
             "run --rm --pull never migrate",
         ] {
             let line = log.lines().find(|line| line.contains(action)).unwrap();
-            let base = line.find("-f docker-compose.yml").unwrap();
-            let existing = line.find("-f docker-compose.override.yml").unwrap();
+            let base = line.find("-f deploy/compose/docker-compose.yml").unwrap();
+            let existing = line.find("-f deploy/compose/docker-compose.override.yml").unwrap();
             let desktop = line.find(".orbo-macos-podman.yml").unwrap();
             assert!(base < existing && existing < desktop, "{line}");
         }
         assert_eq!(
-            std::fs::read_to_string(root.join("docker-compose.yml")).unwrap(),
+            std::fs::read_to_string(root.join("deploy/compose/docker-compose.yml")).unwrap(),
             original
         );
         assert_eq!(
@@ -7084,17 +7090,17 @@ fn main() {
         std::fs::write(root.join("custom override.yml"), "services: {}\n").unwrap();
         std::fs::write(
             root.join(".fixture-compose-environment"),
-            "COMPOSE_FILE=docker-compose.yml;custom override.yml\nCOMPOSE_PATH_SEPARATOR=;\n",
+            "COMPOSE_FILE=deploy/compose/docker-compose.yml;custom override.yml\nCOMPOSE_PATH_SEPARATOR=;\n",
         )
         .unwrap();
         std::fs::remove_file(&record).unwrap();
         migrate(&podman, &root, &Secrets::new()).unwrap();
         let log = std::fs::read_to_string(&record).unwrap();
         assert!(
-            log.contains("-f docker-compose.yml -f custom override.yml"),
+            log.contains("-f deploy/compose/docker-compose.yml -f custom override.yml"),
             "{log}"
         );
-        assert!(!log.contains("docker-compose.override.yml"), "{log}");
+        assert!(!log.contains("deploy/compose/docker-compose.override.yml"), "{log}");
 
         std::fs::write(root.join(".fixture-config-failure"), "").unwrap();
         std::fs::remove_file(&record).unwrap();
@@ -7130,7 +7136,8 @@ fn main() {
     fn computer_stop_root(path: &PathFixture, label: &str, config: &str) -> (PathBuf, PathBuf) {
         let root = path.bin.join(label);
         std::fs::create_dir(&root).unwrap();
-        std::fs::write(root.join("docker-compose.yml"), "services: {}\n").unwrap();
+        std::fs::create_dir_all(root.join("deploy/compose")).unwrap();
+        std::fs::write(root.join("deploy/compose/docker-compose.yml"), "services: {}\n").unwrap();
         std::fs::write(root.join(".fixture-config"), config).unwrap();
         let record = path.bin.join(format!("{label}.log"));
         std::env::set_var("ORBO_TEST_ENGINE_RECORD", &record);
@@ -7208,7 +7215,7 @@ fn main() {
             assert_computer_shutdown_preserves_foreign_and_volumes(&root);
             let config = log.find("config --format json").unwrap();
             let supervisor = log
-                .find("compose -f docker-compose.yml stop supervisor")
+                .find("compose -f deploy/compose/docker-compose.yml stop supervisor")
                 .unwrap();
             let snapshot = log.find("ps --quiet").unwrap();
             let computers = log.find("stop current late restarted").unwrap();
@@ -7275,7 +7282,7 @@ fn main() {
             let log = std::fs::read_to_string(record).unwrap();
             assert!(
                 log.contains(&format!(
-                    "{prefix}compose -f docker-compose.yml config --format json"
+                    "{prefix}compose -f deploy/compose/docker-compose.yml config --format json"
                 )),
                 "{log}"
             );
@@ -7291,7 +7298,7 @@ fn main() {
             );
             assert!(
                 log.contains(&format!(
-                    "{prefix}compose -f docker-compose.yml --profile harness down"
+                    "{prefix}compose -f deploy/compose/docker-compose.yml --profile harness down"
                 )),
                 "{log}"
             );

@@ -22,7 +22,8 @@ mod stop_ipc {
             let path = SerializedPath::set_only_with("docker", "stop-ipc");
             let root = temp_root("stop-ipc");
             std::fs::create_dir_all(root.join(".logs")).unwrap();
-            std::fs::write(root.join("docker-compose.yml"), "services: {}\n").unwrap();
+            std::fs::create_dir_all(root.join("deploy/compose")).unwrap();
+            std::fs::write(root.join("deploy/compose/docker-compose.yml"), "services: {}\n").unwrap();
             std::env::set_var("ORBO_TEST_ENGINE_RECORD", root.join("commands.log"));
             let app = tauri::test::mock_builder()
                 .manage(Shell::default())

@@ -21,7 +21,7 @@ use crate::engine::{Address, Engine};
 use crate::quiet::said as command_said;
 
 #[cfg(test)]
-const DEFAULT_IMAGE: &str = "orbo-agent-computer:s10-chromium-arm64";
+const DEFAULT_IMAGE: &str = "orbo-computer:s10-chromium-arm64";
 const DEFAULT_POLL_INTERVAL: Duration = Duration::from_secs(1);
 const DEFAULT_OPERATION_TIMEOUT: Duration = Duration::from_secs(30);
 const DEFAULT_OUTPUT_LIMIT: usize = 64 * 1024;

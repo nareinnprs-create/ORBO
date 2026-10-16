@@ -42,7 +42,7 @@ async function lastReleaseTag(): Promise<string> {
     .map((line) => line.trim())
     .filter(Boolean)) {
     const has = Bun.spawnSync(
-      ["git", "cat-file", "-e", `${tag}:charts/orbo-diya/values.yaml`],
+      ["git", "cat-file", "-e", `${tag}:deploy/charts/orbo-diya/values.yaml`],
       { stdout: "pipe", stderr: "pipe" },
     );
     if (has.exitCode === 0) return tag;
@@ -75,10 +75,18 @@ function paths(value: unknown, prefix = ""): string[] {
 
 const before = new Set(
   paths(
-    parse(await run(["git", "show", `${since}:charts/orbo-diya/values.yaml`])),
+    parse(
+      await run([
+        "git",
+        "show",
+        `${since}:deploy/charts/orbo-diya/values.yaml`,
+      ]),
+    ),
   ),
 );
-const now = paths(parse(await Bun.file("charts/orbo-diya/values.yaml").text()));
+const now = paths(
+  parse(await Bun.file("deploy/charts/orbo-diya/values.yaml").text()),
+);
 /*
  * A key whose parent is also new is covered by nulling the parent, and nulling both is the same
  * test twice. The parent is the harsher of the two, because that is what --reuse-values actually
@@ -118,7 +126,7 @@ function render(extra: string[]): { ok: boolean; out: string; err: string } {
       "helm",
       "template",
       "ci",
-      "charts/orbo-diya",
+      "deploy/charts/orbo-diya",
       "--values",
       valuesFile,
       "--set-string",
@@ -246,7 +254,9 @@ function renderedValue(out: string, variable: string): string | undefined {
  * runs in a job with no Helm — and a test that shells out to a binary which is not there returns
  * undefined rather than failing.
  */
-const rawChartValues = await Bun.file("charts/orbo-diya/values.yaml").text();
+const rawChartValues = await Bun.file(
+  "deploy/charts/orbo-diya/values.yaml",
+).text();
 const chartValues = parse(rawChartValues) as {
   config?: { handoff?: Record<string, number> };
 };

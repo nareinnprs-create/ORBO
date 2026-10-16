@@ -67,9 +67,9 @@ pub struct Images {
 pub const IMAGE_VARIABLES: [(&str, &str); 5] = [
     ("server", "SERVER_IMAGE"),
     ("supervisor", "SUPERVISOR_IMAGE"),
-    ("agent-computer", "COMPUTER_IMAGE"),
-    ("agent-bot", "BOT_IMAGE"),
-    ("agent-langgraph", "LANGGRAPH_IMAGE"),
+    ("orbo-computer", "COMPUTER_IMAGE"),
+    ("orbo-bot", "BOT_IMAGE"),
+    ("orbo-langgraph", "LANGGRAPH_IMAGE"),
 ];
 
 /// Read the manifest laid down beside the deployment and turn it into Compose variables.
@@ -88,8 +88,8 @@ pub fn image_variables(root: &Path) -> Result<Vec<(String, String)>, String> {
 ///
 /// Every image reference comes from here, whether Compose reads it or the shell runs it directly.
 /// The alternative was a name built from a version, and an engine given an unqualified name looks
-/// it up on Docker Hub: `orbo-agent-langgraph-agui:v0.0.8` became
-/// `docker.io/library/orbo-agent-langgraph-agui`, and the person was shown "requested access to
+/// it up on Docker Hub: `orbo-langgraph-agui:v0.0.8` became
+/// `docker.io/library/orbo-langgraph-agui`, and the person was shown "requested access to
 /// the resource is denied", which reads as a credentials problem and is not one.
 ///
 /// An image this release does not publish is named as that. It is the honest answer and the
@@ -379,11 +379,11 @@ mod tests {
         let missing = pin(&manifest(&[
             "server",
             "supervisor",
-            "agent-computer",
-            "agent-bot",
+            "orbo-computer",
+            "orbo-bot",
         ]));
         let error = missing.expect_err("an incomplete manifest is not a deployment");
-        assert!(error.contains("agent-langgraph"), "{error}");
+        assert!(error.contains("orbo-langgraph"), "{error}");
     }
 
     #[test]

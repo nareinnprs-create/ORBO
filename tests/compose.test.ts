@@ -12,7 +12,7 @@ import { join } from "node:path";
 
 function composeFile() {
   return readFileSync(
-    join(import.meta.dir, "..", "docker-compose.yml"),
+    join(import.meta.dir, "..", "deploy", "compose", "docker-compose.yml"),
     "utf8",
   );
 }
@@ -176,6 +176,8 @@ function runComposeConfig(env: Record<string, string>) {
     "docker",
     [
       "compose",
+      "-f",
+      join("deploy", "compose", "docker-compose.yml"),
       "--env-file",
       "/dev/null",
       "--profile",
@@ -188,7 +190,7 @@ function runComposeConfig(env: Record<string, string>) {
       cwd: join(import.meta.dir, ".."),
       env: {
         PATH: process.env.PATH ?? "",
-        PICKED_HARNESS_IMAGE: "orbo-agent-langgraph-agui:test",
+        PICKED_HARNESS_IMAGE: "orbo-langgraph-agui:test",
         ...env,
       },
       encoding: "utf8",
@@ -326,7 +328,7 @@ for (const { name, environment, expected } of compatibleEndpointCases) {
       OPENAI_API_KEY: "synthetic-openai-key",
       ...environment,
     });
-    for (const service of ["agent-bot", "agent-langgraph", "agent-harness"]) {
+    for (const service of ["orbo-bot", "orbo-langgraph", "orbo-harness"]) {
       expect(config.services[service].environment.OPENAI_BASE_URL).toBe(
         expected,
       );
@@ -344,7 +346,7 @@ test("passes every other provider's key and endpoint into the framework Bot and 
 
   // A service either receives the variable or it does not; reading the file's text cannot tell
   // the difference, because any one service declaring it would satisfy a raw `toContain`.
-  for (const service of ["agent-langgraph", "agent-harness"]) {
+  for (const service of ["orbo-langgraph", "orbo-harness"]) {
     expect(config.services[service].environment).toMatchObject({
       ANTHROPIC_API_KEY: "sk-ant-synthetic",
       ANTHROPIC_BASE_URL: "https://anthropic-gateway.example",
@@ -372,7 +374,7 @@ test("passes the selected Anthropic provider and model into the picked harness",
     OPENAI_API_KEY: "",
   });
 
-  expect(config.services["agent-harness"].environment).toMatchObject({
+  expect(config.services["orbo-harness"].environment).toMatchObject({
     ANTHROPIC_API_KEY: "sk-ant-synthetic",
     ANTHROPIC_BASE_URL: "https://anthropic-gateway.example",
     BOT_PROVIDER: "anthropic",
@@ -395,7 +397,7 @@ test("passes the selected Anthropic provider and model into the picked harness",
     OPENAI_API_KEY: "sk-openai-synthetic",
     OPENAI_BASE_URL: "https://openai-compatible.example/v1",
   });
-  expect(openaiConfig.services["agent-harness"].environment).toMatchObject({
+  expect(openaiConfig.services["orbo-harness"].environment).toMatchObject({
     OPENAI_API_KEY: "sk-openai-synthetic",
     OPENAI_BASE_URL: "https://openai-compatible.example/v1",
     BOT_PROVIDER: "openai",
@@ -410,16 +412,16 @@ test("mounts the ChatGPT token store directory into the picked harness", () => {
     CHATGPT_AUTH_FILE: "/root/.langchain/chatgpt-auth.json",
   });
 
-  expect(config.services["agent-harness"].environment).toMatchObject({
+  expect(config.services["orbo-harness"].environment).toMatchObject({
     CHATGPT_AUTH_FILE: "/root/.langchain/chatgpt-auth.json",
   });
-  expect(config.services["agent-harness"].volumes).toContainEqual(
+  expect(config.services["orbo-harness"].volumes).toContainEqual(
     expect.objectContaining({
       type: "bind",
       target: "/root/.langchain",
     }),
   );
-  expect(config.services["agent-harness"].volumes).not.toContainEqual(
+  expect(config.services["orbo-harness"].volumes).not.toContainEqual(
     expect.objectContaining({
       type: "bind",
       target: "/root/.langchain/chatgpt-auth.json",
@@ -477,7 +479,7 @@ test("builds the deployment image with Playwright's Chromium payload only", () =
   const compose = composeFile();
   expect(compose).toContain(
     [
-      "agent-computer:",
+      "orbo-computer:",
       "    build:",
       "      context: .",
       "      dockerfile: agent-orbo-computer/Dockerfile",
@@ -529,7 +531,7 @@ test("carries per-Bot egress into the computer and the supervisor", () => {
 
   // Both halves: the shared computer reads them itself, and the supervisor passes them on.
   const services = compose.split(/^ {2}(?=\S)/m);
-  for (const name of ["agent-computer:", "supervisor:"]) {
+  for (const name of ["orbo-computer:", "supervisor:"]) {
     const service = services.find((block) => block.startsWith(name));
     expect(service).toBeDefined();
     expect(service).toContain("egress.env");
@@ -544,7 +546,7 @@ test("gives the selected harness the same governed callback as the framework Bot
     ORBO_TOOL_URL: "http://callback.example/api/agent-tools/call",
     ORBO_AGENT_TOOL_TOKEN: "synthetic-callback-token",
   });
-  for (const service of ["agent-harness", "agent-langgraph"] as const) {
+  for (const service of ["orbo-harness", "orbo-langgraph"] as const) {
     expect(config.services[service].environment).toMatchObject({
       ORBO_TOOL_URL: "http://callback.example/api/agent-tools/call",
       ORBO_AGENT_TOOL_TOKEN: "synthetic-callback-token",

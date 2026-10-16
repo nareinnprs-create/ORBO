@@ -75,7 +75,7 @@ Product-created coworkers use:
 ORBO_MANAGED_AGENT_AG_UI_URL=http://localhost:4201/ag-ui
 ```
 
-That is `agent-langgraph`, which runs a real framework and its own tool loop. The proof-of-concept on
+That is `orbo-langgraph`, which runs a real framework and its own tool loop. The proof-of-concept on
 `4200` hand-writes the protocol and leaves the loop to whatever is watching, so it is a reference
 rather than something to build a deployment on.
 

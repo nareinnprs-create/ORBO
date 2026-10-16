@@ -94,7 +94,7 @@ fn main() {
     if SCENARIO == "stop-ipc" && (joined.starts_with("ps ") || joined.contains("stop supervisor")) {
         return;
     }
-    if SCENARIO == "stop-ipc" && joined == "compose -f docker-compose.yml --profile harness down" {
+    if SCENARIO == "stop-ipc" && joined == "compose -f deploy/compose/docker-compose.yml --profile harness down" {
         let mut barrier = std::net::TcpStream::connect(
             std::fs::read_to_string("stop-barrier-address")
                 .unwrap()
@@ -120,7 +120,7 @@ fn main() {
         if args.get(1).map(String::as_str) == Some("logs") {
             if let Some(service) = args
                 .last()
-                .filter(|s| ["agent-langgraph", "agent-harness"].contains(&s.as_str()))
+                .filter(|s| ["orbo-langgraph", "orbo-harness"].contains(&s.as_str()))
             {
                 println!("OpenAIAuthenticationError: 401 {service} refused the key");
             }
@@ -145,19 +145,19 @@ fn main() {
             }
         }
         value if value.starts_with("compose ps -a --format ") => match SCENARIO {
-            "dead-service" => print!("agent-computer\tExited\nmigrate\tExited\n"),
+            "dead-service" => print!("orbo-computer\tExited\nmigrate\tExited\n"),
             "anthropic" => print!(
-                "agent-computer\tUp\nmigrate\tExited\nagent-bot\tExited\nagent-langgraph\tExited\n"
+                "orbo-computer\tUp\nmigrate\tExited\norbo-bot\tExited\norbo-langgraph\tExited\n"
             ),
             _ => std::process::exit(42),
         },
-        "compose logs --tail 3 agent-computer" if SCENARIO == "dead-service" => {
-            println!("agent-computer died after boot")
+        "compose logs --tail 3 orbo-computer" if SCENARIO == "dead-service" => {
+            println!("orbo-computer died after boot")
         }
-        "compose logs --tail 3 agent-bot" if SCENARIO == "anthropic" => {
-            println!("agent-bot missing OPENAI_API_KEY")
+        "compose logs --tail 3 orbo-bot" if SCENARIO == "anthropic" => {
+            println!("orbo-bot missing OPENAI_API_KEY")
         }
-        "compose logs --tail 3 agent-langgraph" if SCENARIO == "anthropic" => {
+        "compose logs --tail 3 orbo-langgraph" if SCENARIO == "anthropic" => {
             println!("langgraph died after boot")
         }
         _ => {

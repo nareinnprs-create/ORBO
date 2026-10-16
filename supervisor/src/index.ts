@@ -60,8 +60,7 @@ if (!token) {
   );
   process.exit(1);
 }
-const image =
-  process.env.ORBO_COMPUTER_IMAGE?.trim() || "orbo-agent-computer:latest";
+const image = process.env.ORBO_COMPUTER_IMAGE?.trim() || "orbo-computer:latest";
 const network = process.env.ORBO_COMPUTER_NETWORK?.trim() || undefined;
 const runtime = process.env.ORBO_COMPUTER_RUNTIME?.trim() || undefined;
 const resolvedMemory = computerMemoryBytes(

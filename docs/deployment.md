@@ -126,8 +126,8 @@ and the fix would not be available.
 `ORBO_COMPUTER_TOKEN` is generated at start if you do not set one. Both processes that need it are inside
 the container, so there is nothing to share it with.
 
-`ORBO_MANAGED_AGENT_AG_UI_URL` is not required here. The image does not carry `agent-langgraph` or
-`agent-bot`. Leave it unset and the shipped Risk Analyst coworker is omitted rather than registered
+`ORBO_MANAGED_AGENT_AG_UI_URL` is not required here. The image does not carry `orbo-langgraph` or
+`orbo-bot`. Leave it unset and the shipped Risk Analyst coworker is omitted rather than registered
 against a host that is not there. Set it, with `ORBO_MANAGED_AGENT_TOKEN`, only when a Bot is actually
 reachable from this container. Unset it if your `.env` still has the laptop default
 `http://localhost:4201/ag-ui`.
@@ -204,7 +204,7 @@ No shared-memory configuration is needed or possible.
 **Kubernetes.** Everything above describes one container run by hand. A cluster is the other shape,
 and it is the only one that gives a Bot a computer of its own, runs the routines schedule without
 something outside the container, and scales the API past a single replica. That is the Helm chart:
-[charts/orbo-diya/README.md](../charts/orbo-diya/README.md), which covers EKS, GKE, AKS and a plain
+[deploy/charts/orbo-diya/README.md](../deploy/charts/orbo-diya/README.md), which covers EKS, GKE, AKS and a plain
 self-hosted cluster from the same templates.
 
 **Azure Container Apps.** Managed ingress with TLS and custom domains. Note the **240-second request
@@ -217,12 +217,12 @@ which makes them the shortest path from nothing to a running deployment.
 ## Known costs
 
 **The browser images carry only the Chromium browser family.** The all-in-one Dockerfile and the
-published `agent-computer` Dockerfile both build from Ubuntu and run Playwright's pinned
+published `orbo-computer` Dockerfile both build from Ubuntu and run Playwright's pinned
 `install --with-deps chromium` path, so Firefox and WebKit are never introduced into the final image
 layers. Keep that Playwright version matched to `agent-orbo-computer/package.json`; changing one without
 the other can make the browser protocol and executable revision diverge. The images keep the
 baseline Node command-line tools (`node`, `npm`, and `npx`) from the official Node 24.18.1 image.
-Measured as local zstd OCI layer descriptors against the previous Playwright-base `agent-computer`
+Measured as local zstd OCI layer descriptors against the previous Playwright-base `orbo-computer`
 image, the compressed image fell from 884.2 MiB to 535.0 MiB on arm64 and from 894.6 MiB to
 518.1 MiB on amd64.
 

@@ -4,7 +4,7 @@
 //! person needs a sentence about their situation and what to do next; whoever is debugging needs
 //! the actual output, verbatim, including the bits that are only meaningful to them. Collapse them
 //! and one of the two is failed: a plain sentence alone throws away the evidence, and raw engine
-//! output alone is what put "pull access denied for orbo-agent-langgraph-agui, repository does
+//! output alone is what put "pull access denied for orbo-langgraph-agui, repository does
 //! not exist or may require 'docker login'" in front of somebody who was setting up an app.
 //!
 //! The window shows `said` as the failure and keeps `detail` behind a disclosure, so the default
@@ -148,13 +148,13 @@ mod tests {
     /// The failure this whole file exists for.
     #[test]
     fn a_refused_pull_reads_as_a_missing_release_not_a_login_problem() {
-        let raw = "Error response from daemon: pull access denied for orbo-agent-langgraph-agui, \
+        let raw = "Error response from daemon: pull access denied for orbo-langgraph-agui, \
                    repository does not exist or may require 'docker login'";
         let said = said_about(raw);
         assert!(said.contains("could not download"), "{said}");
         // The person is never told to run `docker login`, which is not a thing they have.
         assert!(!said.to_lowercase().contains("docker login"), "{said}");
-        assert!(!said.contains("orbo-agent"), "{said}");
+        assert!(!said.contains("orbo-langgraph"), "{said}");
     }
 
     #[test]

@@ -11,7 +11,16 @@
  */
 
 export const colors = {
-  /** Royal Purple — AI accents. 600 is the primary AI accent. */
+  /**
+   * Royal Purple — AI accents. 600 is the primary AI accent.
+   *
+   * D6 accessibility (recomputed from the hex values below): purple-600
+   * (#6D28D9) is 2.63:1 as text on dark grey-950 (FAIL, needs 4.5:1) and
+   * ~2.5:1 as a ring on dark (FAIL, needs 3:1). Use purple-400 (#A78BFA,
+   * 6.85:1) or purple-300 (#C4B5FD, 10.10:1) for text/rings on dark.
+   * White on purple-600 is 7.10:1 (PASS), so solid 600 fills with white
+   * text stay as-is.
+   */
   purple: {
     50: "#F5F3FF",
     100: "#EDE9FE",
@@ -24,7 +33,14 @@ export const colors = {
     800: "#4C1D95",
     900: "#2E1065",
   },
-  /** Deep blue-grey base. 900 is the light-theme foreground, 950 dark bg. */
+  /**
+   * Deep blue-grey base. 900 is the light-theme foreground, 950 dark bg.
+   *
+   * D6 accessibility (recomputed from the hex values below): grey-400
+   * (#8A98AB) is 2.71:1 on grey-50 (FAIL, needs 4.5:1) and must not be
+   * used for body/secondary text on light. Grey-600 (#4A5668) is 6.87:1
+   * on grey-50 (PASS) and is the minimum for muted text on light.
+   */
   grey: {
     50: "#F4F6F8",
     100: "#E8ECF1",
@@ -40,7 +56,16 @@ export const colors = {
   },
 } as const;
 
-/** Semantic state colors (kept from app gallery palette/frame). */
+/**
+ * Semantic state colors (kept from app gallery palette/frame).
+ *
+ * D6 accessibility (recomputed from the hex values below): positive
+ * (#10B981) is 2.54:1 and caution (#F59E0B) is 2.15:1 as text on white
+ * (FAIL, needs 4.5:1; also below the 3:1 non-text/large threshold), so
+ * restrict them to icon/border/large-only usage, never body text.
+ * Negative (#EF4444) is 3.76:1 (passes 3:1 non-text, still fails 4.5:1
+ * body text). Do not darken these hex values here; fix usages instead.
+ */
 export const state = {
   positive: "#10B981",
   caution: "#F59E0B",

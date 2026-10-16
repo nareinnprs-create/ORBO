@@ -301,9 +301,9 @@ Full reference: [docs/configuration.md](docs/configuration.md).
 | ------------------------ | -------------------------- | ------------------------------------------------------------------------------------------------ |
 | `app`                    | 3010                       | React/Vite UI.                                                                                   |
 | `server`                 | 3001                       | Hono API, ORBO runtime, auth, policy, audit, plugins, components, coworkers, and channels. |
-| `agent-computer`         | 4100                       | Chromium plus `/workspace` and browser profile.                                                  |
-| `agent-bot`              | 4200                       | Proof-of-concept AG-UI Bot.                                                                          |
-| `agent-langgraph`        | 4201                       | LangGraph AG-UI Bot.                                                                             |
+| `orbo-computer`          | 4100                       | Chromium plus `/workspace` and browser profile.                                                  |
+| `orbo-bot`               | 4200                       | Proof-of-concept AG-UI Bot.                                                                          |
+| `orbo-langgraph`         | 4201                       | LangGraph AG-UI Bot.                                                                             |
 | `supervisor`             | 4500 host / 4300 container | Creates and manages one computer per Bot.                                                        |
 | `worker`                 | none                       | Fires due routines by handing each run to the server.                                            |
 | PostgreSQL with pgvector | 5432                       | Product data, policy, audit, credentials, grants, channels, and component metadata.              |
@@ -311,7 +311,7 @@ Full reference: [docs/configuration.md](docs/configuration.md).
 
 The server gateway is the product/API path for Bot browser and file tool calls.
 It resolves the target, evaluates policy, writes an audit row, and then calls
-`agent-computer`. The computer also exposes lower-level token-protected service
+`orbo-computer`. The computer also exposes lower-level token-protected service
 endpoints; keep them private and do not use them to bypass the gateway.
 
 More detail: [docs/architecture.md](docs/architecture.md).
@@ -398,7 +398,7 @@ runtime and data and opens the relevant connection screen.
 
 ## Keeping it to your machine
 
-- `agent-computer` drives a browser holding real logins. `docker-compose.yml` binds it to loopback; leave it there.
+- `orbo-computer` drives a browser holding real logins. `deploy/compose/docker-compose.yml` binds it to loopback; leave it there.
 - Store credentials through `/admin/credentials`, which encrypts them. Do not put credential values in tenant YAML or in committed files.
 - `ORBO_AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS` lets a Bot reach services on this machine. It ships commented out in `.env.example`, is for a laptop only, and a deployment running with `NODE_ENV=production` refuses to start while it is set.
 - To reach an agent on your own network from a deployment, list its address in `ORBO_AGENT_ENDPOINT_ALLOWED_HOSTS` instead. That permits the one address, where the switch above permits the network.
@@ -432,7 +432,7 @@ Use `bash scripts/start.sh` for the whole stack and `bash scripts/stop.sh` to ta
 - [docs/routines.md](docs/routines.md)
 - [docs/automatic-learning.md](docs/automatic-learning.md)
 - [docs/deployment.md](docs/deployment.md)
-- [charts/orbo-diya/README.md](charts/orbo-diya/README.md): the Helm chart
+- [deploy/charts/orbo-diya/README.md](deploy/charts/orbo-diya/README.md): the Helm chart
 - [docs/releasing.md](docs/releasing.md)
 - [docs/parallel-research.md](docs/parallel-research.md): public-web search and extraction through Parallel
 

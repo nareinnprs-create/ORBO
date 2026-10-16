@@ -39,7 +39,7 @@ const ORBO_COMPUTER_PORT = "4100/tcp";
  * image carried it, the daemon ran it, and {@link waitUntilAnswering} could ask. Podman does not
  * report it. Its images are OCI-manifest, the OCI image config has no healthcheck field, and the
  * instruction is dropped, both when Podman builds the image and when it pulls one that has it. The
- * published `agent-computer` config does carry it; `podman inspect` of that same image reports
+ * published `orbo-computer` config does carry it; `podman inspect` of that same image reports
  * none.
  *
  * Silently, and into the one branch that cannot tell the difference: with no health to read,
@@ -260,7 +260,7 @@ async function inspectOwned(names: ComputerNames): Promise<{
  * earlier: `docker compose down` does not touch these, because the supervisor makes them rather than
  * compose.
  *
- * That is worse than stale code. `agent-computer` is the browser, the workspace and the confinement,
+ * That is worse than stale code. `orbo-computer` is the browser, the workspace and the confinement,
  * so a fix to any of them silently would not apply to a Bot that already had a computer.
  *
  * Compared by resolved id rather than by tag, because both sides are the same tag and the whole

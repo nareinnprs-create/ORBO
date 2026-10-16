@@ -15,15 +15,15 @@ Regenerate it with `bun run diagram` after changing anything it shows.
 | ------------------------ | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | `app`                    | 3010                       | React/Vite interface for channels, Bot chat, live screen, settings, and admin pages.                                                        |
 | `server`                 | 3001                       | API, ORBO runtime, auth, roles, tenant package, coworkers, channels, policy, audit, credentials, plugins, components, and connectors. |
-| `agent-computer`         | 4100                       | Chromium, `/workspace`, browser profile, screenshots, snapshots, and file tools.                                                            |
-| `agent-bot`              | 4200                       | Proof-of-concept AG-UI Bot.                                                                                                                     |
-| `agent-langgraph`        | 4201                       | LangGraph AG-UI Bot.                                                                                                                        |
-| `agent-harness`          | 4202                       | The Bot framework harness chosen during setup, one of the `agent-<framework>` images, behind the `harness` compose profile.                 |
+| `orbo-computer`         | 4100                       | Chromium, `/workspace`, browser profile, screenshots, snapshots, and file tools.                                                            |
+| `orbo-bot`              | 4200                       | Proof-of-concept AG-UI Bot.                                                                                                                     |
+| `orbo-langgraph`        | 4201                       | LangGraph AG-UI Bot.                                                                                                                        |
+| `orbo-harness`          | 4202                       | The Bot framework harness chosen during setup, one of the `orbo-<framework>` images, behind the `harness` compose profile.                 |
 | `supervisor`             | 4500 host / 4300 container | Creates, stops, resets, and lists per-Bot computer containers.                                                                              |
 | PostgreSQL with pgvector | 5432                       | Product data, audit rows, credentials, policy, grants, channels, and components.                                           |
 | CopilotKit Intelligence  | external                   | Durable threads, memory, and realtime gateway.                                                                                              |
 
-`scripts/start.sh` starts PostgreSQL, `agent-computer`, `agent-langgraph`, `agent-bot` (skipped when `BOT_PROVIDER=anthropic`, since that sample only takes OpenAI keys) and the supervisor (unless `ORBO_ONE_COMPUTER_EACH=false`) through Docker Compose, and runs `migrate`. It then starts `server`, the routines worker (`bun worker/src/index.ts`, the local stand-in for the routines CronJob) and `app` on the host.
+`scripts/start.sh` starts PostgreSQL, `orbo-computer`, `orbo-langgraph`, `orbo-bot` (skipped when `BOT_PROVIDER=anthropic`, since that sample only takes OpenAI keys) and the supervisor (unless `ORBO_ONE_COMPUTER_EACH=false`) through Docker Compose, and runs `migrate`. It then starts `server`, the routines worker (`bun worker/src/index.ts`, the local stand-in for the routines CronJob) and `app` on the host.
 
 The compose file also defines optional SPIRE services. `start.sh` does not start them.
 
@@ -74,7 +74,7 @@ startup.
 
 ## Computers
 
-`agent-computer` requires `ORBO_COMPUTER_TOKEN` and permits only `/health` without it. Docker Compose binds it to `127.0.0.1:4100`.
+`orbo-computer` requires `ORBO_COMPUTER_TOKEN` and permits only `/health` without it. Docker Compose binds it to `127.0.0.1:4100`.
 
 Compose puts it on a different network from PostgreSQL. A Bot has a shell, and a shell reaches whatever its container reaches, so the database is on a `data` network carrying only itself and `migrate`, and everything else is on `default`. A deployment that runs the API server inside Compose rather than on the host joins it to both, which is the one place the two meet.
 

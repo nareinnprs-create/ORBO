@@ -1,16 +1,27 @@
+# DIYA channel membership (docs/planning/20-phase5-diya-seeding.md §4.2):
+# `diya` is the orchestrator, not another specialist, so it is listed in
+# `permitted_agents` wherever it must address the channel's needs alongside
+# (and by orchestrating) the named specialists. Every entry must match an
+# agent id in agents.yaml or the loader refuses to boot.
 channels:
   - id: general-assistant
     name: General Assistant
     description: Ask for help with everyday work.
-    permitted_agents: [general-assistant]
+    # doc 20 §4.2: DIYA is the primary assistant — it does straightforward
+    # everyday work directly and routes the rest, so it orchestrates here.
+    permitted_agents: [general-assistant, diya]
     allowed_groups: [all]
   - id: risk-and-compliance
     name: Risk & Compliance
     description: Investigate policies, transaction monitoring, and control evidence.
-    permitted_agents: [knowledge, risk-analyst]
+    # doc 20 §4.2: DIYA orchestrates the knowledge + risk-analyst specialists
+    # (and keeps the channel served when conditional risk-analyst drops).
+    permitted_agents: [knowledge, risk-analyst, diya]
     allowed_groups: [risk, compliance]
   - id: company-knowledge
     name: Company Knowledge
     description: Find authorized answers from company documents.
-    permitted_agents: [knowledge]
+    # doc 20 §4.2: DIYA delegates knowledge work to the knowledge specialist
+    # (the §5 smoke leg), so it orchestrates this single-specialist channel.
+    permitted_agents: [knowledge, diya]
     allowed_groups: [all]

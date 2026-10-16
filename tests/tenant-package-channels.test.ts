@@ -16,10 +16,10 @@ import { loadTenantPackage } from "../server/src/tenant-package";
  * endpoints make the loader drop them) and the loaded package (exercises the
  * real loader check).
  *
- * Current truth only: `diya` is a declared agent but belongs to no channel
- * yet — adding it to `permitted_agents` lists needs owner review of exactly
- * which channels it must orchestrate, so nothing here asserts its membership
- * and this file must not be read as requiring its absence either.
+ * Current truth: `diya` is a declared agent and orchestrates every channel
+ * (docs/planning/20-phase5-diya-seeding.md §4.2) — it is listed in each
+ * channel's `permitted_agents` in `examples/orbo/channels.yaml`, and the
+ * tests below pin that membership at both levels.
  */
 
 const packagePath = join(import.meta.dir, "..", "examples", "orbo");
@@ -82,19 +82,49 @@ test("every channels.yaml permitted_agents entry matches a declared agent id", (
   }
 });
 
-test("the loaded package keeps every channel ref on a known agent", async () => {
-  // Loading itself exercises the loader's `channel references unknown agent`
-  // refusal: an unknown entry never reaches the assertions below.
+test("diya orchestrates every channel (doc 20 §4.2)", () => {
+  const channels = new Map(
+    channelRefs().map((channel) => [channel.id, channel.permittedAgents]),
+  );
+  expect([...channels.keys()].sort()).toEqual([
+    "company-knowledge",
+    "general-assistant",
+    "risk-and-compliance",
+  ]);
+
+  // DIYA orchestrates specialists wherever it must address the channel's
+  // needs: everyday work directly + routing, risk specialists as a group,
+  // and the knowledge specialist for document answers.
+  expect(channels.get("general-assistant")?.slice().sort()).toEqual([
+    "diya",
+    "general-assistant",
+  ]);
+  expect(channels.get("risk-and-compliance")?.slice().sort()).toEqual([
+    "diya",
+    "knowledge",
+    "risk-analyst",
+  ]);
+  expect(channels.get("company-knowledge")?.slice().sort()).toEqual([
+    "diya",
+    "knowledge",
+  ]);
+});
+
+test("the loaded package serves diya in every channel with nobody left empty", async () => {
   const tenantPackage = await loadTenantPackage(packagePath);
   const agentIds = new Set(tenantPackage.agents.map((agent) => agent.id));
+  expect(agentIds.has("diya")).toBe(true);
 
+  expect(tenantPackage.channels.length).toBeGreaterThan(0);
   for (const channel of tenantPackage.channels) {
-    // A channel left with nobody — e.g. every agent it names dropped as an
-    // unconfigured conditional row — would boot but serve nothing.
     expect(
       channel.permittedAgents.length,
       `channel "${channel.id}" permits no loaded agent`,
     ).toBeGreaterThan(0);
+    expect(
+      channel.permittedAgents,
+      `channel "${channel.id}" does not serve diya`,
+    ).toContain("diya");
     for (const agentId of channel.permittedAgents) {
       expect(
         agentIds.has(agentId),

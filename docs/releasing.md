@@ -63,7 +63,7 @@ Then, in order:
   checked for a section with that number
 - one image is built and pushed to `ghcr.io/nareinnprs-create/orbo`, tagged with the version, the commit
   and `latest`
-- the services `docker-compose.yml` can build are published too, one image each, at
+- the services `deploy/compose/docker-compose.yml` can build are published too, one image each, at
   `ghcr.io/nareinnprs-create/orbo-<service>`. Those are `linux/amd64` and `linux/arm64`, built on native
   runners of each architecture and joined into one manifest list, because the machines pulling them
   are laptops as well as servers. `.github/published-images.json` is the list, and CI fails if it
@@ -87,10 +87,10 @@ The same file is how a machine runs the stack without building any of it. Each k
 is a service, so the references can be read straight out of it:
 
 ```sh
-export ORBO_COMPUTER_IMAGE="$(jq -r '.images["agent-orbo-computer"].reference' container-images.json)"
+export ORBO_COMPUTER_IMAGE="$(jq -r '.images["orbo-computer"].reference' container-images.json)"
 export SUPERVISOR_IMAGE="$(jq -r .images.supervisor.reference container-images.json)"
-export BOT_IMAGE="$(jq -r '.images["agent-orbo-bot"].reference' container-images.json)"
-export LANGGRAPH_IMAGE="$(jq -r '.images["agent-orbo-langgraph"].reference' container-images.json)"
+export BOT_IMAGE="$(jq -r '.images["orbo-bot"].reference' container-images.json)"
+export LANGGRAPH_IMAGE="$(jq -r '.images["orbo-langgraph"].reference' container-images.json)"
 export SERVER_IMAGE="$(jq -r .images.server.reference container-images.json)"
 export IMAGE_PULL_POLICY=missing
 docker compose up -d
@@ -119,10 +119,10 @@ A job added to `ci.yml` is covered by it without anybody updating a list.
 
 | check | what it would catch |
 | --- | --- |
-| `format, lint, types` | the ordinary things, across every workspace including `agent-computer` and the supervisor |
-| `types (agent-computer)`, `types (supervisor)` | a type error in either deployable package, each checked on its own install |
+| `format, lint, types` | the ordinary things, across every workspace including `orbo-computer` and the supervisor |
+| `types (orbo-computer)`, `types (supervisor)` | a type error in either deployable package, each checked on its own install |
 | `native types` | a type error in the `mobile` app, which installs from its own npm lockfile |
-| `computer (real browser)` | the agent-computer behaviour only a real Chromium shows, such as a password reaching the snapshot a model reads, a session cookie lost on restart, or WebRTC leaving around the egress filter |
+| `computer (real browser)` | the orbo-computer behaviour only a real Chromium shows, such as a password reaching the snapshot a model reads, a session cookie lost on restart, or WebRTC leaving around the egress filter |
 | `tests` | a decision made wrongly, in isolation |
 | `chart` | a Helm values file that renders a server which cannot start, across the self-hosted, EKS, EKS sandbox, GKE and AKS targets |
 | `python harness regressions` | a provider-boundary regression in the Python Bot harnesses |

@@ -32,7 +32,8 @@ html {
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.96 0 0);
-  --muted-foreground: oklch(0.5 0 0);
+  /* D6: token grey-600 (#4A5668) — grey-400 is 2.71:1 on light (FAIL), grey-600 is 6.87:1 (PASS). */
+  --muted-foreground: #4a5668;
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);

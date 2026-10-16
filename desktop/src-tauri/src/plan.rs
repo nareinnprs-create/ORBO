@@ -31,7 +31,7 @@ use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 /// tree builds: it resolved locally on the machine it was written on and, on a machine that had
 /// never built anything, sent Podman to `docker.io/library/orbo-harness-claude-sdk`. Resolved
 /// through the release's manifest by `crate::deployment::reference`, like every other image.
-pub const SIGN_IN_IMAGE: &str = "agent-claude-sdk";
+pub const SIGN_IN_IMAGE: &str = "orbo-claude-sdk";
 
 /// Where the SDK keeps the binary it bundles.
 ///
@@ -473,7 +473,7 @@ impl SigningIn {
 /// on the common path this image is being pulled anyway.
 ///
 /// A name, not a reference: see `SIGN_IN_IMAGE`.
-pub const CHATGPT_SIGN_IN_IMAGE: &str = "agent-langgraph-agui";
+pub const CHATGPT_SIGN_IN_IMAGE: &str = "orbo-langgraph-agui";
 
 /// Where the vendor's login persists what it gets.
 const CHATGPT_STORE: &str = "/root/.langchain/chatgpt-auth.json";

@@ -176,7 +176,7 @@ COPY scripts/composio-smoke.ts scripts/composio-smoke.ts
 COPY --from=app-build /src/app/dist app/dist
 ENV APP_DIST_DIR=/app/app/dist
 
-COPY docker/s6 /etc/s6-overlay
+COPY deploy/compose/docker/s6 /etc/s6-overlay
 
 # PostgreSQL, for the deployment that wants one thing to run rather than two.
 #

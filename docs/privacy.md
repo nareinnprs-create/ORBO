@@ -54,7 +54,15 @@ and granted them. Nothing is sold. There is no advertising.
 - Desktop-app telemetry is **on** by default and discloses itself at
   Welcome; it is closed-schema (enum events and metadata only) and opts
   out via `COPILOTKIT_TELEMETRY_DISABLED=true` or `DO_NOT_TRACK=1`
-  (`desktop/TELEMETRY.md`).
+  (either value `true` or `1`; quit and relaunch after changing the
+  environment; opting out removes pending desktop events and prevents
+  recording or replay) (`desktop/TELEMETRY.md`).
+  Current truth (interim default — confirm with counsel; no behavior
+  change): the desktop emitter is constructed with `enabled: true` and
+  `endpoint` taken from the `COPILOTKIT_TELEMETRY_URL` environment
+  variable or `None` (`desktop/src-tauri/src/desktop_telemetry.rs`); with
+  no endpoint set, events queue locally (at most 256, oldest dropped on
+  overflow) and no delivery is attempted (`desktop/src-tauri/src/telemetry.rs`).
   `[OWNER TODO: decide whether desktop telemetry stays opt-out or becomes opt-in for customer builds, and name the telemetry endpoint/processor in the published notice]`.
 
 ## 4. Retention and deletion
@@ -63,7 +71,10 @@ and granted them. Nothing is sold. There is no advertising.
   sets `AUDIT_RETENTION_DAYS` (whole days, ≥ 1). The database refuses
   deletes outside a declared retention sweep (`server/src/audit-retention.ts`,
   `server/src/config.ts`, migration `0007`).
-  `[OWNER TODO: choose a default retention period for hosted/customer deployments and state it here]`.
+  Interim default — confirm with counsel: this notice states the software
+  default (keep forever unless the operator sets `AUDIT_RETENTION_DAYS`);
+  no fixed hosted/customer period is chosen here.
+  `[OWNER TODO: choose a fixed retention period in days for hosted/customer deployments and state it here]`.
 - Secrets in audit payloads are replaced with `[REDACTED]` before storage
   (token, secret, password, credential, prompt, content, result, tool
   arguments/results, and related key spellings in `server/src/audit.ts`).
@@ -71,8 +82,27 @@ and granted them. Nothing is sold. There is no advertising.
   storage (`server/src/telemetry/scrub.ts`).
 - Bot-formed memories are scoped to the Bot and app they were read from;
   revoking the app withdraws the memory (`server/src/db/schema/memory.ts`).
+  Interim default — confirm with counsel: memories are retained until the
+  person or operator deletes them or the app grant is withdrawn; no
+  automatic memory expiry ships in the repo.
 - Attachments live in the database and are removed with their channel.
-- `[OWNER TODO: state attachment, memory, backup, and account-deletion retention and timelines]`.
+  Interim default — confirm with counsel: attachments are retained until
+  their parent channel is deleted; copies in operator backups persist per
+  the operator's backup policy.
+- Sandbox page-frame screenshots are purged after 30 days
+  (`FRAME_RETENTION_MS` in `server/src/computer/page-frames.ts`, swept by
+  `startRetentionSweeps` in `server/src/audit-retention.ts`) and cleared
+  with the computer profile on wipe (interim default — confirm with
+  counsel; records current behavior, no change).
+- Backups: no automated backup ships with ORBO today (`docs/backup-restore.md`
+  describes manual `pg_dump`/`pg_restore`); schedule, retention, off-site
+  location, encryption, and recovery objectives are operator-defined.
+  `[OWNER TODO: state the backup schedule and retention for hosted/customer deployments]`.
+- Account deletion: the operator handles deletion requests against the
+  deployment database and forwards them to Intelligence, Composio, and
+  provider grants (§5.5); no automatic account-deletion timeline ships in
+  the repo.
+  `[OWNER TODO: state the account-deletion timeline for hosted/customer deployments]`.
 
 ## 5. Operator duties (self-hosted and customer deployments)
 
@@ -93,6 +123,10 @@ deployment processes. They must:
 5. Forward data-subject requests (access, correction, deletion) to the
    systems above, including Intelligence, Composio, and Google/Notion,
    where the deployment does not hold the copy.
+   Interim default — confirm with counsel: until a dedicated runbook
+   ships, operators follow `docs/backup-restore.md` (backups/restore),
+   `docs/configuration.md` (provider/retention notes), and the audit
+   trail at `/admin/audit` for evidence.
    `[OWNER TODO: provide the operator runbook and support contact for such requests]`.
 
 ## 6. Self-host notes
@@ -108,7 +142,8 @@ deployment processes. They must:
 
 ## 7. Contact and ownership
 
-- `[OWNER TODO: company legal name and registered address]`.
+- Company legal name: Opraiz Technology Pvt Ltd (`PLAN.md`, `LICENSE`).
+  `[OWNER TODO: registered address]`.
 - `[OWNER TODO: privacy contact email]`.
 - `[OWNER TODO: support URL and data-request procedure]`.
 - `[OWNER TODO: governing law / jurisdiction]`.

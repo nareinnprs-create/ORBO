@@ -318,7 +318,7 @@ describe("start.sh one computer each", () => {
       stderr: "",
     });
     expect(result.dockerLog).toContain(
-      "compose up -d --build postgres agent-computer agent-bot agent-langgraph",
+      "compose up -d --build postgres orbo-computer orbo-bot orbo-langgraph",
     );
     expect(result.dockerLog).not.toContain("supervisor");
   });
@@ -339,7 +339,7 @@ describe("start.sh one computer each", () => {
 
       expect(result.exitCode).toBe(0);
       expect(result.dockerLog).toContain(
-        "compose up -d --build postgres supervisor agent-computer agent-bot agent-langgraph",
+        "compose up -d --build postgres supervisor orbo-computer orbo-bot orbo-langgraph",
       );
     }
   });
@@ -363,16 +363,16 @@ describe("start.sh selected provider services", () => {
         stderr: "",
       });
       expect(result.dockerLog).toContain(
-        "compose up -d --build postgres supervisor agent-computer agent-langgraph",
+        "compose up -d --build postgres supervisor orbo-computer orbo-langgraph",
       );
-      expect(result.dockerLog).not.toContain("agent-bot");
+      expect(result.dockerLog).not.toContain("orbo-bot");
       expect(result.dockerLog).toContain("compose run --rm --build migrate");
       expect(result.curlLog).toContain("http://localhost:4100/health");
       expect(result.curlLog).toContain("http://localhost:4201/health");
       expect(result.curlLog).not.toContain("http://localhost:4200/health");
-      expect(result.stdout).toContain("agent-bot: skipped for Anthropic");
-      expect(result.stdout).not.toContain("agent-bot ready");
-      expect(result.stdout).toContain("agent-langgraph ready");
+      expect(result.stdout).toContain("orbo-bot: skipped for Anthropic");
+      expect(result.stdout).not.toContain("orbo-bot ready");
+      expect(result.stdout).toContain("orbo-langgraph ready");
       expect(result.stdout).toContain(
         "managed coworker endpoint: http://localhost:4201/ag-ui",
       );
@@ -384,11 +384,11 @@ describe("start.sh selected provider services", () => {
     const result = await runStartWithStaleServerProbe(401);
     expect(result.exitCode).toBe(0);
     expect(result.dockerLog).toContain(
-      "compose up -d --build postgres supervisor agent-computer agent-bot agent-langgraph",
+      "compose up -d --build postgres supervisor orbo-computer orbo-bot orbo-langgraph",
     );
     expect(result.curlLog).toContain("http://localhost:4200/health");
-    expect(result.stdout).toContain("agent-bot ready");
-    expect(result.stdout).not.toContain("agent-bot: skipped");
+    expect(result.stdout).toContain("orbo-bot ready");
+    expect(result.stdout).not.toContain("orbo-bot: skipped");
   });
 
   test("Anthropic startup still fails if its managed LangGraph Bot is unavailable", async () => {
@@ -402,7 +402,7 @@ describe("start.sh selected provider services", () => {
     expect(result.exitCode).toBe(1);
     expect(result.curlLog).not.toContain("http://localhost:4200/health");
     expect(result.curlLog).toContain("http://localhost:4201/health");
-    expect(result.stdout).toContain("agent-langgraph never became ready");
+    expect(result.stdout).toContain("orbo-langgraph never became ready");
     expect(result.stdout).not.toContain("Ready. http://localhost:3010");
   });
 });

@@ -443,7 +443,7 @@ pub fn health_gate(address: &Address) -> StepOutcome {
 /// and the platform's own instruction is behind it.
 ///
 /// Compose v2 rather than `podman-compose`: v2 is what the stack was tested against, and it is what
-/// reads the healthchecks and `depends_on` conditions in `docker-compose.yml`. `podman-compose` is
+/// reads the healthchecks and `depends_on` conditions in `deploy/compose/docker-compose.yml`. `podman-compose` is
 /// a separate reimplementation with its own coverage of those, and choosing it here would mean
 /// shipping a deployment nobody has run.
 pub fn missing_compose(binary: &str) -> String {

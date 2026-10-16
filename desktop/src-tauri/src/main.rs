@@ -1362,7 +1362,7 @@ async fn start_stack_inner<R: tauri::Runtime>(
     };
     let picked = harness::picked(harness.as_ref(), &root).map_err(|error| {
         // Two registers, because one of these refusals is about a release and the other is
-        // about a pick. "ORBO v0.0.8 does not include agent-orbo-langgraph-agui" is the
+        // about a pick. "ORBO v0.0.8 does not include orbo-langgraph-agui" is the
         // evidence, not the sentence: it names a published image, which is not a thing the
         // person chose or can change.
         Problem::with(
@@ -1620,7 +1620,7 @@ async fn start_stack_inner<R: tauri::Runtime>(
         format!("http://127.0.0.1:{}", ports.server),
         host_token,
         address,
-        deployment::reference(&root, "agent-computer")?,
+        deployment::reference(&root, "orbo-computer")?,
         vec![root.clone()],
     );
     let broker = host_access::HostAccess::start_with_approval(
@@ -1760,7 +1760,7 @@ fn down_owned_containers(shell: &Shell, root: &Path) -> Result<(), String> {
     match containers.as_ref() {
         Some(owned) => stack::down(&owned.address, root),
         None if shell.stopped_container_root.lock().unwrap().as_deref() == Some(root) => Ok(()),
-        None if root.join("docker-compose.yml").exists() => Err(
+        None if root.join("deploy/compose/docker-compose.yml").exists() => Err(
             "ORBO has no runtime ownership for this installation. Stop its containers using the original engine and context before starting ORBO again.".into(),
         ),
         None => Ok(()),
@@ -2748,7 +2748,7 @@ async fn ask_the_bot_with_settings(
             // Only a selection this install explicitly recorded as local can explain itself
             // through Compose logs. Legacy/unknown provenance and stale IMAGE/PORT do not.
             (settings.get("PICKED_HARNESS_SOURCE").map(String::as_str) == Some("installed"))
-                .then_some("agent-harness"),
+                .then_some("orbo-harness"),
             settings.get("PICKED_HARNESS_KIND").cloned(),
             settings.get("PICKED_HARNESS_AGENT_ID").cloned(),
         ),
@@ -2757,7 +2757,7 @@ async fn ask_the_bot_with_settings(
                 .get("ORBO_MANAGED_AGENT_AG_UI_URL")
                 .cloned()
                 .unwrap_or_default(),
-            Some("agent-langgraph"),
+            Some("orbo-langgraph"),
             None,
             None,
         ),
@@ -4257,7 +4257,7 @@ mod tests {
     fn quit_cleanup_notice_is_known_safe_bounded_and_consumed_once() {
         let root = temp_root("orbo-quit-cleanup-notice");
         let lines = vec![
-            "[exit] cleanup failed: Compose down failed: /Users/alice/ORBO/docker-compose.yml refused token=secret".to_string(),
+            "[exit] cleanup failed: Compose down failed: /Users/alice/ORBO/deploy/compose/docker-compose.yml refused token=secret".to_string(),
             "[exit] cleanup failed: C:\\Users\\alice\\ORBO\\owned.exe OAuth password".to_string(),
         ];
 
@@ -4508,7 +4508,7 @@ mod tests {
 
         assert_eq!(deployment::installed(&root).unwrap().version, "v0.0.7");
         assert_eq!(
-            std::fs::read_to_string(root.join("docker-compose.yml")).unwrap(),
+            std::fs::read_to_string(root.join("deploy/compose/docker-compose.yml")).unwrap(),
             "services: {}\n"
         );
         std::fs::remove_dir_all(root).unwrap();
@@ -5344,7 +5344,7 @@ mod tests {
         );
         let volume = format!("{project}_postgres-data");
         std::fs::write(
-            root.join("docker-compose.yml"),
+            root.join("deploy/compose/docker-compose.yml"),
             format!(
                 "name: {project}\nservices:\n  postgres:\n    image: docker.io/pgvector/pgvector:pg17\n    environment:\n      POSTGRES_PASSWORD: isolated-fixture-only\n    volumes:\n      - postgres-data:/var/lib/postgresql/data\n    healthcheck:\n      test: [CMD, pg_isready, -U, postgres]\n      interval: 1s\n      timeout: 5s\n      retries: 45\nvolumes:\n  postgres-data:\n"
             ),
@@ -5987,7 +5987,8 @@ mod tests {
         let active = temp_root("orbo-active-stop-root");
         let fallback = temp_root("orbo-default-stop-root");
         std::fs::create_dir_all(&active).unwrap();
-        std::fs::write(active.join("docker-compose.yml"), "services: {}\n").unwrap();
+        std::fs::create_dir_all(active.join("deploy/compose")).unwrap();
+        std::fs::write(active.join("deploy/compose/docker-compose.yml"), "services: {}\n").unwrap();
         std::fs::create_dir_all(&fallback).unwrap();
         let shell = Shell::default();
         *shell.root.lock().unwrap() = Some(active.clone());
@@ -6014,7 +6015,8 @@ mod tests {
         let active = temp_root("orbo-active-quit-root");
         let fallback = temp_root("orbo-default-quit-root");
         std::fs::create_dir_all(&active).unwrap();
-        std::fs::write(active.join("docker-compose.yml"), "services: {}\n").unwrap();
+        std::fs::create_dir_all(active.join("deploy/compose")).unwrap();
+        std::fs::write(active.join("deploy/compose/docker-compose.yml"), "services: {}\n").unwrap();
         std::fs::create_dir_all(&fallback).unwrap();
         let shell = Shell::default();
         *shell.root.lock().unwrap() = Some(active.clone());
@@ -6035,7 +6037,8 @@ mod tests {
         let active = temp_root("orbo-active-stop-failures");
         let fallback = temp_root("orbo-default-stop-failures");
         std::fs::create_dir_all(&active).unwrap();
-        std::fs::write(active.join("docker-compose.yml"), "services: {}\n").unwrap();
+        std::fs::create_dir_all(active.join("deploy/compose")).unwrap();
+        std::fs::write(active.join("deploy/compose/docker-compose.yml"), "services: {}\n").unwrap();
         std::fs::create_dir_all(&fallback).unwrap();
         let shell = Shell::default();
         *shell.root.lock().unwrap() = Some(active.clone());
@@ -6086,7 +6089,8 @@ mod tests {
         let active = temp_root("orbo-active-exit-failures");
         let fallback = temp_root("orbo-default-exit-failures");
         std::fs::create_dir_all(&active).unwrap();
-        std::fs::write(active.join("docker-compose.yml"), "services: {}\n").unwrap();
+        std::fs::create_dir_all(active.join("deploy/compose")).unwrap();
+        std::fs::write(active.join("deploy/compose/docker-compose.yml"), "services: {}\n").unwrap();
         std::fs::create_dir_all(&fallback).unwrap();
         let shell = Shell::default();
         *shell.root.lock().unwrap() = Some(active.clone());
@@ -6366,10 +6370,10 @@ fn main() {
             if cwd.join("fail-up").exists() { eprintln!("synthetic partial up failure");std::process::exit(71); }
         }
         ["compose","run","--rm","--pull","never","migrate"] => { eprintln!("synthetic migration barrier");std::process::exit(72); }
-        ["compose","-f","docker-compose.yml","config","--format","json"] => println!("{{\"services\":{{\"supervisor\":{{\"environment\":{{\"ORBO_COMPUTER_NAMESPACE\":\"fixture\"}}}}}}}}"),
-        ["compose","-f","docker-compose.yml","stop","supervisor"] => (),
+        ["compose","-f","deploy/compose/docker-compose.yml","config","--format","json"] => println!("{{\"services\":{{\"supervisor\":{{\"environment\":{{\"ORBO_COMPUTER_NAMESPACE\":\"fixture\"}}}}}}}}"),
+        ["compose","-f","deploy/compose/docker-compose.yml","stop","supervisor"] => (),
         ["ps","--quiet","--filter",_,"--filter",_] => (),
-        ["compose","-f","docker-compose.yml","--profile","harness","down"] => {
+        ["compose","-f","deploy/compose/docker-compose.yml","--profile","harness","down"] => {
             if cwd.join("fail-down").exists() { eprintln!("synthetic down refusal");std::process::exit(73); }
             if fs::read_to_string(cwd.join("fixture-containers-running")).ok().as_deref()==Some(&identity) {
                 fs::remove_file(cwd.join("fixture-containers-running")).unwrap();
@@ -6629,7 +6633,7 @@ fn main() {
                 "{diagnostic}"
             );
             assert!(retained, "unresolved cleanup must retain run ownership");
-            assert!(cleanup_commands.contains("compose -f docker-compose.yml config"));
+            assert!(cleanup_commands.contains("compose -f deploy/compose/docker-compose.yml config"));
             assert!(
                 !cleanup_commands.contains("version --format"),
                 "cleanup must use retained runtime, not rediscover"
@@ -6824,7 +6828,7 @@ fn main() {
                     "--remote=false",
                     "compose",
                     "-f",
-                    "docker-compose.yml",
+                    "deploy/compose/docker-compose.yml",
                     "--profile",
                     "harness",
                     "down",
@@ -7022,7 +7026,7 @@ fn main() {
             }
             let fixture = Fixture::new();
             remember_selected_root(&fixture.app.state::<Shell>(), &fixture.a);
-            assert!(fixture.a.join("docker-compose.yml").exists());
+            assert!(fixture.a.join("deploy/compose/docker-compose.yml").exists());
             fixture.quit();
             assert!(
                 fixture.commands().is_empty(),
@@ -7112,7 +7116,7 @@ fn main() {
             assert!(ready.address.unwrap().composes());
             let retry = fixture.start(&fixture.b, true);
             assert!(retry["said"].is_string());
-            assert!(!fixture.b.join("docker-compose.yml").exists());
+            assert!(!fixture.b.join("deploy/compose/docker-compose.yml").exists());
             if quit {
                 fixture.quit();
             } else {
@@ -7263,7 +7267,7 @@ fn main() {
         let mut images: deployment::Images =
             serde_json::from_str(&std::fs::read_to_string(deployment::images_path(&root)).unwrap())
                 .unwrap();
-        for name in ["agent-orbo-langgraph-agui", "agent-orbo-claude-sdk"] {
+        for name in ["orbo-langgraph-agui", "orbo-claude-sdk"] {
             images.images.insert(
                 name.into(),
                 deployment::Image {
@@ -7289,33 +7293,33 @@ fn main() {
         let mut choice = serde_json::json!({"id":"byo-url", "agentUrl":remote});
         let (expected_up, expected_image) = match case {
             "remote" | "remote-stale-image" => (
-                "compose up -d --no-build --pull never postgres supervisor agent-computer agent-bot agent-langgraph",
+                "compose up -d --no-build --pull never postgres supervisor orbo-computer orbo-bot orbo-langgraph",
                 None,
             ),
             "anthropic-api" => {
                 model = serde_json::json!({"provider":"anthropic", "login":"api-key", "apiKey":"synthetic-anthropic-key"});
                 choice = serde_json::json!({"id":"langgraph"});
-                ("compose --profile harness up -d --no-build --pull never postgres supervisor agent-computer agent-langgraph agent-harness", Some("agent-orbo-langgraph-agui"))
+                ("compose --profile harness up -d --no-build --pull never postgres supervisor orbo-computer orbo-langgraph orbo-harness", Some("orbo-langgraph-agui"))
             }
             "compatible" => {
                 model = serde_json::json!({"provider":"openai-compatible", "login":"endpoint", "baseUrl":"http://127.0.0.1:11434/v1", "model":"synthetic-model", "apiKey":""});
-                ("compose up -d --no-build --pull never postgres supervisor agent-computer agent-bot agent-langgraph", None)
+                ("compose up -d --no-build --pull never postgres supervisor orbo-computer orbo-bot orbo-langgraph", None)
             }
             "installed" => {
                 choice = serde_json::json!({"id":"langgraph"});
-                ("compose --profile harness up -d --no-build --pull never postgres supervisor agent-computer agent-bot agent-langgraph agent-harness", Some("agent-orbo-langgraph-agui"))
+                ("compose --profile harness up -d --no-build --pull never postgres supervisor orbo-computer orbo-bot orbo-langgraph orbo-harness", Some("orbo-langgraph-agui"))
             }
             "none" => {
                 choice = serde_json::Value::Null;
-                ("compose up -d --no-build --pull never postgres supervisor agent-computer agent-bot agent-langgraph", None)
+                ("compose up -d --no-build --pull never postgres supervisor orbo-computer orbo-bot orbo-langgraph", None)
             }
             "chatgpt-plan" => {
                 model = serde_json::json!({"provider":"openai", "login":"plan", "token":"{\"refresh_token\":\"synthetic-plan\"}"});
-                ("compose --profile harness up -d --no-build --pull never postgres supervisor agent-computer agent-harness", Some("agent-orbo-langgraph-agui"))
+                ("compose --profile harness up -d --no-build --pull never postgres supervisor orbo-computer orbo-harness", Some("orbo-langgraph-agui"))
             }
             "claude-plan" => {
                 model = serde_json::json!({"provider":"anthropic", "login":"plan", "token":"synthetic-claude-plan"});
-                ("compose --profile harness up -d --no-build --pull never postgres supervisor agent-computer agent-harness", Some("agent-orbo-claude-sdk"))
+                ("compose --profile harness up -d --no-build --pull never postgres supervisor orbo-computer orbo-harness", Some("orbo-claude-sdk"))
             }
             _ => panic!("unknown test case"),
         };
@@ -7420,7 +7424,7 @@ fn main() {
             bundled_url.is_empty(),
             !expected_up
                 .split_whitespace()
-                .any(|service| service == "agent-langgraph"),
+                .any(|service| service == "orbo-langgraph"),
             "case={case}, persisted advertisement must match actual Start services"
         );
         let mut asked = false;
@@ -7595,7 +7599,7 @@ fn main() {
         );
         assert_eq!(
             problem.detail.as_deref(),
-            Some("agent-computer stopped: agent-computer died after boot")
+            Some("orbo-computer stopped: orbo-computer died after boot")
         );
         println!("SLOT1B dead Compose Start proof:\nproblem={problem:?}\ncommands={commands}");
         assert!(
@@ -7603,7 +7607,7 @@ fn main() {
             "{commands}"
         );
         assert!(commands.contains("\tcompose version\n"), "{commands}");
-        assert!(commands.contains("\tcompose up -d --no-build --pull never postgres supervisor agent-computer agent-bot agent-langgraph\n"), "{commands}");
+        assert!(commands.contains("\tcompose up -d --no-build --pull never postgres supervisor orbo-computer orbo-bot orbo-langgraph\n"), "{commands}");
         assert!(
             commands.contains("\tcompose run --rm --pull never migrate\n"),
             "{commands}"
@@ -7613,7 +7617,7 @@ fn main() {
             "{commands}"
         );
         assert!(
-            commands.contains("\tcompose logs --tail 3 agent-computer\n"),
+            commands.contains("\tcompose logs --tail 3 orbo-computer\n"),
             "{commands}"
         );
         assert!(
@@ -7670,31 +7674,31 @@ fn main() {
         let commands = std::fs::read_to_string(&record).expect("command record");
         assert!(
             commands.contains(
-                "\tcompose up -d --no-build --pull never postgres supervisor agent-computer agent-langgraph\n"
+                "\tcompose up -d --no-build --pull never postgres supervisor orbo-computer orbo-langgraph\n"
             ),
             "{commands}"
         );
         assert!(
             !commands
-                .contains("compose up -d --no-build --pull never postgres supervisor agent-computer agent-bot"),
-            "Anthropic Start must not target the OpenAI-only agent-bot: {commands}"
+                .contains("compose up -d --no-build --pull never postgres supervisor orbo-computer orbo-bot"),
+            "Anthropic Start must not target the OpenAI-only orbo-bot: {commands}"
         );
         assert_eq!(problem.said, "Part of ORBO stopped during startup.");
         let detail = problem.detail.as_deref().unwrap_or_default();
         assert!(
-            detail.contains("agent-langgraph stopped: langgraph died after boot"),
+            detail.contains("orbo-langgraph stopped: langgraph died after boot"),
             "{detail}"
         );
         assert!(
-            !detail.contains("agent-bot"),
-            "stale, unrequested agent-bot exit must not fail this Anthropic Start: {detail}"
+            !detail.contains("orbo-bot"),
+            "stale, unrequested orbo-bot exit must not fail this Anthropic Start: {detail}"
         );
         assert!(
-            !commands.contains("\tcompose logs --tail 3 agent-bot\n"),
-            "stale unrequested agent-bot should not get reported: {commands}"
+            !commands.contains("\tcompose logs --tail 3 orbo-bot\n"),
+            "stale unrequested orbo-bot should not get reported: {commands}"
         );
         assert!(
-            commands.contains("\tcompose logs --tail 3 agent-langgraph\n"),
+            commands.contains("\tcompose logs --tail 3 orbo-langgraph\n"),
             "selected dead LangGraph service should get reported: {commands}"
         );
         let _ = std::fs::remove_dir_all(root);
@@ -7988,9 +7992,9 @@ fn main() {
             let local =
                 case.starts_with("installed-") && case != "installed-to-byo" || case == "managed";
             let expected_service = if case == "managed" {
-                "agent-langgraph"
+                "orbo-langgraph"
             } else {
-                "agent-harness"
+                "orbo-harness"
             };
             let correct = if local {
                 said.contains("That key was refused")
@@ -8083,20 +8087,20 @@ fn main() {
         );
         let detail = problem.detail.as_deref().expect("managed log detail");
         assert!(
-            detail.contains("agent-langgraph refused the key"),
+            detail.contains("orbo-langgraph refused the key"),
             "{detail}"
         );
         let commands = std::fs::read_to_string(&record).expect("command record");
         assert!(
             commands
                 .lines()
-                .any(|line| line.ends_with("\tcompose logs --tail 40 agent-langgraph")),
+                .any(|line| line.ends_with("\tcompose logs --tail 40 orbo-langgraph")),
             "{commands}"
         );
         assert!(
             !commands
                 .lines()
-                .any(|line| line.ends_with("\tcompose logs --tail 40 agent-harness")),
+                .any(|line| line.ends_with("\tcompose logs --tail 40 orbo-harness")),
             "{commands}"
         );
         let _ = std::fs::remove_dir_all(root);
@@ -8152,18 +8156,18 @@ fn main() {
             problem.said
         );
         let detail = problem.detail.as_deref().expect("harness log detail");
-        assert!(detail.contains("agent-harness refused the key"), "{detail}");
+        assert!(detail.contains("orbo-harness refused the key"), "{detail}");
         let commands = std::fs::read_to_string(&record).expect("command record");
         assert!(
             commands
                 .lines()
-                .any(|line| line.ends_with("\tcompose logs --tail 40 agent-harness")),
+                .any(|line| line.ends_with("\tcompose logs --tail 40 orbo-harness")),
             "{commands}"
         );
         assert!(
             !commands
                 .lines()
-                .any(|line| line.ends_with("\tcompose logs --tail 40 agent-langgraph")),
+                .any(|line| line.ends_with("\tcompose logs --tail 40 orbo-langgraph")),
             "{commands}"
         );
         let _ = std::fs::remove_dir_all(root);
@@ -8175,7 +8179,8 @@ fn main() {
         std::fs::create_dir_all(root.join("server")).unwrap();
         std::fs::create_dir_all(root.join("app")).unwrap();
         std::fs::create_dir_all(root.join("worker")).unwrap();
-        std::fs::write(root.join("docker-compose.yml"), "services: {}\n").unwrap();
+        std::fs::create_dir_all(root.join("deploy/compose")).unwrap();
+        std::fs::write(root.join("deploy/compose/docker-compose.yml"), "services: {}\n").unwrap();
         std::fs::write(
             root.join("app/package.json"),
             r#"{"scripts":{"serve":"vite preview"}}"#,
@@ -8197,21 +8202,21 @@ fn main() {
                     },
                 ),
                 (
-                    "agent-computer".into(),
+                    "orbo-computer".into(),
                     deployment::Image {
-                        reference: "localhost/orbo-agent-computer@sha256:00".into(),
+                        reference: "localhost/orbo-computer@sha256:00".into(),
                     },
                 ),
                 (
-                    "agent-bot".into(),
+                    "orbo-bot".into(),
                     deployment::Image {
-                        reference: "localhost/orbo-agent-bot@sha256:00".into(),
+                        reference: "localhost/orbo-bot@sha256:00".into(),
                     },
                 ),
                 (
-                    "agent-langgraph".into(),
+                    "orbo-langgraph".into(),
                     deployment::Image {
-                        reference: "localhost/orbo-agent-langgraph@sha256:00".into(),
+                        reference: "localhost/orbo-langgraph@sha256:00".into(),
                     },
                 ),
             ]),
@@ -9845,7 +9850,7 @@ fn main() {
         assert!(
             lines.lines().any(|line| line
                 == format!(
-                    "{}\tcompose -f docker-compose.yml --profile harness down",
+                    "{}\tcompose -f deploy/compose/docker-compose.yml --profile harness down",
                     root.display()
                 )),
             "{lines}"

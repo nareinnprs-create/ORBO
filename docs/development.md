@@ -48,9 +48,9 @@ Use `bun run dev` only when you want the app and API server without starting the
 | ----------------- | -------------------------- |
 | `app`             | 3010                       |
 | `server`          | 3001                       |
-| `agent-computer`  | 4100                       |
-| `agent-bot`       | 4200                       |
-| `agent-langgraph` | 4201                       |
+| `orbo-computer`  | 4100                       |
+| `orbo-bot`       | 4200                       |
+| `orbo-langgraph` | 4201                       |
 | `supervisor`      | 4500 host / 4300 container |
 | PostgreSQL        | 5432                       |
 
@@ -59,7 +59,7 @@ Use `bun run dev` only when you want the app and API server without starting the
 **Nothing here sweeps staged attachments.** A file dropped into the composer is stored before the
 message is sent, and the only thing that reclaims the ones never sent is
 `bun scripts/cull-staged-attachments.ts` from `server/`, which the Helm chart runs hourly and which
-neither `docker-compose.yml` nor `start.sh` starts. It needs only `DATABASE_URL`, and takes a
+neither `deploy/compose/docker-compose.yml` nor `start.sh` starts. It needs only `DATABASE_URL`, and takes a
 retention window in hours as its one optional argument, defaulting to 24. On a laptop that is
 usually nothing, because the rows are small and the database is yours. It stops being nothing at
 thirty-two: one person may hold that many unsent files across every channel at once, the refusal on

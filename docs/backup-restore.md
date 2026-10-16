@@ -1,7 +1,7 @@
 # Backup and restore
 
 No automated backup ships with ORBO today. There is no backup script in `scripts/`, no backup
-service in `docker-compose.yml`, and no scheduled dump anywhere in the tree. The bundled database
+service in `deploy/compose/docker-compose.yml`, and no scheduled dump anywhere in the tree. The bundled database
 in the Helm chart says so explicitly: nothing about that shape gives you backups, failover, or
 point-in-time recovery. What follows is what to back up, and how to restore it, using the pieces
 the repo already documents.
@@ -14,7 +14,7 @@ backup story in two.
 
 1. **PostgreSQL.** This is the deployment: the audit trail, Bot profiles, routines, credentials
    (encrypted), staged attachments, and page snapshots all live here.
-   - `docker-compose.yml`: the `postgres-data` volume at `/var/lib/postgresql/data` (pgvector/pg17
+   - `deploy/compose/docker-compose.yml`: the `postgres-data` volume at `/var/lib/postgresql/data` (pgvector/pg17
      image, database `orbo`).
    - One-container image with `EMBEDDED_POSTGRES=on`: the volume mounted at the **parent**,
      `/var/lib/postgresql` (named `orbo-data` in the documented commands), not at the data
@@ -41,8 +41,9 @@ backup story in two.
    lets a restore run the exact images the backup was taken from. Note the compose project /
    `ORBO_COMPUTER_NAMESPACE` too: per-Bot volume names derive from it.
 
-Backup schedule, retention, off-site location, backup encryption, and recovery objectives are
-[OWNER TODO].
+Default starting point (default, change to taste): take the logical `pg_dump`
+daily and retain 7 days of dumps. Off-site location, backup encryption, and
+recovery objectives are [OWNER TODO].
 
 ## Backing up
 
@@ -80,7 +81,10 @@ files above.
 5. Start the stack and verify health routes, sign-in, and one Bot turn before handing the
    deployment back.
 
-Who may run a restore, and the expected recovery time, are [OWNER TODO].
+Restore-drill expectation (default, change to taste): restore the latest dump
+to an empty database and verify sign-in plus one Bot turn before you need it
+in an incident. Who may run a restore, and the expected recovery time, are
+[OWNER TODO].
 
 ## What is NOT backed up
 

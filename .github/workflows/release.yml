@@ -107,7 +107,7 @@ jobs:
           # The chart's default image tag is its appVersion, so a release that moves package.json
           # without moving this leaves a default `helm install` pulling the previous image, or an
           # image tag that was never pushed. Move them together, every time.
-          sed -i -E "s/^appVersion:.*/appVersion: \"$version\"/" charts/orbo-diya/Chart.yaml
+          sed -i -E "s/^appVersion:.*/appVersion: \"$version\"/" deploy/charts/orbo-diya/Chart.yaml
 
           # Unreleased becomes the version, and a fresh empty Unreleased takes its place so the next
           # change has somewhere to go without anyone hand-editing a heading.
@@ -145,7 +145,7 @@ jobs:
       - name: Preview
         if: inputs.dry_run
         run: |
-          git --no-pager diff -- package.json CHANGELOG.md charts/orbo-diya/Chart.yaml desktop/src-tauri/Cargo.toml desktop/src-tauri/Cargo.lock
+          git --no-pager diff -- package.json CHANGELOG.md deploy/charts/orbo-diya/Chart.yaml desktop/src-tauri/Cargo.toml desktop/src-tauri/Cargo.lock
           cat /tmp/pr-body.md
 
       # A pull request opened by a workflow does not trigger the pull_request workflows, so the

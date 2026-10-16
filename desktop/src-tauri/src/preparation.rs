@@ -134,7 +134,7 @@ fn fingerprint(root: &Path) -> Result<String, Problem> {
         [
             PathBuf::from(".orbo-deployment"),
             PathBuf::from("container-images.json"),
-            PathBuf::from("docker-compose.yml"),
+            PathBuf::from("deploy/compose/docker-compose.yml"),
             PathBuf::from(DEPENDENCIES),
         ],
     )
@@ -368,7 +368,8 @@ mod tests {
             )
             .unwrap();
             std::fs::write(root.join("bun.lock"), "synthetic-lock").unwrap();
-            std::fs::write(root.join("docker-compose.yml"), "services: {}\n").unwrap();
+            std::fs::create_dir_all(root.join("deploy/compose")).unwrap();
+            std::fs::write(root.join("deploy/compose/docker-compose.yml"), "services: {}\n").unwrap();
             std::fs::write(root.join("container-images.json"), "{}").unwrap();
             deployment::record(&root, "v-test").unwrap();
             let source = root.join("runtime.rs");

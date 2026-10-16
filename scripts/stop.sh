@@ -136,8 +136,8 @@ info "3/4  API server"
 stop_port "$SERVER_PORT" server
 
 info "4/4  Docker"
-if docker compose ps --quiet 2>/dev/null | grep -q .; then
-  docker compose down >/dev/null 2>&1
+if docker compose -f deploy/compose/docker-compose.yml ps --quiet 2>/dev/null | grep -q .; then
+  docker compose -f deploy/compose/docker-compose.yml down >/dev/null 2>&1
   green "  compose services: stopped"
 else
   info "  compose services: not running"

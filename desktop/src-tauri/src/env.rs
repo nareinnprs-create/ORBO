@@ -27,7 +27,7 @@ use crate::engine::EngineStatus;
 /**
 Where a signed-in ChatGPT plan's token store lives, on this machine and inside the harness.
 
-Two paths for one file, joined by a directory bind mount `docker-compose.yml` declares. It has to be
+Two paths for one file, joined by a directory bind mount `deploy/compose/docker-compose.yml` declares. It has to be
 a file rather than a setting because the harness's provider WRITES to it: when the access token
 expires it renews and saves, and the mount is what makes that renewal outlast the container.
 
@@ -412,7 +412,7 @@ pub fn compose(
          * model that was chosen" — about a model this run never chose. Exactly the failure the
          * clearing above exists for, with one key missed.
          *
-         * Removed rather than emptied, so `docker-compose.yml`'s own default applies. Blank would
+         * Removed rather than emptied, so `deploy/compose/docker-compose.yml`'s own default applies. Blank would
          * be passed through as a model named "", which is a worse question to ask a provider.
          */
         if !matches!(
@@ -514,7 +514,7 @@ pub fn compose(
              * The bundled Bot's own model variable, set to the same name.
              *
              * It has one because it hand-writes `/v1/chat/completions`, where `gpt-5.6-*` rejects
-             * function tools, so `docker-compose.yml` pins it to `gpt-5.5` rather than letting the
+             * function tools, so `deploy/compose/docker-compose.yml` pins it to `gpt-5.5` rather than letting the
              * framework Bot's choice take its tools away. That reasoning is about OpenAI's own
              * models and does not survive a custom endpoint: `gpt-5.5` is not in the catalogue of
              * an Ollama or a vLLM, so the pin asked somebody's own server for a model it has never
@@ -606,7 +606,7 @@ pub fn compose(
      * The picked harness, if there is one.
      *
      * Addressed on loopback rather than by a compose service name, because the server is a host
-     * process here and not a container: it reaches `agent-bot` and `agent-langgraph` the same way,
+     * process here and not a container: it reaches `orbo-bot` and `orbo-langgraph` the same way,
      * over the port those services publish.
      *
      * One address and one kind. The package's single row drops itself while the address is blank,
@@ -770,7 +770,7 @@ Nothing new had to be built to make a Bot appear.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PickedHarness {
     Installed {
-        /// The published image, e.g. `orbo-agent-crewai`. Named by the release, not derived.
+        /// The published image, e.g. `orbo-crewai`. Named by the release, not derived.
         image: String,
         /// The port that image listens on, fixed by its own Dockerfile.
         port: u16,
@@ -1136,9 +1136,14 @@ mod tests {
         crate::deployment::IMAGE_VARIABLES
             .iter()
             .map(|(published, variable)| {
+                let repository = if published.starts_with("orbo-") {
+                    (*published).to_string()
+                } else {
+                    format!("orbo-{published}")
+                };
                 (
                     (*variable).to_string(),
-                    format!("ghcr.io/nareinnprs-create/orbo-{published}@sha256:abc"),
+                    format!("ghcr.io/nareinnprs-create/{repository}@sha256:abc"),
                 )
             })
             .collect()
@@ -1596,7 +1601,7 @@ HTTPS_PROXY=http://proxy:8080
             false,
             crate::stack::BundledBots::for_credential(&ModelCredential::None)
         )
-        .contains(&"agent-langgraph"));
+        .contains(&"orbo-langgraph"));
     }
 
     #[test]
@@ -1935,9 +1940,14 @@ mod model_tests {
         crate::deployment::IMAGE_VARIABLES
             .iter()
             .map(|(published, variable)| {
+                let repository = if published.starts_with("orbo-") {
+                    (*published).to_string()
+                } else {
+                    format!("orbo-{published}")
+                };
                 (
                     (*variable).to_string(),
-                    format!("ghcr.io/nareinnprs-create/orbo-{published}@sha256:abc"),
+                    format!("ghcr.io/nareinnprs-create/{repository}@sha256:abc"),
                 )
             })
             .collect()
@@ -2072,7 +2082,7 @@ mod model_tests {
                 &Ports::default(),
                 &pinned(),
                 Some(&PickedHarness::Installed {
-                    image: "orbo-agent-crewai".into(),
+                    image: "orbo-crewai".into(),
                     port,
                     name: "CrewAI".into(),
                     mastra,
@@ -2346,7 +2356,7 @@ mod model_tests {
         /*
          * And the bundled Bot's own variable, which is the one that was missed.
          *
-         * `docker-compose.yml` reads `ORBO_AGENT_BOT_MODEL` for `agent-bot` rather than `BOT_MODEL`, so
+         * `deploy/compose/docker-compose.yml` reads `ORBO_AGENT_BOT_MODEL` for `orbo-bot` rather than `BOT_MODEL`, so
          * that a model chosen for the framework Bot cannot take its tools away. On a custom
          * endpoint that pin asked somebody's own server for `gpt-5.5`, which an Ollama or a vLLM
          * has never heard of.

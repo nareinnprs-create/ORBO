@@ -153,12 +153,12 @@ pub fn catalogue() -> Vec<Harness> {
     // file and a brand with no mark are different things and only one of them is a bug.
     const UNMARKED: [&str; 3] = ["agno", "ag2", "langroid"];
     /*
-     * The directory is given, not derived from the id, and that is deliberate.
+     * The published name is given, not derived from the id, and that is deliberate.
      *
-     * A release publishes `orbo-<directory>`, taken from the Dockerfile paths in the tree, so
-     * the image name belongs to the directory and not to whatever this list calls the row. Derived
+     * A release publishes `orbo-*`, taken from `.github/published-images.json`, so
+     * the image name belongs to the release and not to whatever this list calls the row. Derived
      * from the id it was wrong for every row — `orbo-harness-crewai` against a published
-     * `orbo-agent-orbo-crewai` — and wrong twice for the four whose id does not match their folder.
+     * `orbo-crewai` — and wrong twice for the four whose id does not match their folder.
      * A picker that names an image nobody publishes fails at the pull, on a first run, with nothing
      * on screen to say why. `every_image_is_one_a_release_publishes` holds it.
      */
@@ -172,8 +172,8 @@ pub fn catalogue() -> Vec<Harness> {
         id: id.into(),
         name: name.into(),
         summary: summary.into(),
-        // The manifest's own key, which is the directory the image is built from. `orbo-` is
-        // the published repository's prefix and belongs to the reference, not to this name.
+        // The manifest's own key, which is the published short name. `orbo-` is
+        // the published repository's prefix and belongs to this name.
         image: Some(directory.to_string()),
         port: Some(port),
         health_path: Some("/health".into()),
@@ -186,7 +186,7 @@ pub fn catalogue() -> Vec<Harness> {
     vec![
         ours(
             "crewai",
-            "agent-orbo-crewai",
+            "orbo-crewai",
             4202,
             "",
             "CrewAI",
@@ -195,7 +195,7 @@ pub fn catalogue() -> Vec<Harness> {
         ),
         ours(
             "llamaindex",
-            "agent-orbo-llamaindex",
+            "orbo-llamaindex",
             4204,
             "/run",
             "LlamaIndex",
@@ -204,7 +204,7 @@ pub fn catalogue() -> Vec<Harness> {
         ),
         ours(
             "agno",
-            "agent-orbo-agno",
+            "orbo-agno",
             4203,
             "/agui",
             "Agno",
@@ -213,7 +213,7 @@ pub fn catalogue() -> Vec<Harness> {
         ),
         ours(
             "langgraph",
-            "agent-orbo-langgraph-agui",
+            "orbo-langgraph-agui",
             4206,
             "",
             "LangGraph",
@@ -222,7 +222,7 @@ pub fn catalogue() -> Vec<Harness> {
         ),
         ours(
             "google-adk",
-            "agent-orbo-adk",
+            "orbo-adk",
             4208,
             "",
             "Google ADK",
@@ -231,7 +231,7 @@ pub fn catalogue() -> Vec<Harness> {
         ),
         ours(
             "pydantic-ai",
-            "agent-orbo-pydantic-ai",
+            "orbo-pydantic-ai",
             4205,
             "",
             "Pydantic AI",
@@ -240,7 +240,7 @@ pub fn catalogue() -> Vec<Harness> {
         ),
         ours(
             "microsoft-agent-framework",
-            "agent-orbo-microsoft",
+            "orbo-microsoft",
             4211,
             "",
             "Microsoft Agent Framework",
@@ -251,7 +251,7 @@ pub fn catalogue() -> Vec<Harness> {
             id: "claude-agent-sdk".into(),
             name: "Claude Agent SDK".into(),
             summary: "Anthropic's own. The one that takes a Claude plan instead of a key.".into(),
-            image: Some("agent-orbo-claude-sdk".into()),
+            image: Some("orbo-claude-sdk".into()),
             port: Some(4212),
             health_path: Some("/health".into()),
             run_path: String::new(),
@@ -261,7 +261,7 @@ pub fn catalogue() -> Vec<Harness> {
         },
         ours(
             "strands",
-            "agent-orbo-strands",
+            "orbo-strands",
             4207,
             "",
             "AWS Strands",
@@ -270,7 +270,7 @@ pub fn catalogue() -> Vec<Harness> {
         ),
         ours(
             "ag2",
-            "agent-orbo-ag2",
+            "orbo-ag2",
             4210,
             "",
             "AG2",
@@ -279,7 +279,7 @@ pub fn catalogue() -> Vec<Harness> {
         ),
         ours(
             "langroid",
-            "agent-orbo-langroid",
+            "orbo-langroid",
             4209,
             "",
             "Langroid",
@@ -288,7 +288,7 @@ pub fn catalogue() -> Vec<Harness> {
         ),
         ours(
             "mastra",
-            "agent-orbo-mastra",
+            "orbo-mastra",
             4213,
             "",
             "Mastra",
@@ -581,8 +581,8 @@ mod tests {
         std::fs::write(
             crate::deployment::images_path(root),
             "{ \"version\": \"v9.9.9\", \"images\": { \
-             \"agent-orbo-crewai\": { \
-             \"reference\": \"ghcr.io/nareinnprs-create/orbo-agent-orbo-crewai@sha256:abc\" } } }",
+             \"orbo-crewai\": { \
+             \"reference\": \"ghcr.io/nareinnprs-create/orbo-crewai@sha256:abc\" } } }",
         )
         .expect("manifest is written");
     }
@@ -619,7 +619,7 @@ mod tests {
         };
         assert_eq!(
             image,
-            "ghcr.io/nareinnprs-create/orbo-agent-orbo-crewai@sha256:abc"
+            "ghcr.io/nareinnprs-create/orbo-crewai@sha256:abc"
         );
         let _ = std::fs::remove_dir_all(&root);
     }
@@ -757,7 +757,7 @@ mod tests {
         };
         assert_eq!(
             image,
-            "ghcr.io/nareinnprs-create/orbo-agent-orbo-crewai@sha256:abc"
+            "ghcr.io/nareinnprs-create/orbo-crewai@sha256:abc"
         );
         assert_eq!(port, 4202);
         assert!(!mastra);
@@ -830,7 +830,7 @@ mod tests {
         .unwrap();
 
         let refused = picked(Some(&choice("crewai")), &root).expect_err("it should be refused");
-        assert!(refused.contains("agent-orbo-crewai"), "{refused}");
+        assert!(refused.contains("orbo-crewai"), "{refused}");
         assert!(refused.contains("v1.2.3"), "{refused}");
         assert!(!refused.contains("denied"), "{refused}");
         let _ = std::fs::remove_dir_all(&root);
@@ -842,7 +842,7 @@ mod tests {
     THE SAME BUG THREE TIMES. First the names were built from the ids and matched nothing a release
     publishes. Then the version stopped being appended, so an engine read the bare name as
     `:latest`. Then the name was correct and tagged and still unqualified, so Podman resolved
-    `orbo-agent-langgraph-agui:v0.0.8` to `docker.io/library/...` and the person was told access
+    `orbo-langgraph-agui:v0.0.8` to `docker.io/library/...` and the person was told access
     was denied. Each one is a perfectly good string, each one failed at the pull on a first run, and
     the fix is that no reference is built here at all: they are read from the release's manifest.
     */

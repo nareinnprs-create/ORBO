@@ -77,7 +77,7 @@ WORKER_SHARED_SECRET="$(setting WORKER_SHARED_SECRET orbo-dev-worker-secret)"
 #
 # Written into .env rather than exported for this run alone, so `docker compose up` by hand later
 # sees the same value the script used.
-# The laptop stack runs agent-langgraph on LANGGRAPH_PORT. The one-container image does not, so
+# The laptop stack runs orbo-langgraph on LANGGRAPH_PORT. The one-container image does not, so
 # this default stays in the script rather than in .env: a `docker run --env-file .env` must not
 # inherit a URL that points at a process the image does not contain.
 ORBO_MANAGED_AGENT_AG_UI_URL="$(setting ORBO_MANAGED_AGENT_AG_UI_URL "http://localhost:${LANGGRAPH_PORT}/ag-ui")"
@@ -241,15 +241,15 @@ fi
 # `docker compose up -d` is declarative and does nothing for a service whose configuration has not
 # changed, so naming them all costs a comparison and buys the guarantee that what is running is what
 # this run configured.
-SERVICES+=(agent-computer)
+SERVICES+=(orbo-computer)
 # The managed coworker uses LangGraph. The separate legacy sample only accepts OpenAI keys,
 # so requiring it would prevent an Anthropic-only deployment from reaching its managed Bot.
 if [ "$BOT_PROVIDER" = "anthropic" ]; then
-  info "  agent-bot: skipped for Anthropic (OpenAI-only sample)"
+  info "  orbo-bot: skipped for Anthropic (OpenAI-only sample)"
 else
-  SERVICES+=(agent-bot)
+  SERVICES+=(orbo-bot)
 fi
-SERVICES+=(agent-langgraph)
+SERVICES+=(orbo-langgraph)
 
 export SUPERVISOR_TOKEN ORBO_COMPUTER_TOKEN WORKER_SHARED_SECRET
 export ORBO_COMPUTER_PORT BOT_PORT LANGGRAPH_PORT SUPERVISOR_PORT
@@ -258,20 +258,20 @@ export ORBO_COMPUTER_PORT BOT_PORT LANGGRAPH_PORT SUPERVISOR_PORT
 # stdout, and stops with "failed to get console: provided file is not a console". An environment
 # variable rather than `--progress`, because a Compose too old to know the flag refuses it, and one
 # too old to know the variable ignores it.
-COMPOSE_PROGRESS=quiet docker compose up -d --build "${SERVICES[@]}" >/dev/null
-if ! docker compose run --rm --build migrate >"$LOGS/migrate.log" 2>&1; then
+COMPOSE_PROGRESS=quiet docker compose -f deploy/compose/docker-compose.yml up -d --build "${SERVICES[@]}" >/dev/null
+if ! docker compose -f deploy/compose/docker-compose.yml run --rm --build migrate >"$LOGS/migrate.log" 2>&1; then
   red "  Migrations did not apply. The database is not the schema this server expects."
   red "  Log: $LOGS/migrate.log"
   exit 1
 fi
-wait_for "http://localhost:$ORBO_COMPUTER_PORT/health" "agent-computer"
+wait_for "http://localhost:$ORBO_COMPUTER_PORT/health" "orbo-computer"
 if [ "$BOT_PROVIDER" != "anthropic" ]; then
-  wait_for "http://localhost:$BOT_PORT/health" "agent-bot"
+  wait_for "http://localhost:$BOT_PORT/health" "orbo-bot"
 fi
-wait_for "http://localhost:$LANGGRAPH_PORT/health" "agent-langgraph"
+wait_for "http://localhost:$LANGGRAPH_PORT/health" "orbo-langgraph"
 
 for table in agent_profiles agent_preferences; do
-  if ! docker compose exec -T postgres \
+  if ! docker compose -f deploy/compose/docker-compose.yml exec -T postgres \
        psql -U orbo -d orbo -tAc "select to_regclass('public.$table')" 2>/dev/null \
        | grep -q "^$table$"; then
     red "  $table is missing. Run: bun run --cwd server db:migrate"

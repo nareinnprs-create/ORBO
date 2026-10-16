@@ -36,7 +36,7 @@ the product. It needs `ORBO_MANAGED_AGENT_TOKEN` beside it, or the server refuse
 server starts without a managed Bot, the shipped Risk Analyst coworker is omitted, and creating a
 coworker without its own endpoint is refused. A leftover token with no URL is ignored. The
 one-container image has no Bot process, so leave the URL unset there. `scripts/start.sh` points it
-at `agent-langgraph` on a laptop.
+at `orbo-langgraph` on a laptop.
 
 ## General variables
 
@@ -48,15 +48,15 @@ at `agent-langgraph` on a laptop.
 | `DEPLOYMENT_ID`      | the tenant package's id            | Names this deployment inside a shared Intelligence project, and prefixes the identity a Shared app's account is held under at the vendor. That identity is fixed when the app is made Shared, so changing this later does not move it. |
 | `OPENAI_API_KEY`     | unset                              | Default model key for built-in agents and both shipped Bots.        |
 | `OPENAI_BASE_URL`    | unset                              | OpenAI-compatible endpoint that key is spent against. See below.    |
-| `BOT_PROVIDER`       | `openai`                           | Provider the framework Bot (`agent-langgraph`) and the picked harness run on: `openai`, `anthropic`, or `google`. The Python Bots read it too; `agent-bot` does not, it is OpenAI only. |
+| `BOT_PROVIDER`       | `openai`                           | Provider the framework Bot (`orbo-langgraph`) and the picked harness run on: `openai`, `anthropic`, or `google`. The Python Bots read it too; `orbo-bot` does not, it is OpenAI only. |
 | `ANTHROPIC_API_KEY`  | unset                              | Anthropic key when `BOT_PROVIDER=anthropic`.                        |
 | `ANTHROPIC_BASE_URL` | unset                              | Anthropic-compatible endpoint that key is spent against.            |
 | `GOOGLE_API_KEY`     | unset                              | Google key when `BOT_PROVIDER=google`.                              |
 | `GOOGLE_GENERATIVE_AI_BASE_URL` | unset                   | Google-compatible endpoint that key is spent against.               |
 | `BOT_MODEL`          | the Bot's row in the spec file   | Model for whichever Bot is starting. Unset, it comes from that Bot's row in [the provider spec file](#the-provider-spec-file); the provider fallbacks are `gpt-5.5`, `claude-sonnet-4-5`, and `gemini-2.5-flash`. |
-| `ORBO_AGENT_BOT_MODEL`    | `gpt-5.5`                          | Model for the proof-of-concept Bot (`agent-bot`), kept separate because it speaks `/v1/chat/completions` directly and refuses a model it cannot use. |
-| `BOT_RESPONSES_API`  | `false`                            | Makes `agent-langgraph` use the OpenAI Responses API.               |
-| `BOT_REASONING_EFFORT` | unset (provider default)         | OpenAI and the Responses API only: one of `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`. `agent-langgraph` refuses to start on any other value, on a non-`openai` provider, or without the Responses API. |
+| `ORBO_AGENT_BOT_MODEL`    | `gpt-5.5`                          | Model for the proof-of-concept Bot (`orbo-bot`), kept separate because it speaks `/v1/chat/completions` directly and refuses a model it cannot use. |
+| `BOT_RESPONSES_API`  | `false`                            | Makes `orbo-langgraph` use the OpenAI Responses API.               |
+| `BOT_REASONING_EFFORT` | unset (provider default)         | OpenAI and the Responses API only: one of `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`. `orbo-langgraph` refuses to start on any other value, on a non-`openai` provider, or without the Responses API. |
 | `ORBO_AGENT_STALL_TIMEOUT_MS` | unset (off)                    | How long a Bot's stream may produce nothing before the turn is ended for it. |
 | `ORBO_AGENT_TOOL_TOKEN`   | unset; `start.sh` generates one    | The secret a framework Bot presents when it calls a granted tool back through this server. |
 | `APP_DIST_DIR`       | unset                              | Where the built app is, when this process serves it. Set inside the container image; unset in development, where Vite serves the app. |
@@ -147,7 +147,7 @@ provider and model each Bot runs:
     }
   },
   "bots": {
-    "agent-langgraph": { "provider": "openai", "model": "gpt-5.5" },
+    "orbo-langgraph": { "provider": "openai", "model": "gpt-5.5" },
     "agent-adk": { "provider": "openai", "model": "gpt-4o-mini" }
   }
 }
@@ -161,7 +161,7 @@ of it:
 3. the provider's `default_model` — what is left when neither says.
 
 Each Bot retains its existing default: for example, `agent-mastra` uses `gpt-4o-mini`, while
-`agent-langgraph` uses `gpt-5.5`. Editing a Bot's row changes that Bot's default without changing
+`orbo-langgraph` uses `gpt-5.5`. Editing a Bot's row changes that Bot's default without changing
 another Bot's choice. The Python LangGraph harness also accepts `BOT_PROVIDER=google_genai` as an
 alias for the spec's `google` provider.
 
@@ -183,14 +183,14 @@ own loader has never heard of, nor against a provider their own loader names whe
 row for it. Either refusal names the key that is wrong, at startup rather than at the first model
 call, in either language.
 
-`agent-bot` is the one Bot that pins its provider: it speaks `/v1/chat/completions` directly and
-has never read `BOT_PROVIDER`, and `bots.agent-bot` supplies only its model.
+`orbo-bot` is the one Bot that pins its provider: it speaks `/v1/chat/completions` directly and
+has never read `BOT_PROVIDER`, and `bots.orbo-bot` supplies only its model.
 
 ## OpenAI-compatible endpoints
 
 `OPENAI_BASE_URL` decides where an OpenAI-shaped request is answered. Unset, that is OpenAI. Set, it is any endpoint speaking the same API: a gateway in front of several providers, a proxy, or a model on hardware you control.
 
-It moves the whole deployment rather than one Bot. The API server reads it for package built-in agents, `agent-bot` reads it for the client it constructs, and `agent-langgraph` reads it for `BOT_PROVIDER=openai`.
+It moves the whole deployment rather than one Bot. The API server reads it for package built-in agents, `orbo-bot` reads it for the client it constructs, and `orbo-langgraph` reads it for `BOT_PROVIDER=openai`.
 
 `OPENAI_CONTAINER_BASE_URL` overrides that value inside the Bot containers only, for an endpoint the containers reach by a different route than the host does. Unset, the containers use `OPENAI_BASE_URL` like everything else.
 
@@ -564,7 +564,7 @@ is still the record.
 `ORBO_COMPUTER_SANDBOX` is not the cluster sandbox provider. A Kubernetes deployment can instead run each
 computer as a sandboxed pod, selected by `ORBO_COMPUTER_SANDBOX_NAMESPACE` with `ORBO_COMPUTER_SANDBOX_IDLE_AFTER`
 and `ORBO_COMPUTER_SANDBOX_TEMPLATE_FILE` beside it; those are set by the Helm chart, not by Compose, and
-are covered in [charts/orbo-diya/README.md](../charts/orbo-diya/README.md). The similarly named
+are covered in [deploy/charts/orbo-diya/README.md](../deploy/charts/orbo-diya/README.md). The similarly named
 `ORBO_COMPUTER_SANDBOX` above only toggles Chromium's own process sandbox on a Docker computer.
 
 Changing `ORBO_COMPUTER_BROWSER_MODE` affects new supervised computers. A computer that already exists is
@@ -586,7 +586,7 @@ already installs that browser and Xvfb; it does not require Google Chrome. For C
 supervisor as applicable:
 
 ```sh
-docker compose up -d --force-recreate agent-computer supervisor
+docker compose up -d --force-recreate orbo-computer supervisor
 ```
 
 Existing supervisor-created computers retain their mode until recreated as described above. The
@@ -663,7 +663,7 @@ selectors, and restart the API. Unset `ORBO_COMPUTER_BROWSER_BACKEND` (or set `m
 computer process; choose `headless` or `headed` as before. Local Chrome profiles remain in the local
 data root, separate from managed computer volumes.
 
-`agent-computer` also reads:
+`orbo-computer` also reads:
 
 - `ACTION_TIMEOUT_MS`
 - `NAVIGATION_TIMEOUT_MS`
@@ -752,15 +752,15 @@ When optional SPIRE services are used:
 
 ## Images
 
-Every service `docker-compose.yml` can build is published by a release, so a machine can run the
+Every service `deploy/compose/docker-compose.yml` can build is published by a release, so a machine can run the
 stack without a toolchain and without waiting for Chromium to build.
 
 | Service           | Setting             | Published image                            |
 | ----------------- | ------------------- | ------------------------------------------ |
-| `agent-computer`  | `ORBO_COMPUTER_IMAGE`    | `ghcr.io/nareinnprs-create/orbo-agent-orbo-computer` |
+| `orbo-computer`  | `ORBO_COMPUTER_IMAGE`    | `ghcr.io/nareinnprs-create/orbo-computer` |
 | `supervisor`      | `SUPERVISOR_IMAGE`  | `ghcr.io/nareinnprs-create/orbo-supervisor`     |
-| `agent-bot`       | `BOT_IMAGE`         | `ghcr.io/nareinnprs-create/orbo-agent-orbo-bot`      |
-| `agent-langgraph` | `LANGGRAPH_IMAGE`   | `ghcr.io/nareinnprs-create/orbo-agent-orbo-langgraph`|
+| `orbo-bot`       | `BOT_IMAGE`         | `ghcr.io/nareinnprs-create/orbo-bot`      |
+| `orbo-langgraph` | `LANGGRAPH_IMAGE`   | `ghcr.io/nareinnprs-create/orbo-langgraph`|
 | `migrate`         | `SERVER_IMAGE`      | `ghcr.io/nareinnprs-create/orbo-server`         |
 
 Unset, each names a local tag and Compose builds it, which is what a checkout of this repository
@@ -782,13 +782,13 @@ useful answer is that the image could not be fetched. Somewhere that must never 
 | ----------------- | -------------------------- | ----------------- |
 | `app`             | 3010                       | `APP_PORT`        |
 | `server`          | 3001                       | `SERVER_PORT`     |
-| `agent-computer`  | 4100                       | `ORBO_COMPUTER_PORT`   |
-| `agent-bot`       | 4200                       | `BOT_PORT`        |
-| `agent-langgraph` | 4201                       | `LANGGRAPH_PORT`  |
+| `orbo-computer`  | 4100                       | `ORBO_COMPUTER_PORT`   |
+| `orbo-bot`       | 4200                       | `BOT_PORT`        |
+| `orbo-langgraph` | 4201                       | `LANGGRAPH_PORT`  |
 | `supervisor`      | 4500 host / 4300 container | `SUPERVISOR_PORT` |
 | PostgreSQL        | 5432                       | `POSTGRES_PORT`   |
 
-Set these in `.env` or in the environment. `docker-compose.yml` publishes on them and
+Set these in `.env` or in the environment. `deploy/compose/docker-compose.yml` publishes on them and
 `scripts/start.sh` reads the same names to decide where to look, so one setting moves a service and
 everything that talks to it. The addresses built from them are separate settings, so a moved service
 also needs its URL changed: `DATABASE_URL`, `ORBO_AGENT_COMPUTER_URL` and `ORBO_MANAGED_AGENT_AG_UI_URL`.

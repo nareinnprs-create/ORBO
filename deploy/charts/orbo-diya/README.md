@@ -145,8 +145,8 @@ from the cluster's own security group. `aws eks describe-cluster` names both. Ke
 The bundled database and one administrator, which is the shortest thing that works:
 
 ```sh
-helm dependency build charts/orbo-diya
-helm upgrade --install orbo charts/orbo-diya \
+helm dependency build deploy/charts/orbo-diya
+helm upgrade --install orbo deploy/charts/orbo-diya \
   --namespace orbo --create-namespace \
   --set postgresql.enabled=true \
   --set config.initialAdminEmails=you@example.com \
@@ -256,7 +256,7 @@ about that cluster:
 Render any of them without a cluster:
 
 ```sh
-helm template orbo charts/orbo-diya -f charts/orbo-diya/ci/eks-values.yaml
+helm template orbo deploy/charts/orbo-diya -f deploy/charts/orbo-diya/ci/eks-values.yaml
 ```
 
 ### Identity, in one map
@@ -539,7 +539,7 @@ replaced. The message names this. Two ways out:
 
 ```sh
 # Either hand the existing directories to 1001 on the node, or go back to root:
-helm upgrade orbo ./charts/orbo-diya --set computers.podSecurityContext=null
+helm upgrade orbo ./deploy/charts/orbo-diya --set computers.podSecurityContext=null
 ```
 
 **`--reuse-values` will not pick this up.** A new key is not in the old release's values, so an
