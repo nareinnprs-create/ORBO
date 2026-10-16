@@ -15,7 +15,7 @@
 #   as they do on a laptop with no supervisor configured. Per-Bot isolation is A6.
 #
 # Chromium comes from Playwright's own installer, but the final image is not Playwright's all-browser
-# image. Keep this version matched to `agent-computer/package.json`: bump both or neither.
+# image. Keep this version matched to `agent-orbo-computer/package.json`: bump both or neither.
 
 FROM node:24.18.1-bookworm-slim AS node-toolchain
 FROM oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 AS bun-toolchain
@@ -68,12 +68,12 @@ RUN bun install --frozen-lockfile --filter app --filter server --filter worker -
 # is not an error: bun resolves afresh, succeeds, and the flag has decorated nothing. With both files
 # here, the tree in the image is the tree this repository resolved and committed. Bun is already
 # pinned twenty-odd lines above for the same reason; this is the install below it.
-COPY agent-computer/package.json agent-computer/package.json
-COPY agent-computer/bun.lock agent-computer/bun.lock
+COPY agent-orbo-computer/package.json agent-orbo-computer/package.json
+COPY agent-orbo-computer/bun.lock agent-orbo-computer/bun.lock
 # Production-only, into /prod-computer. The runtime executes `bun src/index.ts`, which needs
 # `playwright`, `spiffe` and `yaml`, not the `typescript` devDependency, so the dev tree never
 # enters a layer the final image copies — the same prune /prod does for the server below.
-RUN mkdir -p /prod-computer && cp agent-computer/package.json agent-computer/bun.lock /prod-computer/ \
+RUN mkdir -p /prod-computer && cp agent-orbo-computer/package.json agent-orbo-computer/bun.lock /prod-computer/ \
   && cd /prod-computer && bun install --frozen-lockfile --production \
   && rm -rf /root/.bun/install/cache /root/.cache /tmp/*
 
@@ -81,7 +81,7 @@ RUN mkdir -p /prod-computer && cp agent-computer/package.json agent-computer/bun
 # biome and the test tooling are a gigabyte that nothing in a running container imports.
 #
 # Scoped to the one workspace that runs here. The runtime serves the prebuilt `app/dist` statically
-# and executes `server/` (plus `agent-computer/`, which is a separate install root below, and the one
+# and executes `server/` (plus `agent-orbo-computer/`, which is a separate install root below, and the one
 # composio script, which only imports `server/`): every bare import in those files is declared in
 # `server/package.json`, so the app frontend, the Expo client, worker and ui trees buy resolution
 # nothing and ship hundreds of megabytes. They stay out of this install the same way the Expo tree
@@ -150,13 +150,13 @@ COPY --from=deps /prod/bun.lock bun.lock
 # The browser's tree is a separate install root with its own lockfile rather than a workspace of the
 # one above, so its pruned half is /prod-computer, installed `--production` in the stage above:
 # nothing `bun src/index.ts` executes imports the `typescript` devDependency left out of it.
-COPY --from=deps /prod-computer/node_modules agent-computer/node_modules
+COPY --from=deps /prod-computer/node_modules agent-orbo-computer/node_modules
 
 COPY server server
 COPY shared shared
 COPY examples examples
-COPY agent-computer/src agent-computer/src
-COPY agent-computer/package.json agent-computer/package.json
+COPY agent-orbo-computer/src agent-orbo-computer/src
+COPY agent-orbo-computer/package.json agent-orbo-computer/package.json
 
 # `bun run composio:smoke`, because the manifest copied above carries that entry and the question it
 # answers belongs here rather than on a laptop: it asks what THIS deployment's Composio key can see,
@@ -240,11 +240,11 @@ ENV PROFILES_DIR=/profiles
 #
 # No private-host allowance is set for it, and none is needed. Reaching the sibling process goes
 # through `checkComputerAddress`, which decides on the protocol and the metadata floor and never
-# consults `AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS`. That switch governs where a *Bot* may browse and
+# consults `ORBO_AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS`. That switch governs where a *Bot* may browse and
 # which endpoint one may be registered against, so setting it here bought nothing for this address
 # and let a Bot reach whatever this container's network reaches, which on a default bridge is the
 # host's LAN.
-ENV AGENT_COMPUTER_URL=http://127.0.0.1:4100
+ENV ORBO_AGENT_COMPUTER_URL=http://127.0.0.1:4100
 
 # NOTHING THAT MATTERS RUNS AS ROOT.
 #

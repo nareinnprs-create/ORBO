@@ -3119,7 +3119,7 @@ serve<SocketData>({
        * Through the gateway, not the provider.
        *
        * `gateway.locate` runs checkComputerAddress; `provider.locate` does not, and the URL built
-       * below carries COMPUTER_TOKEN in its query string. A provider that answered with a foreign
+       * below carries ORBO_COMPUTER_TOKEN in its query string. A provider that answered with a foreign
        * host was handed the deployment's computer token, which is the case that check was written
        * for. Every acting path already went through the gateway; this one did not.
        */

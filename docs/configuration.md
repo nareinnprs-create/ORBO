@@ -31,8 +31,8 @@ unconfigured.
 `COPILOTKIT_LICENSE_TOKEN` is optional: managed Intelligence issues no licence token, and a
 self-hosted Intelligence that has one sets this and has it forwarded to the runtime.
 
-`MANAGED_AGENT_AG_UI_URL` names the Bot in the box: the default endpoint for coworkers created in
-the product. It needs `MANAGED_AGENT_TOKEN` beside it, or the server refuses to start. Unset, the
+`ORBO_MANAGED_AGENT_AG_UI_URL` names the Bot in the box: the default endpoint for coworkers created in
+the product. It needs `ORBO_MANAGED_AGENT_TOKEN` beside it, or the server refuses to start. Unset, the
 server starts without a managed Bot, the shipped Risk Analyst coworker is omitted, and creating a
 coworker without its own endpoint is refused. A leftover token with no URL is ignored. The
 one-container image has no Bot process, so leave the URL unset there. `scripts/start.sh` points it
@@ -54,11 +54,11 @@ at `agent-langgraph` on a laptop.
 | `GOOGLE_API_KEY`     | unset                              | Google key when `BOT_PROVIDER=google`.                              |
 | `GOOGLE_GENERATIVE_AI_BASE_URL` | unset                   | Google-compatible endpoint that key is spent against.               |
 | `BOT_MODEL`          | the Bot's row in the spec file   | Model for whichever Bot is starting. Unset, it comes from that Bot's row in [the provider spec file](#the-provider-spec-file); the provider fallbacks are `gpt-5.5`, `claude-sonnet-4-5`, and `gemini-2.5-flash`. |
-| `AGENT_BOT_MODEL`    | `gpt-5.5`                          | Model for the proof-of-concept Bot (`agent-bot`), kept separate because it speaks `/v1/chat/completions` directly and refuses a model it cannot use. |
+| `ORBO_AGENT_BOT_MODEL`    | `gpt-5.5`                          | Model for the proof-of-concept Bot (`agent-bot`), kept separate because it speaks `/v1/chat/completions` directly and refuses a model it cannot use. |
 | `BOT_RESPONSES_API`  | `false`                            | Makes `agent-langgraph` use the OpenAI Responses API.               |
 | `BOT_REASONING_EFFORT` | unset (provider default)         | OpenAI and the Responses API only: one of `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`. `agent-langgraph` refuses to start on any other value, on a non-`openai` provider, or without the Responses API. |
-| `AGENT_STALL_TIMEOUT_MS` | unset (off)                    | How long a Bot's stream may produce nothing before the turn is ended for it. |
-| `AGENT_TOOL_TOKEN`   | unset; `start.sh` generates one    | The secret a framework Bot presents when it calls a granted tool back through this server. |
+| `ORBO_AGENT_STALL_TIMEOUT_MS` | unset (off)                    | How long a Bot's stream may produce nothing before the turn is ended for it. |
+| `ORBO_AGENT_TOOL_TOKEN`   | unset; `start.sh` generates one    | The secret a framework Bot presents when it calls a granted tool back through this server. |
 | `APP_DIST_DIR`       | unset                              | Where the built app is, when this process serves it. Set inside the container image; unset in development, where Vite serves the app. |
 | `AUDIT_RETENTION_DAYS` | unset                            | Whole number of days to keep audit rows; older ones are removed. Unset keeps the trail forever. |
 | `WORKER_SHARED_SECRET` | unset; `start.sh` uses a fixed local default | The secret the routines worker presents to fire a due routine. Without it the server refuses every handoff, whether or not a worker exists to send one. |
@@ -82,13 +82,13 @@ gallery; invalid JSON blocks saving and publishing.
 Generated HTML runs without the app's session or same-origin access to its data. It can load
 libraries from a CDN; deployments that prohibit that browser traffic can disable generated UI.
 
-**`AGENT_STALL_TIMEOUT_MS`** watches for the failure a Bot has that nothing else in the trail can
+**`ORBO_AGENT_STALL_TIMEOUT_MS`** watches for the failure a Bot has that nothing else in the trail can
 show: a stream that stops producing anything. Every other audit row is something that happened, and
 this one is the absence of anything happening, which leaves no trace of its own. Ending the turn
 writes `agent.stream_stalled`. Unset or `0` switches it off and nothing is watched. `.env.example`
 ships `60000`, so a new clone has it on and an upgraded deployment does not acquire it unasked.
 
-**`AGENT_TOOL_TOKEN`** exists because a framework Bot runs its own loop in its own process and still
+**`ORBO_AGENT_TOOL_TOKEN`** exists because a framework Bot runs its own loop in its own process and still
 may not reach a vendor directly. It calls the deployment that granted the tool, which is where the
 grant, the policy and the audit row live. Absent, no Bot may call tools back, and it is told so
 rather than quietly allowed.
@@ -96,10 +96,10 @@ rather than quietly allowed.
 That default is right for a deployment and wrong for a laptop, where it meant every granted MCP tool
 was refused before it reached the grant, the boundary or the trail — and a refusal at that point is
 not visible in the transcript, so a Bot reported no results rather than an error. `scripts/start.sh`
-therefore generates one and writes it to `.env`, as it already does for `MANAGED_AGENT_TOKEN`. A
+therefore generates one and writes it to `.env`, as it already does for `ORBO_MANAGED_AGENT_TOKEN`. A
 value already set is kept.
 
-It is one of a pair, and they are not interchangeable: `MANAGED_AGENT_TOKEN` is the server proving
+It is one of a pair, and they are not interchangeable: `ORBO_MANAGED_AGENT_TOKEN` is the server proving
 itself to a Bot, this is a Bot proving itself to the server. Rotating either means the process
 holding the old one refuses every call, which is why `start.sh` restarts the server and recreates the
 Bot containers on a run that mints one.
@@ -110,14 +110,14 @@ API server refuses a handoff without one configured, and the worker refuses to s
 all. See [routines.md](routines.md) for what a deployment with no worker at all looks like — the
 Routines page says so when nothing has swept.
 
-Unlike `AGENT_TOOL_TOKEN`, `start.sh` does not generate and persist this one. It supplies a fixed
+Unlike `ORBO_AGENT_TOOL_TOKEN`, `start.sh` does not generate and persist this one. It supplies a fixed
 local default, `orbo-dev-worker-secret`, the same value every clone of this repository gets. That
 is fine here not because of where the server listens — it binds no hostname, so the port itself is
 reachable like any other — but because this is a dev-only default on a machine's own dev stack, and
 the endpoint it guards accepts nothing but an unguessable `routine_run_<uuid>` id: the server
 re-reads the routine, the owner and the channel from its own tables rather than trusting anything
 else the caller says, so a well-known value from a public repository gates nothing sensitive here.
-`AGENT_TOOL_TOKEN` is generated fresh and written to `.env` precisely because it is not that: it is
+`ORBO_AGENT_TOOL_TOKEN` is generated fresh and written to `.env` precisely because it is not that: it is
 copied into every Bot container, and a framework Bot holding it may be running on a machine of its
 own, so a fixed default there would be no boundary at all. Production deployments must set a real
 `WORKER_SHARED_SECRET`.
@@ -334,7 +334,7 @@ policies apply. See [OpenAI WebRTC](https://developers.openai.com/api/docs/guide
 its own deployment's `.env` and owns their values: `ORBO_MODEL_OAUTH_FILE`, `CHATGPT_AUTH_FILE`,
 `CLAUDE_CODE_OAUTH_TOKEN`, and the `PICKED_HARNESS_*` names that describe the Bot picked during setup
 (`PICKED_HARNESS_IMAGE`, `PICKED_HARNESS_URL`, `PICKED_HARNESS_PORT` and the rest). The server reads
-`PICKED_HARNESS_IMAGE` and `PICKED_HARNESS_URL` to hand that Bot `MANAGED_AGENT_TOKEN`, and refuses to
+`PICKED_HARNESS_IMAGE` and `PICKED_HARNESS_URL` to hand that Bot `ORBO_MANAGED_AGENT_TOKEN`, and refuses to
 start when they are set without it. When a model provider is connected by OAuth rather than by key, the
 desktop also points `OPENAI_BASE_URL` at ORBO's own loopback route and sets `OPENAI_API_KEY` to a
 local proxy credential rather than a provider key, so those two do not mean what the table above says
@@ -546,28 +546,28 @@ is still the record.
 
 | Variable                             | Meaning                                                                                   |
 | ------------------------------------ | ----------------------------------------------------------------------------------------- |
-| `AGENT_COMPUTER_URL`                 | Shared computer URL. If absent, computer routes are not mounted.                          |
-| `COMPUTER_TOKEN`                     | Secret every computer request must present. The computer refuses to start without it.     |
-| `COMPUTER_MAX_BROWSERS`              | How many Bots may hold a running browser at once. `8` by default; the least recently used is closed past it. |
-| `COMPUTER_BROWSER_IDLE_MS`           | How long an untouched browser is kept. 30 minutes by default; `0` keeps them resident.    |
-| `COMPUTER_BROWSER_BACKEND`           | `managed` by default (full bundled Chromium); `local-chrome` opts into installed Chrome with dedicated profiles and a loopback API. |
-| `COMPUTER_BROWSER_MODE`              | Managed defaults to `headless` (full Chromium's new headless mode). `headed` uses Xvfb on Linux and a native window on macOS/Windows. Local Chrome requires `headed`. |
+| `ORBO_AGENT_COMPUTER_URL`                 | Shared computer URL. If absent, computer routes are not mounted.                          |
+| `ORBO_COMPUTER_TOKEN`                     | Secret every computer request must present. The computer refuses to start without it.     |
+| `ORBO_COMPUTER_MAX_BROWSERS`              | How many Bots may hold a running browser at once. `8` by default; the least recently used is closed past it. |
+| `ORBO_COMPUTER_BROWSER_IDLE_MS`           | How long an untouched browser is kept. 30 minutes by default; `0` keeps them resident.    |
+| `ORBO_COMPUTER_BROWSER_BACKEND`           | `managed` by default (full bundled Chromium); `local-chrome` opts into installed Chrome with dedicated profiles and a loopback API. |
+| `ORBO_COMPUTER_BROWSER_MODE`              | Managed defaults to `headless` (full Chromium's new headless mode). `headed` uses Xvfb on Linux and a native window on macOS/Windows. Local Chrome requires `headed`. |
 | `ORBO_LOCAL_COMPUTER_DIR`         | Local startup helper's absolute data root. Defaults to the platform's ORBO user-data directory; contains `profiles/` and `workspace/`. |
-| `COMPUTER_SUPERVISOR_URL`            | Supervisor URL for per-Bot computers. If absent, Bots share `AGENT_COMPUTER_URL`.         |
+| `ORBO_COMPUTER_SUPERVISOR_URL`            | Supervisor URL for per-Bot computers. If absent, Bots share `ORBO_AGENT_COMPUTER_URL`.         |
 | `SUPERVISOR_TOKEN`                   | Bearer token required by the supervisor.                                                  |
-| `AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS` | Local-only private-host browsing when `true`. A deployment running with `NODE_ENV=production` refuses to start while it is set. Cloud metadata addresses are refused either way. |
-| `AGENT_ENDPOINT_ALLOWED_HOSTS`       | Private addresses an agent may be registered at, comma separated; unset (none) by default. Host, optionally with a port. Exact match; no wildcards. Never-allowed addresses cannot be named. |
-| `AGENT_COMPUTER_POLICY`              | JSON action policy: `{"mode":"enforce","deny":[...],"allow":[...]}`.                      |
-| `COMPUTER_RUNTIME`                   | Set to `runsc` to run supervised computers under gVisor.                                  |
-| `COMPUTER_SANDBOX`                   | Set to `on` to enable Chromium's own sandbox where the host permits user namespaces. Which way it went is printed at start-up. |
+| `ORBO_AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS` | Local-only private-host browsing when `true`. A deployment running with `NODE_ENV=production` refuses to start while it is set. Cloud metadata addresses are refused either way. |
+| `ORBO_AGENT_ENDPOINT_ALLOWED_HOSTS`       | Private addresses an agent may be registered at, comma separated; unset (none) by default. Host, optionally with a port. Exact match; no wildcards. Never-allowed addresses cannot be named. |
+| `ORBO_AGENT_COMPUTER_POLICY`              | JSON action policy: `{"mode":"enforce","deny":[...],"allow":[...]}`.                      |
+| `ORBO_COMPUTER_RUNTIME`                   | Set to `runsc` to run supervised computers under gVisor.                                  |
+| `ORBO_COMPUTER_SANDBOX`                   | Set to `on` to enable Chromium's own sandbox where the host permits user namespaces. Which way it went is printed at start-up. |
 
-`COMPUTER_SANDBOX` is not the cluster sandbox provider. A Kubernetes deployment can instead run each
-computer as a sandboxed pod, selected by `COMPUTER_SANDBOX_NAMESPACE` with `COMPUTER_SANDBOX_IDLE_AFTER`
-and `COMPUTER_SANDBOX_TEMPLATE_FILE` beside it; those are set by the Helm chart, not by Compose, and
+`ORBO_COMPUTER_SANDBOX` is not the cluster sandbox provider. A Kubernetes deployment can instead run each
+computer as a sandboxed pod, selected by `ORBO_COMPUTER_SANDBOX_NAMESPACE` with `ORBO_COMPUTER_SANDBOX_IDLE_AFTER`
+and `ORBO_COMPUTER_SANDBOX_TEMPLATE_FILE` beside it; those are set by the Helm chart, not by Compose, and
 are covered in [charts/orbo-diya/README.md](../charts/orbo-diya/README.md). The similarly named
-`COMPUTER_SANDBOX` above only toggles Chromium's own process sandbox on a Docker computer.
+`ORBO_COMPUTER_SANDBOX` above only toggles Chromium's own process sandbox on a Docker computer.
 
-Changing `COMPUTER_BROWSER_MODE` affects new supervised computers. A computer that already exists is
+Changing `ORBO_COMPUTER_BROWSER_MODE` affects new supervised computers. A computer that already exists is
 left running until its image changes or its container is recreated. To apply a mode-only change to
 all computers while preserving their browser profiles and workspaces, apply the new supervisor
 environment and remove only the owned containers (do not remove their volumes):
@@ -582,7 +582,7 @@ The supervisor recreates each computer with the same named volumes on its next r
 
 The managed backend uses Playwright's full `chromium` channel in either mode. The Docker image
 already installs that browser and Xvfb; it does not require Google Chrome. For Compose, set
-`COMPUTER_BROWSER_MODE=headed` in the deployment environment and recreate the shared computer or
+`ORBO_COMPUTER_BROWSER_MODE=headed` in the deployment environment and recreate the shared computer or
 supervisor as applicable:
 
 ```sh
@@ -595,7 +595,7 @@ same per-Bot profile volumes and streamed viewer continue to work. For Helm, add
 ```yaml
 computers:
   extraEnv:
-    - name: COMPUTER_BROWSER_MODE
+    - name: ORBO_COMPUTER_BROWSER_MODE
       value: headed
 ```
 
@@ -615,21 +615,21 @@ in its standard location, then install dependencies from the checkout root:
 
 ```sh
 bun install --frozen-lockfile
-bun install --cwd agent-computer --frozen-lockfile
+bun install --cwd agent-orbo-computer --frozen-lockfile
 ```
 
-Use the same existing `COMPUTER_TOKEN` for the API and helper. It can be set in the checkout's `.env`
+Use the same existing `ORBO_COMPUTER_TOKEN` for the API and helper. It can be set in the checkout's `.env`
 (Bun loads it) or supplied securely in each process environment; the helper never prints it. Set the
 following API configuration and clear both supervisor selectors, including any inherited process
 environment values, because either selector takes precedence over the shared URL:
 
 ```dotenv
-AGENT_COMPUTER_URL=http://127.0.0.1:4101
-COMPUTER_SUPERVISOR_URL=
-COMPUTER_SANDBOX_NAMESPACE=
+ORBO_AGENT_COMPUTER_URL=http://127.0.0.1:4101
+ORBO_COMPUTER_SUPERVISOR_URL=
+ORBO_COMPUTER_SANDBOX_NAMESPACE=
 ```
 
-In the helper's environment, leave `COMPUTER_BROWSER_BACKEND` and `COMPUTER_BROWSER_MODE` unset, or
+In the helper's environment, leave `ORBO_COMPUTER_BROWSER_BACKEND` and `ORBO_COMPUTER_BROWSER_MODE` unset, or
 set them to `local-chrome` and `headed`. An inherited `managed` or `headless` setting is an error.
 Leave `PORT` unset for 4101, or explicitly choose another port and update the API URL to match. Start:
 
@@ -658,8 +658,8 @@ access tools for host commands. Native Chrome runs with your OS account's networ
 is not a container or an OS network sandbox. Keep the API's private-host browsing opt-in off unless
 you intentionally need it for your local deployment.
 
-To switch back, stop the helper, restore your prior `AGENT_COMPUTER_URL` and supervisor/sandbox
-selectors, and restart the API. Unset `COMPUTER_BROWSER_BACKEND` (or set `managed`) on the managed
+To switch back, stop the helper, restore your prior `ORBO_AGENT_COMPUTER_URL` and supervisor/sandbox
+selectors, and restart the API. Unset `ORBO_COMPUTER_BROWSER_BACKEND` (or set `managed`) on the managed
 computer process; choose `headless` or `headed` as before. Local Chrome profiles remain in the local
 data root, separate from managed computer volumes.
 
@@ -669,14 +669,14 @@ data root, separate from managed computer volumes.
 - `NAVIGATION_TIMEOUT_MS`
 - `WORKSPACE_DIR`
 - `PROFILES_DIR`
-- `COMPUTER_BOT_ID`
+- `ORBO_COMPUTER_BOT_ID`
 - `EGRESS_PROXY_DEFAULT` (in `egress.env`, see below)
 - `EGRESS_PROXY_<BOT_ID>` (in `egress.env`, see below)
-- `COMPUTER_SHELL_ENV`
+- `ORBO_COMPUTER_SHELL_ENV`
 
 A command on the computer inherits PATH, locale and terminal names, and the proxy variables, not
 the rest of the process environment. Userinfo is stripped from a proxy URL, so a password in
-`HTTP_PROXY` is not in `env`. `COMPUTER_SHELL_ENV` is a comma-separated list of extra names to
+`HTTP_PROXY` is not in `env`. `ORBO_COMPUTER_SHELL_ENV` is a comma-separated list of extra names to
 pass. Naming a secret or a credentialed proxy there is an operator's decision; the default does not.
 
 ### Per-Bot egress
@@ -713,10 +713,10 @@ a computer it creates does not receive it.
 
 The supervisor also reads:
 
-- `COMPUTER_IMAGE`
-- `COMPUTER_NAMESPACE`
-- `COMPUTER_NETWORK`
-- `COMPUTER_MEMORY_BYTES`
+- `ORBO_COMPUTER_IMAGE`
+- `ORBO_COMPUTER_NAMESPACE`
+- `ORBO_COMPUTER_NETWORK`
+- `ORBO_COMPUTER_MEMORY_BYTES`
 - `DOCKER_SOCKET`
 
 `ENGINE_SOCKET` is separate from those, because it is read by Compose rather than by the supervisor:
@@ -727,7 +727,7 @@ symlinks that path to the rootless socket. Rootless Podman on Linux needs
 symlink to the rootful socket, which is not the one running, and the supervisor reports that it
 cannot reach Docker.
 
-`COMPUTER_NAMESPACE` defaults to `orbo` and names the deployment a computer belongs to. It is part
+`ORBO_COMPUTER_NAMESPACE` defaults to `orbo` and names the deployment a computer belongs to. It is part
 of every container and volume name the supervisor derives, and the supervisor acts only on computers
 carrying it, so two deployments on one Docker host never adopt each other's.
 
@@ -757,10 +757,10 @@ stack without a toolchain and without waiting for Chromium to build.
 
 | Service           | Setting             | Published image                            |
 | ----------------- | ------------------- | ------------------------------------------ |
-| `agent-computer`  | `COMPUTER_IMAGE`    | `ghcr.io/nareinnprs-create/orbo-agent-computer` |
+| `agent-computer`  | `ORBO_COMPUTER_IMAGE`    | `ghcr.io/nareinnprs-create/orbo-agent-orbo-computer` |
 | `supervisor`      | `SUPERVISOR_IMAGE`  | `ghcr.io/nareinnprs-create/orbo-supervisor`     |
-| `agent-bot`       | `BOT_IMAGE`         | `ghcr.io/nareinnprs-create/orbo-agent-bot`      |
-| `agent-langgraph` | `LANGGRAPH_IMAGE`   | `ghcr.io/nareinnprs-create/orbo-agent-langgraph`|
+| `agent-bot`       | `BOT_IMAGE`         | `ghcr.io/nareinnprs-create/orbo-agent-orbo-bot`      |
+| `agent-langgraph` | `LANGGRAPH_IMAGE`   | `ghcr.io/nareinnprs-create/orbo-agent-orbo-langgraph`|
 | `migrate`         | `SERVER_IMAGE`      | `ghcr.io/nareinnprs-create/orbo-server`         |
 
 Unset, each names a local tag and Compose builds it, which is what a checkout of this repository
@@ -782,7 +782,7 @@ useful answer is that the image could not be fetched. Somewhere that must never 
 | ----------------- | -------------------------- | ----------------- |
 | `app`             | 3010                       | `APP_PORT`        |
 | `server`          | 3001                       | `SERVER_PORT`     |
-| `agent-computer`  | 4100                       | `COMPUTER_PORT`   |
+| `agent-computer`  | 4100                       | `ORBO_COMPUTER_PORT`   |
 | `agent-bot`       | 4200                       | `BOT_PORT`        |
 | `agent-langgraph` | 4201                       | `LANGGRAPH_PORT`  |
 | `supervisor`      | 4500 host / 4300 container | `SUPERVISOR_PORT` |
@@ -791,10 +791,10 @@ useful answer is that the image could not be fetched. Somewhere that must never 
 Set these in `.env` or in the environment. `docker-compose.yml` publishes on them and
 `scripts/start.sh` reads the same names to decide where to look, so one setting moves a service and
 everything that talks to it. The addresses built from them are separate settings, so a moved service
-also needs its URL changed: `DATABASE_URL`, `AGENT_COMPUTER_URL` and `MANAGED_AGENT_AG_UI_URL`.
+also needs its URL changed: `DATABASE_URL`, `ORBO_AGENT_COMPUTER_URL` and `ORBO_MANAGED_AGENT_AG_UI_URL`.
 
 To run two deployments on one Docker host, give the second one its own `COMPOSE_PROJECT_NAME`,
-`COMPUTER_NAMESPACE` and `COMPUTER_IMAGE`. Container and volume names are global to a host, and the
+`ORBO_COMPUTER_NAMESPACE` and `ORBO_COMPUTER_IMAGE`. Container and volume names are global to a host, and the
 namespace is what keeps each deployment's per-Bot computers its own.
 
 Give it its own `DEPLOYMENT_ID` as well when it shares an Intelligence project, which a copy made
@@ -859,7 +859,7 @@ agents:
     title: Risk & Compliance
     role_description: Investigate policies and controls.
     type: remote-ag-ui
-    endpoint: ${MANAGED_AGENT_AG_UI_URL:-}
+    endpoint: ${ORBO_MANAGED_AGENT_AG_UI_URL:-}
 ```
 
 Each agent requires `id`, `name`, `title`, `role_description`, and `type`.

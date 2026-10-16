@@ -65,13 +65,6 @@ export const COMPUTER_ACTING_TOOLS = [
 
 export type ComputerActingToolName = (typeof COMPUTER_ACTING_TOOLS)[number];
 
-export function isActingTool(name: string): name is ComputerActingToolName {
-  return (COMPUTER_ACTING_TOOLS as readonly string[]).includes(name);
-}
-
-export type ComputerToolName = (typeof COMPUTER_TOOLS)[number];
-
-export type NavigateInput = { url: string; toolCallId?: string };
 export type NavigateResult = {
   /** The untrusted-content notice for the page's own fields. See untrusted-content.ts. */
   untrusted?: string;
@@ -271,14 +264,6 @@ export type WriteFileResult = {
   bytes: number;
   appended: boolean;
 };
-
-/**
- * Who is driving the computer.
- *
- * The expand overlay is where control lands. One browser, two possible drivers, never at once: while a person holds the wheel every acting call from the Bot
- * is refused rather than queued, because a queued click arrives after the person has moved on.
- */
-export type ControlHolder = "bot" | "human";
 
 export type ControlState = ComputerControlState;
 

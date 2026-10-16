@@ -1453,12 +1453,12 @@ function remoteAgentWithStandingRole(
         ).pipe(switchMap((offered) => runWith(offered, input, next))),
       );
       const owned =
-        !!process.env.MANAGED_AGENT_TOKEN &&
+        !!process.env.ORBO_MANAGED_AGENT_TOKEN &&
         agent.headers?.["x-orbo-agent-token"] ===
-          process.env.MANAGED_AGENT_TOKEN &&
+          process.env.ORBO_MANAGED_AGENT_TOKEN &&
         [
           process.env.PICKED_HARNESS_URL,
-          process.env.MANAGED_AGENT_AG_UI_URL,
+          process.env.ORBO_MANAGED_AGENT_AG_UI_URL,
         ].some(
           (url) =>
             url?.replace(/\/$/, "") === agent.endpoint.replace(/\/$/, ""),

@@ -293,18 +293,18 @@ and collapse into **one** ORBO subsystem.
 ### B. Open decisions — proposed defaults
 8. Upstream pin → latest `main` SHA at clone time (recorded in `UPSTREAM.md`).
 9. ORBO version → `0.1.0`.
-10. DB default → `EMBEDDED_POSTGRES=on`; external `DATABASE_URL` supported.
+10. DB default → `EMBEDDED_POSTGRES=off` (opt-in `on`); external `DATABASE_URL` supported.
 11. Ports → keep upstream, documented centrally.
 12. Bundle IDs → `ai.orbo.app` (mobile), `ai.orbo.desktop`; display name ORBO.
 13. Installers → Windows MSI, macOS DMG, Linux AppImage + deb.
-14. Desktop auto-update → Tauri updater to an ORBO endpoint (placeholder until domain set).
-15. UI state/data → TanStack Query + Zustand.
+14. Desktop auto-update → updater removed (no config/crate/endpoint) pending domain + signing.
+15. UI state/data → TanStack Query only (no Zustand).
 16. Canonical auth → OpenBot Better Auth only.
 17. Agent catalog → owner approves names/roles I draft (DIYA boss + rebranded set).
 18. DIYA persona → neutral default prompt; admin-editable.
-19. CI → new GitHub Actions (lint/test/build, macOS runner, EAS).
+19. CI → new GitHub Actions (lint/test/build, macOS runner); EAS config present but no workflow invokes EAS builds.
 20. Docs → in-repo `docs/`.
-21. Observability → structured logs + `/api/health`; no third-party APM for v1.
+21. Observability → structured logs + `/health`; no third-party APM for v1.
 
 ### C. Design/engineering planning still pending
 22. Schema unification (three data models → one Postgres schema) + mapping doc.

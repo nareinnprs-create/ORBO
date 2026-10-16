@@ -92,27 +92,3 @@ export async function supplySecret(
     };
   }
 }
-
-/**
- * Serializes human input requests without blocking the caller; ordering matters for typed secrets.
- */
-let inputQueue: Promise<unknown> = Promise.resolve();
-
-/**
- * Send one human input event. Returns immediately; delivery is ordered.
- */
-export function sendHumanInput(
-  computerId: string,
-  kind: "click" | "type" | "key" | "scroll",
-  body: Record<string, unknown>,
-): void {
-  inputQueue = inputQueue
-    .then(() =>
-      tryClient(`/api/computers/${computerId}/human/${kind}`, {
-        method: "POST",
-        body,
-      }),
-    )
-    // Fire-and-forget: the user can see/retry input failures, while the input queue must keep moving.
-    .catch(() => undefined);
-}

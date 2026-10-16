@@ -27,7 +27,6 @@ import {
 import {
   ResponsibilityNotFoundError,
   ResponsibilityRefusedError,
-  type ResponsibilitySource,
   type ResponsibilityStatus,
 } from "./types";
 
@@ -186,10 +185,6 @@ export function parseTriggerConfig(input: unknown): TriggerConfig {
       result.error.issues[0]?.message ?? "Invalid trigger.",
     );
   return result.data;
-}
-
-export function sourceForKind(kind: TriggerKind): ResponsibilitySource {
-  return kind;
 }
 
 function valueAt(payload: unknown, path: string): unknown {

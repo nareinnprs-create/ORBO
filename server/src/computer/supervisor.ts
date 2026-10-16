@@ -8,7 +8,7 @@
  * The server still never touches Docker. It asks for a Bot's computer by Bot; the supervisor decides
  * what that means. Everything the API server can express is in this file, and it is four verbs.
  *
- * Without a supervisor configured, nothing here is used and the fixed `AGENT_COMPUTER_URL` still
+ * Without a supervisor configured, nothing here is used and the fixed `ORBO_AGENT_COMPUTER_URL` still
  * answers for every Bot. That is the single-container mode: fine for one person on a laptop, and
  * honest about being one shared computer.
  */

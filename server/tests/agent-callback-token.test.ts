@@ -394,7 +394,7 @@ describe("the tool-call route a callback token guards", () => {
   const DEPLOYMENT_TOKEN = "deployment-wide-agent-token";
 
   const config = loadConfig(
-    testEnvironment({ AGENT_TOOL_TOKEN: DEPLOYMENT_TOKEN }),
+    testEnvironment({ ORBO_AGENT_TOOL_TOKEN: DEPLOYMENT_TOKEN }),
   );
 
   /**

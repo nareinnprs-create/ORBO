@@ -64,16 +64,6 @@ const OPEN: readonly SignInStatus[] = ["pending", "taken_over"];
  * request this long and no longer.
  */
 const FILLING_LEASE_MS = 120_000;
-const FINAL: readonly SignInStatus[] = [
-  "signed_in",
-  "failed",
-  "cancelled",
-  "expired",
-];
-
-export function isFinalSignIn(status: SignInStatus) {
-  return FINAL.includes(status);
-}
 
 /**
  * What the Bot is told when a request ends. The only thing about a sign-in that reaches a model.

@@ -292,7 +292,7 @@ computers:
   # all-in-one image, whose `Dockerfile` creates `pwuser`, chowns `/workspace`, `/profiles` and
   # `/app` to it, and drops to it through s6. A computer pod overrides the command to run the
   # browser process alone, so it never reaches s6 and ran as uid 0. The Compose and supervisor
-  # paths run `agent-computer/Dockerfile`, which builds no such user and is still uid 0; that is
+  # paths run `agent-orbo-computer/Dockerfile`, which builds no such user and is still uid 0; that is
   # the rest of #261's residual and is not this.
   #
   # WHAT IT BUYS, honestly. It is not a containment boundary against a Bot's own shell: the image

@@ -61,7 +61,6 @@ export const proactiveMemoryInputSchema = z
   })
   .strict();
 
-export type ProactiveSettingInput = z.infer<typeof proactiveSettingInputSchema>;
 export type ProactiveSetting = {
   id: string;
   ownerUserId: string;

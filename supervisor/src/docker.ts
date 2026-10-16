@@ -30,12 +30,12 @@ const docker = new Docker(
 );
 
 /** The port the computer listens on inside its own container. */
-const COMPUTER_PORT = "4100/tcp";
+const ORBO_COMPUTER_PORT = "4100/tcp";
 
 /**
  * Readiness, stated at create time rather than read off the image.
  *
- * `agent-computer/Dockerfile` declares the same HEALTHCHECK, and under Docker that was enough: the
+ * `agent-orbo-computer/Dockerfile` declares the same HEALTHCHECK, and under Docker that was enough: the
  * image carried it, the daemon ran it, and {@link waitUntilAnswering} could ask. Podman does not
  * report it. Its images are OCI-manifest, the OCI image config has no healthcheck field, and the
  * instruction is dropped, both when Podman builds the image and when it pulls one that has it. The
@@ -54,7 +54,7 @@ const COMPUTER_PORT = "4100/tcp";
 const COMPUTER_HEALTHCHECK = {
   Test: [
     "CMD-SHELL",
-    `bun -e "const r = await fetch('http://localhost:${COMPUTER_PORT.split("/")[0]}/health'); process.exit(r.ok ? 0 : 1)"`,
+    `bun -e "const r = await fetch('http://localhost:${ORBO_COMPUTER_PORT.split("/")[0]}/health'); process.exit(r.ok ? 0 : 1)"`,
   ],
   // Nanoseconds, which is what the API takes. The same numbers the Dockerfile states.
   Interval: 2_000_000_000,
@@ -223,7 +223,7 @@ async function inspectOwned(names: ComputerNames): Promise<{
     const info = await docker.getContainer(names.container).inspect();
     if (!ours(info.Config?.Labels)) return null;
     const published =
-      info.NetworkSettings?.Ports?.[COMPUTER_PORT]?.[0]?.HostPort;
+      info.NetworkSettings?.Ports?.[ORBO_COMPUTER_PORT]?.[0]?.HostPort;
     const port = parseHostPort(published);
     return {
       status: info.State?.Status ?? "unknown",
@@ -285,18 +285,18 @@ async function runsCurrentImage(
   }
 }
 
-/** `COMPUTER_TOKEN=...` out of a list of `KEY=value`, which is how both sides carry an environment. */
+/** `ORBO_COMPUTER_TOKEN=...` out of a list of `KEY=value`, which is how both sides carry an environment. */
 function tokenIn(environment: string[] | undefined): string | undefined {
   const entry = environment?.find((line) => line.startsWith(`${TOKEN_NAME}=`));
   return entry?.slice(TOKEN_NAME.length + 1);
 }
 
-const TOKEN_NAME = "COMPUTER_TOKEN";
+const TOKEN_NAME = "ORBO_COMPUTER_TOKEN";
 
 /**
  * Whether the computer that exists will accept the token this deployment now hands out.
  *
- * A computer is checked against the `COMPUTER_TOKEN` it was created with, and it holds that one for
+ * A computer is checked against the `ORBO_COMPUTER_TOKEN` it was created with, and it holds that one for
  * as long as the container lives. Normally that is nothing to worry about, because the shell mints
  * the generated secrets once per deployment and deliberately does not rotate them: a computer
  * outliving a restart is the reason it does not.
@@ -439,7 +439,7 @@ function hostConfig(names: ComputerNames, options: EnsureOptions) {
           // the computer requires is the control; this keeps the surface off the network as well,
           // because both is the right number of locks on a browser holding somebody's logins.
           PortBindings: {
-            [COMPUTER_PORT]: [{ HostIp: "127.0.0.1", HostPort: "" }],
+            [ORBO_COMPUTER_PORT]: [{ HostIp: "127.0.0.1", HostPort: "" }],
           },
         }),
     RestartPolicy: { Name: "unless-stopped" },
@@ -526,7 +526,7 @@ export async function ensure(
           // an identity per Bot then falls out of the same fact that names the container.
           Labels: labelsFor(names),
           Env: options.environment,
-          ExposedPorts: { [COMPUTER_PORT]: {} },
+          ExposedPorts: { [ORBO_COMPUTER_PORT]: {} },
           Healthcheck: COMPUTER_HEALTHCHECK,
           HostConfig: hostConfig(names, options),
         });

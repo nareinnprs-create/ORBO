@@ -94,8 +94,6 @@ export const revokeApprovalRule = (id: string) =>
     method: "DELETE",
     fallback: "The permission could not be revoked.",
   });
-export const setApprovalEnabled = (enabled: boolean) =>
-  setApprovalPreferences({ enabled });
 export const setApprovalPreferences = (input: {
   enabled?: boolean;
   autoReview?: boolean;

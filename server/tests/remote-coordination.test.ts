@@ -27,7 +27,10 @@ const RUN: RunAssertion = {
 function callbackApp(caller: DeploymentToolCaller) {
   const parameters: Parameters<typeof createApp> = [
     loadConfig(
-      testEnvironment({ AGENT_TOOL_TOKEN: TOKEN, KEY_ENCRYPTION_KEY: KEY }),
+      testEnvironment({
+        ORBO_AGENT_TOOL_TOKEN: TOKEN,
+        KEY_ENCRYPTION_KEY: KEY,
+      }),
     ),
   ];
   parameters[28] = caller;

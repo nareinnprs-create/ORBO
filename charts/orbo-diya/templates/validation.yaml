@@ -84,7 +84,7 @@ This template renders nothing.
 {{- /*
   A computer nobody can reach, or one anybody can.
 
-  `agent-computer` refuses every request without `COMPUTER_TOKEN` and permits only `/health`, so a
+  `agent-computer` refuses every request without `ORBO_COMPUTER_TOKEN` and permits only `/health`, so a
   chart that created one without a token would create a process that answers nothing. And a mode of
   `external` with no address is a deployment whose Bots have no computer at all, which fails at the
   first browser action rather than at install.

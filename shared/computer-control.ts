@@ -35,8 +35,6 @@ export type ComputerControlState = {
   secretRef?: string;
   secretSnapshotId?: number;
 };
-export type RequestHelpInput = { reason: string; toolCallId?: string };
-export type ControlRequestInput = { requestId: string };
 export type BrowserChallenge = {
   kind: "cloudflare" | "visible-challenge";
   reason: string;

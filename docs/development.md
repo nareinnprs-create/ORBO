@@ -152,15 +152,15 @@ Asked for without it, the run stops before the first test and names the variable
 directory's own dependencies:
 
 ```sh
-cd agent-computer && bun install
+cd agent-orbo-computer && bun install
 cd .. && bun run test:live-screen
 ```
 
 It drives the live screen against the real computer process with a real Chromium: a socket closing
 while the browser is still starting, a second connection taking the screen from the first, the wheel
 refusing input from the socket that owns it, and a browser closing by request or by the idle sweep.
-Those need `agent-computer/src/index.ts`, which imports Playwright at module scope, and `playwright`
-is declared only in `agent-computer/package.json`, which `bun install` at the root does not reach. So
+Those need `agent-orbo-computer/src/index.ts`, which imports Playwright at module scope, and `playwright`
+is declared only in `agent-orbo-computer/package.json`, which `bun install` at the root does not reach. So
 without `ORBO_LIVE_SCREEN=1` the files skip before importing anything, which is what keeps
 `bun run test` and CI working where that dependency was never installed.
 

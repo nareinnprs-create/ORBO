@@ -82,13 +82,13 @@ fn main() {
         if joined.contains("config --format json") {
             println!(
                 "{}",
-                r#"{"services":{"supervisor":{"environment":{"COMPUTER_NAMESPACE":"orbo"}}}}"#
+                r#"{"services":{"supervisor":{"environment":{"ORBO_COMPUTER_NAMESPACE":"orbo"}}}}"#
             );
         }
         return;
     }
     if SCENARIO == "stop-ipc" && joined.contains("config --format json") {
-        println!("{{\"services\":{{\"supervisor\":{{\"environment\":{{\"COMPUTER_NAMESPACE\":\"stop-ipc\"}}}}}}}}");
+        println!("{{\"services\":{{\"supervisor\":{{\"environment\":{{\"ORBO_COMPUTER_NAMESPACE\":\"stop-ipc\"}}}}}}}}");
         return;
     }
     if SCENARIO == "stop-ipc" && (joined.starts_with("ps ") || joined.contains("stop supervisor")) {

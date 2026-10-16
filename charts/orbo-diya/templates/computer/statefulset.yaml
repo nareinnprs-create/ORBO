@@ -82,7 +82,7 @@ spec:
       {{- /*
         gVisor or Kata, where the cluster has one, and an ordinary pod where it does not.
 
-        The product already has this idea: `COMPUTER_RUNTIME=runsc` runs a computer under gVisor on a
+        The product already has this idea: `ORBO_COMPUTER_RUNTIME=runsc` runs a computer under gVisor on a
         host that supports it. This is the same setting where Kubernetes expects it. Unset by
         default, because a chart that assumed a RuntimeClass would fail to install on a cluster that
         has none, and the three clouds do not agree: GKE has managed gVisor, AKS offers Kata, and on
@@ -118,7 +118,7 @@ spec:
             One image serves both roles and the command decides which: this skips s6 and runs the
             browser process directly, so a computer pod carries no API and no database.
           */}}
-          command: ["/usr/local/bin/bun", "/app/agent-computer/src/index.ts"]
+          command: ["/usr/local/bin/bun", "/app/agent-orbo-computer/src/index.ts"]
           ports:
             - name: http
               containerPort: 4100
@@ -144,17 +144,17 @@ spec:
             */}}
             - name: BUN_INSTALL
               value: /home/pwuser/.bun
-            - name: COMPUTER_TOKEN
+            - name: ORBO_COMPUTER_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: {{ default (include "orbo.secretName" .) .Values.computers.existingTokenSecret }}
                   key: computer-token
             {{- with .Values.computers.maxBrowsers }}
-            - name: COMPUTER_MAX_BROWSERS
+            - name: ORBO_COMPUTER_MAX_BROWSERS
               value: {{ . | quote }}
             {{- end }}
             {{- with .Values.computers.browserIdleMs }}
-            - name: COMPUTER_BROWSER_IDLE_MS
+            - name: ORBO_COMPUTER_BROWSER_IDLE_MS
               value: {{ . | quote }}
             {{- end }}
             {{- with .Values.computers.extraEnv }}

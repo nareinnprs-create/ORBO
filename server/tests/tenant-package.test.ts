@@ -467,10 +467,10 @@ describe("tenant YAML validation", () => {
      * are switched off here to read the package as a bare install does.
      */
     const saved = {
-      managed: process.env.MANAGED_AGENT_AG_UI_URL,
+      managed: process.env.ORBO_MANAGED_AGENT_AG_UI_URL,
       picked: process.env.PICKED_HARNESS_URL,
     };
-    delete process.env.MANAGED_AGENT_AG_UI_URL;
+    delete process.env.ORBO_MANAGED_AGENT_AG_UI_URL;
     delete process.env.PICKED_HARNESS_URL;
     try {
       const tenantPackage = await loadTenantPackage(
@@ -483,8 +483,8 @@ describe("tenant YAML validation", () => {
       ]);
     } finally {
       if (saved.managed === undefined)
-        delete process.env.MANAGED_AGENT_AG_UI_URL;
-      else process.env.MANAGED_AGENT_AG_UI_URL = saved.managed;
+        delete process.env.ORBO_MANAGED_AGENT_AG_UI_URL;
+      else process.env.ORBO_MANAGED_AGENT_AG_UI_URL = saved.managed;
       if (saved.picked === undefined) delete process.env.PICKED_HARNESS_URL;
       else process.env.PICKED_HARNESS_URL = saved.picked;
     }
@@ -1586,14 +1586,14 @@ describe("pairing a package's coworkers with its skills", () => {
 test("blank package endpoint disables only its owned agent and restores it when configured again", async () => {
   const suffix = randomUUID();
   const actor = { id: `reader-${suffix}`, role: "user" as const };
-  const original = process.env.MANAGED_AGENT_AG_UI_URL;
+  const original = process.env.ORBO_MANAGED_AGENT_AG_UI_URL;
   const originalPicked = process.env.PICKED_HARNESS_URL;
   let packageId: string | undefined;
   let otherPackageId: string | undefined;
   const ownedIds: string[] = [];
   const historyId = `history-${suffix}`;
   try {
-    process.env.MANAGED_AGENT_AG_UI_URL = "http://127.0.0.1:4201/ag-ui";
+    process.env.ORBO_MANAGED_AGENT_AG_UI_URL = "http://127.0.0.1:4201/ag-ui";
     process.env.PICKED_HARNESS_URL = "http://127.0.0.1:4206/ag-ui";
     const source = new URL("../../examples/orbo", import.meta.url).pathname;
     const configured = await loadTenantPackage(source);
@@ -1671,7 +1671,7 @@ test("blank package endpoint disables only its owned agent and restores it when 
         ownerUserId: control.ownerUserId,
       });
     }
-    process.env.MANAGED_AGENT_AG_UI_URL = "";
+    process.env.ORBO_MANAGED_AGENT_AG_UI_URL = "";
     const omitted = isolate(await loadTenantPackage(source));
     expect(omitted.agents.some((agent) => agent.id === target)).toBe(false);
     // Explicitly omitted foreign/user-owned IDs must not acquire package ownership.
@@ -1707,8 +1707,8 @@ test("blank package endpoint disables only its owned agent and restores it when 
       (await runtime(actor)).find((agent) => agent.id === target)?.type,
     ).toBe("remote_ag_ui");
   } finally {
-    if (original === undefined) delete process.env.MANAGED_AGENT_AG_UI_URL;
-    else process.env.MANAGED_AGENT_AG_UI_URL = original;
+    if (original === undefined) delete process.env.ORBO_MANAGED_AGENT_AG_UI_URL;
+    else process.env.ORBO_MANAGED_AGENT_AG_UI_URL = original;
     if (originalPicked === undefined) delete process.env.PICKED_HARNESS_URL;
     else process.env.PICKED_HARNESS_URL = originalPicked;
     await database.delete(channels).where(eq(channels.id, historyId));

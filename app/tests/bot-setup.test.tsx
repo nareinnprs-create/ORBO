@@ -53,7 +53,7 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-/** What `scripts/start.sh` sets `MANAGED_AGENT_AG_UI_URL` to. */
+/** What `scripts/start.sh` sets `ORBO_MANAGED_AGENT_AG_UI_URL` to. */
 const MANAGED = "http://localhost:4201/ag-ui";
 
 const actor = {

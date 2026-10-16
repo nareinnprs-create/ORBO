@@ -62,7 +62,7 @@ test("Mastra's maintained AG-UI bridge consumes the catalog and both learned too
   const script = `
     import { getLocalAgents } from "@ag-ui/mastra";
     import { lastValueFrom, toArray } from "rxjs";
-    import { mastra } from "../agent-mastra/src/mastra/index.ts";
+    import { mastra } from "../agent-orbo-mastra/src/mastra/index.ts";
     import { RemoteLearnedSkillsMiddleware } from "./src/learning/remote.ts";
     const tools = ["copilotkit_load_skill", "copilotkit_read_skill_file"].map(name => ({
       name, description: "Read learned guidance", parameters: {

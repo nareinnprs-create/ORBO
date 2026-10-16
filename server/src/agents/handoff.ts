@@ -26,9 +26,6 @@ import type { AgentActor } from "./profile-types";
 /** The kind of work a hop is, on the shared queue. */
 export const HANDOFF_KIND = "bot.message";
 
-/** The kind of grant that lets one Bot address another. */
-export const HANDOFF_GRANT = "bot";
-
 /**
  * What one Bot sends another.
  *

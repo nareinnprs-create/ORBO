@@ -594,7 +594,7 @@ describe("dialling a stored agent endpoint", () => {
 /**
  * Naming a private address instead of opening the network.
  *
- * `AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS` is a floor: it permits this deployment's whole network, to
+ * `ORBO_AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS` is a floor: it permits this deployment's whole network, to
  * browsing and to agent endpoints alike, and a production deployment refuses to start with it on.
  * That left bring-your-own-agent unusable in the image people are told to deploy, because a company's
  * own agent lives at an internal address. Naming the address is the narrow answer, and these are the

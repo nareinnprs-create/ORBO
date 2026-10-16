@@ -123,12 +123,12 @@ and the fix would not be available.
 | `COPILOTKIT_LICENSE_TOKEN` | optional. Managed Intelligence issues none; set it only for a self-hosted Intelligence that has one |
 | a model key | `OPENAI_API_KEY`, or the provider you configured |
 
-`COMPUTER_TOKEN` is generated at start if you do not set one. Both processes that need it are inside
+`ORBO_COMPUTER_TOKEN` is generated at start if you do not set one. Both processes that need it are inside
 the container, so there is nothing to share it with.
 
-`MANAGED_AGENT_AG_UI_URL` is not required here. The image does not carry `agent-langgraph` or
+`ORBO_MANAGED_AGENT_AG_UI_URL` is not required here. The image does not carry `agent-langgraph` or
 `agent-bot`. Leave it unset and the shipped Risk Analyst coworker is omitted rather than registered
-against a host that is not there. Set it, with `MANAGED_AGENT_TOKEN`, only when a Bot is actually
+against a host that is not there. Set it, with `ORBO_MANAGED_AGENT_TOKEN`, only when a Bot is actually
 reachable from this container. Unset it if your `.env` still has the laptop default
 `http://localhost:4201/ag-ui`.
 
@@ -219,7 +219,7 @@ which makes them the shortest path from nothing to a running deployment.
 **The browser images carry only the Chromium browser family.** The all-in-one Dockerfile and the
 published `agent-computer` Dockerfile both build from Ubuntu and run Playwright's pinned
 `install --with-deps chromium` path, so Firefox and WebKit are never introduced into the final image
-layers. Keep that Playwright version matched to `agent-computer/package.json`; changing one without
+layers. Keep that Playwright version matched to `agent-orbo-computer/package.json`; changing one without
 the other can make the browser protocol and executable revision diverge. The images keep the
 baseline Node command-line tools (`node`, `npm`, and `npx`) from the official Node 24.18.1 image.
 Measured as local zstd OCI layer descriptors against the previous Playwright-base `agent-computer`

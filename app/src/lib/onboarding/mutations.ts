@@ -24,18 +24,6 @@ function invalidateCurrentUser(queryClient: QueryClient) {
   });
 }
 
-export function advanceOnboardingMutationOptions(queryClient: QueryClient) {
-  return mutationOptions({
-    mutationFn: (step: number): Promise<OnboardingStatus> =>
-      client("/api/me/onboarding", "onboarding", {
-        method: "POST",
-        body: { step },
-        fallback: FALLBACK,
-      }),
-    onSuccess: () => invalidateCurrentUser(queryClient),
-  });
-}
-
 export function completeOnboardingMutationOptions(queryClient: QueryClient) {
   return mutationOptions({
     mutationFn: (): Promise<OnboardingStatus> =>

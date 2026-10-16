@@ -26,7 +26,6 @@ import {
   DEPLOYMENT_INITIATOR,
   recordAuditEvent,
 } from "../audit";
-import { isConfiguredAdmin } from "../auth/roles";
 import {
   type PolicyContext,
   type PolicyDecision,
@@ -629,14 +628,6 @@ export async function installEnterpriseControls(
     },
   };
   return installed;
-}
-
-/** For the break-glass rule, which is decided before the controls may be installed. */
-export function isBreakGlass(
-  email: string,
-  initialAdminEmails: readonly string[],
-): boolean {
-  return isConfiguredAdmin(email, initialAdminEmails);
 }
 
 /* ------------------------------ guarding stores in place ------------------------------ */

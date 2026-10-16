@@ -13,7 +13,7 @@ import { namesFor, NAMESPACE } from "../../src/names";
 const namespace = NAMESPACE;
 if (
   !namespace.startsWith("supervisor-test-") ||
-  namespace !== process.env.COMPUTER_NAMESPACE
+  namespace !== process.env.ORBO_COMPUTER_NAMESPACE
 ) {
   throw new Error(
     "This fixture requires its own supervisor-test namespace before importing the supervisor.",
@@ -300,7 +300,7 @@ describe("a computer built from an older image", () => {
   /*
    * The install that reached the containers but not the computers.
    *
-   * A computer checks callers against the `COMPUTER_TOKEN` it was created with and keeps that one
+   * A computer checks callers against the `ORBO_COMPUTER_TOKEN` it was created with and keeps that one
    * for the life of the container. Setting a machine up again from nothing mints a new token:
    * compose rebuilds everything it owns with it, and the computers, which the supervisor makes
    * rather than compose, survive holding the old one. Every call to them is then a 401 that no
@@ -312,7 +312,7 @@ describe("a computer built from an older image", () => {
   test("is replaced when it holds a token this deployment no longer uses", async () => {
     await withDocker().supervisor.ensure(names, {
       image: IMAGE,
-      environment: [`COMPUTER_TOKEN=${"old-token"}`],
+      environment: [`ORBO_COMPUTER_TOKEN=${"old-token"}`],
     });
     const before = await withDocker()
       .docker.getContainer(names.container)
@@ -320,7 +320,7 @@ describe("a computer built from an older image", () => {
 
     const state = await withDocker().supervisor.ensure(names, {
       image: IMAGE,
-      environment: [`COMPUTER_TOKEN=${"new-token"}`],
+      environment: [`ORBO_COMPUTER_TOKEN=${"new-token"}`],
     });
     const after = await withDocker()
       .docker.getContainer(names.container)
@@ -328,7 +328,7 @@ describe("a computer built from an older image", () => {
 
     expect(state).not.toBeNull();
     expect(after.Id).not.toBe(before.Id);
-    expect(after.Config.Env).toContain("COMPUTER_TOKEN=new-token");
+    expect(after.Config.Env).toContain("ORBO_COMPUTER_TOKEN=new-token");
     expect(after.State.Health?.Status).toBe("healthy");
   }, 180_000);
 
@@ -338,7 +338,7 @@ describe("a computer built from an older image", () => {
      * risk the image comparison beside it carries. A deployment that sets no token at all is also
      * not a mismatch: that is a choice the environment made, not something to act on.
      */
-    const environment = ["COMPUTER_TOKEN=steady"];
+    const environment = ["ORBO_COMPUTER_TOKEN=steady"];
     await withDocker().supervisor.ensure(names, { image: IMAGE, environment });
     const before = await withDocker()
       .docker.getContainer(names.container)

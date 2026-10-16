@@ -1,7 +1,7 @@
 /**
  * Which network policy a Bot's computer runs under, and getting it there.
  *
- * The rules and their matcher are `agent-computer/src/egress.ts`, imported rather than copied so the
+ * The rules and their matcher are `agent-orbo-computer/src/egress.ts`, imported rather than copied so the
  * API server refusing a navigation and the computer refusing a connection are the same code.
  *
  * WHO A COMPUTER BELONGS TO is the Bot's owner (`agent_profiles.owner_user_id`). Their directory
@@ -20,7 +20,7 @@ import {
   type EgressRule,
   egressDecision,
   parseEgressRules,
-} from "../../../agent-computer/src/egress";
+} from "../../../agent-orbo-computer/src/egress";
 import type { NetworkPolicyRow } from "../admin/settings-store";
 import type { ComputerProvider } from "./provider";
 

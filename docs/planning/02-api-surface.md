@@ -175,7 +175,7 @@ in `apps/server/src/app.ts`.
 
 | Method | Path | File:line |
 | --- | --- | --- |
-| GET | `/api/health` | `app.ts:98` |
+| GET | `/api/health` | `_sources/OpenMuse/apps/server/src/app.ts:98` (upstream only; ORBO canonical is `GET /health`, `server/src/app.ts:436` — see §1) |
 | POST | `/api/session` | `app.ts:108` |
 | GET | `/api/google/callback` | `app.ts:122` |
 | GET | `/api/workspace`, `/api/calendars`, `/api/calendar/events` | `app.ts:145,161,162` |

@@ -3,7 +3,7 @@ import { constants } from "node:fs";
 import { createServer } from "node:net";
 import { homedir } from "node:os";
 import { join, posix, win32 } from "node:path";
-import { browserRuntimeFromEnv } from "../agent-computer/src/browser-runtime";
+import { browserRuntimeFromEnv } from "../agent-orbo-computer/src/browser-runtime";
 
 type Environment = Record<string, string | undefined>;
 
@@ -13,17 +13,17 @@ export function localChromeConfiguration(
   platform: string = process.platform,
   userHome = homedir(),
 ) {
-  if (!env.COMPUTER_TOKEN?.trim()) {
+  if (!env.ORBO_COMPUTER_TOKEN?.trim()) {
     throw new Error(
-      "COMPUTER_TOKEN is required. Use the same secret as the local ORBO API.",
+      "ORBO_COMPUTER_TOKEN is required. Use the same secret as the local ORBO API.",
     );
   }
   if (
-    env.COMPUTER_BROWSER_BACKEND?.trim() &&
-    env.COMPUTER_BROWSER_BACKEND.trim() !== "local-chrome"
+    env.ORBO_COMPUTER_BROWSER_BACKEND?.trim() &&
+    env.ORBO_COMPUTER_BROWSER_BACKEND.trim() !== "local-chrome"
   ) {
     throw new Error(
-      "This helper requires COMPUTER_BROWSER_BACKEND=local-chrome; unset the managed backend setting.",
+      "This helper requires ORBO_COMPUTER_BROWSER_BACKEND=local-chrome; unset the managed backend setting.",
     );
   }
   const path = platform === "win32" ? win32 : posix;
@@ -50,9 +50,10 @@ export function localChromeConfiguration(
   }
   const childEnv: Environment = {
     ...env,
-    COMPUTER_BROWSER_BACKEND: "local-chrome",
-    COMPUTER_BROWSER_MODE: env.COMPUTER_BROWSER_MODE?.trim() || "headed",
-    COMPUTER_SANDBOX: "on",
+    ORBO_COMPUTER_BROWSER_BACKEND: "local-chrome",
+    ORBO_COMPUTER_BROWSER_MODE:
+      env.ORBO_COMPUTER_BROWSER_MODE?.trim() || "headed",
+    ORBO_COMPUTER_SANDBOX: "on",
     PORT: port,
     PROFILES_DIR: path.join(root, "profiles"),
     WORKSPACE_DIR: path.join(root, "workspace"),
@@ -140,7 +141,7 @@ async function main(): Promise<void> {
   for (const directory of [config.env.PROFILES_DIR, config.env.WORKSPACE_DIR]) {
     if (directory) await mkdir(directory, { recursive: true, mode: 0o700 });
   }
-  const computerDirectory = join(import.meta.dir, "..", "agent-computer");
+  const computerDirectory = join(import.meta.dir, "..", "agent-orbo-computer");
   console.info(
     `Starting local Chrome computer at http://127.0.0.1:${config.port}; data: ${config.root}`,
   );

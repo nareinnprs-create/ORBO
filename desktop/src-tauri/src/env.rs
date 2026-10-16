@@ -3,7 +3,7 @@
 //! `scripts/start.sh` writes the same file for a developer. This writes it for somebody who will
 //! never open a terminal, which changes three things:
 //!
-//! - **No dev fallbacks.** `start.sh` falls back to fixed strings for `COMPUTER_TOKEN`,
+//! - **No dev fallbacks.** `start.sh` falls back to fixed strings for `ORBO_COMPUTER_TOKEN`,
 //!   `SUPERVISOR_TOKEN` and `WORKER_SHARED_SECRET`, which are published in this repository. They are
 //!   fine on a laptop somebody is debugging and they are not fine as the default a product ships.
 //!   Every one of them is generated here.
@@ -11,7 +11,7 @@
 //!   `server/src/config.ts` only throws on it under `NODE_ENV=production`. A desktop install is not
 //!   production, so it would land in the warn branch and encrypt the credential vault with a key
 //!   printed in a public repository, objected to by a `console.warn` nobody running a window reads.
-//! - **`COMPUTER_SUPERVISOR_URL` is not optional.** Without it the server runs every Bot against one
+//! - **`ORBO_COMPUTER_SUPERVISOR_URL` is not optional.** Without it the server runs every Bot against one
 //!   shared browser and says so only in a startup line. `start.sh` sets it at run time, so a `.env`
 //!   copied from a developer's machine does not have it.
 
@@ -74,7 +74,7 @@ impl Ports {
                 "APP_PORT",
                 "SERVER_PORT",
                 "POSTGRES_PORT",
-                "COMPUTER_PORT",
+                "ORBO_COMPUTER_PORT",
                 "BOT_PORT",
                 "LANGGRAPH_PORT",
                 "SUPERVISOR_PORT",
@@ -86,7 +86,7 @@ impl Ports {
             ("APP_PORT", &mut ports.app),
             ("SERVER_PORT", &mut ports.server),
             ("POSTGRES_PORT", &mut ports.postgres),
-            ("COMPUTER_PORT", &mut ports.computer),
+            ("ORBO_COMPUTER_PORT", &mut ports.computer),
             ("BOT_PORT", &mut ports.bot),
             ("LANGGRAPH_PORT", &mut ports.langgraph),
             ("SUPERVISOR_PORT", &mut ports.supervisor),
@@ -107,7 +107,7 @@ impl Ports {
             ("APP_PORT", self.app),
             ("SERVER_PORT", self.server),
             ("POSTGRES_PORT", self.postgres),
-            ("COMPUTER_PORT", self.computer),
+            ("ORBO_COMPUTER_PORT", self.computer),
             ("BOT_PORT", self.bot),
             ("LANGGRAPH_PORT", self.langgraph),
             ("SUPERVISOR_PORT", self.supervisor),
@@ -419,7 +419,7 @@ pub fn compose(
             model.credential,
             ModelCredential::Compatible { .. } | ModelCredential::ProviderOAuth { .. }
         ) {
-            for key in ["BOT_MODEL", "AGENT_BOT_MODEL"] {
+            for key in ["BOT_MODEL", "ORBO_AGENT_BOT_MODEL"] {
                 env.remove(key);
             }
         }
@@ -479,7 +479,7 @@ pub fn compose(
             );
             env.insert("BOT_PROVIDER".into(), "openai".into());
             env.insert("BOT_MODEL".into(), model.clone());
-            env.insert("AGENT_BOT_MODEL".into(), model.clone());
+            env.insert("ORBO_AGENT_BOT_MODEL".into(), model.clone());
         }
         ModelCredential::Compatible {
             base_url,
@@ -521,7 +521,7 @@ pub fn compose(
              * heard of. The person named exactly one model on that screen and meant it for
              * whichever Bot answers.
              */
-            insert_if_given(&mut env, "AGENT_BOT_MODEL", name);
+            insert_if_given(&mut env, "ORBO_AGENT_BOT_MODEL", name);
         }
     }
 
@@ -552,7 +552,7 @@ pub fn compose(
      * again. A new one on every Start quietly orphaned everything the last run had encrypted.
      *
      * The rest are kept for a smaller reason that points the same way: a Bot's computer is a
-     * container that outlives a restart and was created holding the old `COMPUTER_TOKEN`, so
+     * container that outlives a restart and was created holding the old `ORBO_COMPUTER_TOKEN`, so
      * rotating buys nothing and can only strand it.
      *
      * Two installs still do not share a key. A machine with nothing stored generates, which is what
@@ -588,11 +588,11 @@ pub fn compose(
         ),
     );
     env.insert(
-        "AGENT_COMPUTER_URL".into(),
+        "ORBO_AGENT_COMPUTER_URL".into(),
         format!("http://127.0.0.1:{}", ports.computer),
     );
     env.insert(
-        "MANAGED_AGENT_AG_UI_URL".into(),
+        "ORBO_MANAGED_AGENT_AG_UI_URL".into(),
         if crate::stack::BundledBots::for_credential(&model.credential).agent_langgraph {
             format!("http://127.0.0.1:{}/ag-ui", ports.langgraph)
         } else {
@@ -682,7 +682,7 @@ pub fn compose(
     // Without this the server gives every Bot the same browser. It is the difference between the
     // product this installs and a demo of it.
     env.insert(
-        "COMPUTER_SUPERVISOR_URL".into(),
+        "ORBO_COMPUTER_SUPERVISOR_URL".into(),
         format!("http://127.0.0.1:{}", ports.supervisor),
     );
 
@@ -709,7 +709,10 @@ pub fn compose(
     // right there and wrong here: the supervisor, the computers and the Bots are all on loopback by
     // design. Without this the server refuses to call its own supervisor and the failure arrives as
     // an Unauthorized wrapped in a 500, which names neither the address nor the rule.
-    env.insert("AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS".into(), "true".into());
+    env.insert(
+        "ORBO_AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS".into(),
+        "true".into(),
+    );
 
     // Which package the deployment runs. Without it the server falls back rather than using the one
     // that came with the deployment, and the Bots somebody was given are not the Bots they get.
@@ -879,10 +882,10 @@ const BANNER: &str = "# Written by ORBO Desktop. Anything else in this file is l
 
 /// The secrets this deployment mints for itself, once.
 pub const MINTED: [&str; 6] = [
-    "AGENT_TOOL_TOKEN",
-    "COMPUTER_TOKEN",
+    "ORBO_AGENT_TOOL_TOKEN",
+    "ORBO_COMPUTER_TOKEN",
     "KEY_ENCRYPTION_KEY",
-    "MANAGED_AGENT_TOKEN",
+    "ORBO_MANAGED_AGENT_TOKEN",
     "SUPERVISOR_TOKEN",
     "WORKER_SHARED_SECRET",
 ];
@@ -1372,7 +1375,7 @@ HTTPS_PROXY=http://proxy:8080
             &BTreeMap::new(),
         );
         for key in [
-            "COMPUTER_TOKEN",
+            "ORBO_COMPUTER_TOKEN",
             "SUPERVISOR_TOKEN",
             "WORKER_SHARED_SECRET",
             "KEY_ENCRYPTION_KEY",
@@ -1474,7 +1477,7 @@ HTTPS_PROXY=http://proxy:8080
             &BTreeMap::new(),
         );
         assert_eq!(
-            env.get("AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS")
+            env.get("ORBO_AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS")
                 .map(String::as_str),
             Some("true"),
             "everything a desktop install talks to is on this machine"
@@ -1544,7 +1547,7 @@ HTTPS_PROXY=http://proxy:8080
             &BTreeMap::new(),
         );
         assert_eq!(
-            env.get("COMPUTER_SUPERVISOR_URL").map(String::as_str),
+            env.get("ORBO_COMPUTER_SUPERVISOR_URL").map(String::as_str),
             Some("http://127.0.0.1:4500")
         );
     }
@@ -1588,7 +1591,7 @@ HTTPS_PROXY=http://proxy:8080
             None,
             &BTreeMap::new(),
         );
-        assert_eq!(env["MANAGED_AGENT_AG_UI_URL"], "");
+        assert_eq!(env["ORBO_MANAGED_AGENT_AG_UI_URL"], "");
         assert!(!crate::stack::selected_services(
             false,
             crate::stack::BundledBots::for_credential(&ModelCredential::None)
@@ -1609,9 +1612,9 @@ HTTPS_PROXY=http://proxy:8080
         );
         for key in [
             "DATABASE_URL",
-            "AGENT_COMPUTER_URL",
-            "COMPUTER_SUPERVISOR_URL",
-            "MANAGED_AGENT_AG_UI_URL",
+            "ORBO_AGENT_COMPUTER_URL",
+            "ORBO_COMPUTER_SUPERVISOR_URL",
+            "ORBO_MANAGED_AGENT_AG_UI_URL",
         ] {
             assert!(!env[key].contains("localhost"), "{key} says localhost");
         }
@@ -1641,7 +1644,7 @@ HTTPS_PROXY=http://proxy:8080
             "dropped a setting it does not own"
         );
         assert!(written.contains("# a comment"));
-        assert!(written.contains("COMPUTER_SUPERVISOR_URL="));
+        assert!(written.contains("ORBO_COMPUTER_SUPERVISOR_URL="));
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -1778,7 +1781,7 @@ HTTPS_PROXY=http://proxy:8080
             &path,
             "KEY_ENCRYPTION_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\n\
              SUPERVISOR_TOKEN=orbo-dev-supervisor-token\n\
-             COMPUTER_TOKEN=orbo-dev-computer-token\n\
+             ORBO_COMPUTER_TOKEN=orbo-dev-computer-token\n\
              WORKER_SHARED_SECRET=orbo-dev-worker-secret\n",
         )
         .unwrap();
@@ -2343,13 +2346,13 @@ mod model_tests {
         /*
          * And the bundled Bot's own variable, which is the one that was missed.
          *
-         * `docker-compose.yml` reads `AGENT_BOT_MODEL` for `agent-bot` rather than `BOT_MODEL`, so
+         * `docker-compose.yml` reads `ORBO_AGENT_BOT_MODEL` for `agent-bot` rather than `BOT_MODEL`, so
          * that a model chosen for the framework Bot cannot take its tools away. On a custom
          * endpoint that pin asked somebody's own server for `gpt-5.5`, which an Ollama or a vLLM
          * has never heard of.
          */
         assert_eq!(
-            compatible.get("AGENT_BOT_MODEL"),
+            compatible.get("ORBO_AGENT_BOT_MODEL"),
             Some(&"local-model".to_string())
         );
 
@@ -2366,7 +2369,7 @@ mod model_tests {
             None,
             &BTreeMap::new(),
         );
-        for key in ["BOT_MODEL", "AGENT_BOT_MODEL"] {
+        for key in ["BOT_MODEL", "ORBO_AGENT_BOT_MODEL"] {
             assert!(
                 !with_a_key.contains_key(key),
                 "a key path carried a model name it never chose: {key}"

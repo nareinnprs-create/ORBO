@@ -110,8 +110,8 @@ function ComputersPage() {
             Every Bot is sharing one computer.
           </span>{" "}
           They share its logins, its files and its session, so a Bot can reach
-          what another signed into. Set <code>COMPUTER_SUPERVISOR_URL</code> to
-          give each Bot its own.
+          what another signed into. Set{" "}
+          <code>ORBO_COMPUTER_SUPERVISOR_URL</code> to give each Bot its own.
         </p>
       ) : isolation === "per-bot" ? (
         <p className="mt-4 rounded-md border border-border bg-muted/40 px-3 py-2 text-muted-foreground text-sm">

@@ -72,14 +72,14 @@ Hiding and pinning are personal roster state. Hiding removes the coworker from o
 Product-created coworkers use:
 
 ```dotenv
-MANAGED_AGENT_AG_UI_URL=http://localhost:4201/ag-ui
+ORBO_MANAGED_AGENT_AG_UI_URL=http://localhost:4201/ag-ui
 ```
 
 That is `agent-langgraph`, which runs a real framework and its own tool loop. The proof-of-concept on
 `4200` hand-writes the protocol and leaves the loop to whatever is watching, so it is a reference
 rather than something to build a deployment on.
 
-The URL is optional. Set it with `MANAGED_AGENT_TOKEN`, or leave it unset: product-created coworkers
+The URL is optional. Set it with `ORBO_MANAGED_AGENT_TOKEN`, or leave it unset: product-created coworkers
 then need their own endpoint, and a package agent whose endpoint expands to nothing is omitted
 rather than registered against a missing host. A leftover token with no URL is ignored.
 Package-provided agents otherwise use their own `agents.yaml` configuration.

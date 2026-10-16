@@ -156,7 +156,7 @@ def assert_learning_delivery(monkeypatch, harness, route="/"):
     thread.start()
     for key, value in {
         "BOT_PROVIDER": "openai", "BOT_MODEL": "gpt-4.1-mini",
-        "OPENAI_API_KEY": "synthetic-provider-key", "MANAGED_AGENT_TOKEN": "test-token",
+        "OPENAI_API_KEY": "synthetic-provider-key", "ORBO_MANAGED_AGENT_TOKEN": "test-token",
         "OPENAI_BASE_URL": f"http://127.0.0.1:{provider.server_port}/v1",
         "OPENAI_USE_CACHED_CLIENT": "false", "OTEL_SDK_DISABLED": "true",
         "CREWAI_TRACING_ENABLED": "false",

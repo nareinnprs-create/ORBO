@@ -6,11 +6,11 @@
 # refuses to start without it regardless.
 #
 # Generated rather than required, because an operator should not have to invent a shared secret for
-# two processes they cannot address separately. Set COMPUTER_TOKEN yourself and this leaves it be.
+# two processes they cannot address separately. Set ORBO_COMPUTER_TOKEN yourself and this leaves it be.
 set -eu
-if [ -z "${COMPUTER_TOKEN:-}" ]; then
+if [ -z "${ORBO_COMPUTER_TOKEN:-}" ]; then
   head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' \
-    > /run/s6/container_environment/COMPUTER_TOKEN
+    > /run/s6/container_environment/ORBO_COMPUTER_TOKEN
 fi
 
 chmod 0700 /run/s6/container_environment

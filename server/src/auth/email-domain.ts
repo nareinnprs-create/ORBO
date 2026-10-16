@@ -75,7 +75,7 @@ function emailDomain(email: string): string | undefined {
  * list exists, because admitting something the rule cannot be applied to is the case the rule is
  * for.
  *
- * EXACT, NO WILDCARDS, for the reason `AGENT_ENDPOINT_ALLOWED_HOSTS` gives: a pattern that widens
+ * EXACT, NO WILDCARDS, for the reason `ORBO_AGENT_ENDPOINT_ALLOWED_HOSTS` gives: a pattern that widens
  * by accident is the usual way a host check fails. `example.com` therefore admits neither
  * `sub.example.com` nor `evil-example.com`, and a deployment with subdomains names them.
  *

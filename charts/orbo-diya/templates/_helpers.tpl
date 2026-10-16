@@ -286,17 +286,17 @@ and in whatever holds the release, which is not where `KEY_ENCRYPTION_KEY` belon
   thing that could send every Bot to the same browser.
 */}}
 {{- if eq .Values.computers.mode "shared" }}
-- name: AGENT_COMPUTER_URL
+- name: ORBO_AGENT_COMPUTER_URL
   value: http://{{ include "orbo.componentName" (dict "root" . "component" "computer") }}-0.{{ include "orbo.componentName" (dict "root" . "component" "computer") }}:4100
 {{- else if and (eq .Values.computers.mode "external") .Values.computers.url }}
-- name: AGENT_COMPUTER_URL
+- name: ORBO_AGENT_COMPUTER_URL
   value: {{ .Values.computers.url | quote }}
 {{- else if eq .Values.computers.mode "sandbox" }}
-- name: COMPUTER_SANDBOX_NAMESPACE
+- name: ORBO_COMPUTER_SANDBOX_NAMESPACE
   value: {{ default .Release.Namespace .Values.computers.sandbox.namespace | quote }}
-- name: COMPUTER_SANDBOX_IDLE_AFTER
+- name: ORBO_COMPUTER_SANDBOX_IDLE_AFTER
   value: {{ .Values.computers.sandbox.idleAfter | quote }}
-- name: COMPUTER_SANDBOX_TEMPLATE_FILE
+- name: ORBO_COMPUTER_SANDBOX_TEMPLATE_FILE
   value: /etc/orbo/sandbox-template.json
 {{- end }}
 {{- /*
@@ -353,9 +353,9 @@ and in whatever holds the release, which is not where `KEY_ENCRYPTION_KEY` belon
       key: license-token
 {{- end }}
 {{- with .Values.config.managedAgent.url }}
-- name: MANAGED_AGENT_AG_UI_URL
+- name: ORBO_MANAGED_AGENT_AG_UI_URL
   value: {{ . | quote }}
-- name: MANAGED_AGENT_TOKEN
+- name: ORBO_MANAGED_AGENT_TOKEN
   valueFrom:
     secretKeyRef:
       name: {{ include "orbo.secretName" $ }}
@@ -422,7 +422,7 @@ and in whatever holds the release, which is not where `KEY_ENCRYPTION_KEY` belon
       name: {{ include "orbo.secretName" . }}
       key: model-api-key
       optional: true
-- name: COMPUTER_TOKEN
+- name: ORBO_COMPUTER_TOKEN
   valueFrom:
     secretKeyRef:
       name: {{ default (include "orbo.secretName" .) .Values.computers.existingTokenSecret }}
@@ -629,7 +629,7 @@ therefore set here instead. See `computers.podSecurityContext` in values.yaml fo
         "name" "computer"
         "image" (include "orbo.image" .)
         "imagePullPolicy" .Values.image.pullPolicy
-        "command" (list "/usr/local/bin/bun" "/app/agent-computer/src/index.ts")
+        "command" (list "/usr/local/bin/bun" "/app/agent-orbo-computer/src/index.ts")
         "ports" (list (dict "name" "http" "containerPort" 4100))
         "env" (concat
           (list
@@ -638,7 +638,7 @@ therefore set here instead. See `computers.podSecurityContext` in values.yaml fo
             (dict "name" "PROFILES_DIR" "value" "/profiles")
             (dict "name" "HOME" "value" "/home/pwuser")
             (dict "name" "BUN_INSTALL" "value" "/home/pwuser/.bun")
-            (dict "name" "COMPUTER_TOKEN" "valueFrom" (dict "secretKeyRef" (dict
+            (dict "name" "ORBO_COMPUTER_TOKEN" "valueFrom" (dict "secretKeyRef" (dict
               "name" (default (include "orbo.secretName" .) .Values.computers.existingTokenSecret)
               "key" "computer-token"))))
           .Values.computers.extraEnv)

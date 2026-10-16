@@ -285,7 +285,7 @@ describe("acting on an element that is not there", () => {
  * A refusal because a person took the wheel, told apart from stale refs.
  *
  * Both arrive as 409, and the computer says which is which by putting `humanHasControl` on the body
- * (agent-computer/src/index.ts). Mapping every 409 to the same condition throws that away, and the
+ * (agent-orbo-computer/src/index.ts). Mapping every 409 to the same condition throws that away, and the
  * surface then tells the model its refs are stale and to take a fresh snapshot: advice that sends a
  * Bot round the loop again against a person who has deliberately taken the browser. The status is
  * the same either way; what differs is what the caller should do next, which is the only thing the

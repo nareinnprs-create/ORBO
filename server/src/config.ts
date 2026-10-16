@@ -183,7 +183,7 @@ export type DeploymentConfig = {
   /**
    * Private addresses an agent may be registered at, named one at a time.
    *
-   * WHY THIS EXISTS. `AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS` is a floor, not a permission: it opens this
+   * WHY THIS EXISTS. `ORBO_AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS` is a floor, not a permission: it opens this
    * deployment's whole network, to browsing and to agent endpoints alike, which is why a production
    * deployment refuses to start with it on. That left bring-your-own-agent — a headline capability —
    * unusable in the image people are told to deploy, because a company's own agent legitimately lives
@@ -602,20 +602,20 @@ function optionalHttpUrl(
 function managedAgentConfig(
   environment: Environment,
 ): ManagedAgentConfig | undefined {
-  const endpoint = optionalHttpUrl(environment, "MANAGED_AGENT_AG_UI_URL");
+  const endpoint = optionalHttpUrl(environment, "ORBO_MANAGED_AGENT_AG_UI_URL");
   // BYO writes a URL too, but does not run our image or hold our deployment token.
   const alsoRun = optional(environment, "PICKED_HARNESS_IMAGE")
     ? optionalHttpUrl(environment, "PICKED_HARNESS_URL")
     : undefined;
-  const token = optional(environment, "MANAGED_AGENT_TOKEN");
+  const token = optional(environment, "ORBO_MANAGED_AGENT_TOKEN");
   if (endpoint && !token) {
     throw new Error(
-      "MANAGED_AGENT_TOKEN must be set when MANAGED_AGENT_AG_UI_URL is set",
+      "ORBO_MANAGED_AGENT_TOKEN must be set when ORBO_MANAGED_AGENT_AG_UI_URL is set",
     );
   }
   if (alsoRun && !token) {
     throw new Error(
-      "MANAGED_AGENT_TOKEN must be set when an installed PICKED_HARNESS_URL is set",
+      "ORBO_MANAGED_AGENT_TOKEN must be set when an installed PICKED_HARNESS_URL is set",
     );
   }
   if ((!endpoint && !alsoRun) || !token) {
@@ -938,19 +938,22 @@ function runtimeCapabilities(environment: Environment): RuntimeCapabilities {
 function agentEndpointAllowedHosts(
   environment: NodeJS.ProcessEnv,
 ): ReadonlySet<string> {
-  const named = commaSeparated(environment, "AGENT_ENDPOINT_ALLOWED_HOSTS");
+  const named = commaSeparated(
+    environment,
+    "ORBO_AGENT_ENDPOINT_ALLOWED_HOSTS",
+  );
   const hosts = new Set<string>();
   for (const entry of named) {
     const host = entry.trim().toLowerCase();
     if (!host) continue;
     if (host.includes("/") || host.includes("://")) {
       throw new Error(
-        `AGENT_ENDPOINT_ALLOWED_HOSTS entry "${entry}" must be a host, optionally with a port, and not a URL.`,
+        `ORBO_AGENT_ENDPOINT_ALLOWED_HOSTS entry "${entry}" must be a host, optionally with a port, and not a URL.`,
       );
     }
     if (host.includes("*")) {
       throw new Error(
-        `AGENT_ENDPOINT_ALLOWED_HOSTS entry "${entry}" must name one host. Patterns are not accepted: list each address instead.`,
+        `ORBO_AGENT_ENDPOINT_ALLOWED_HOSTS entry "${entry}" must name one host. Patterns are not accepted: list each address instead.`,
       );
     }
     hosts.add(normalizeAllowedHost(entry, host));
@@ -980,7 +983,7 @@ function normalizeAllowedHost(entry: string, host: string): string {
   const port = close === -1 ? "" : host.slice(close + 1);
   const refusal = () =>
     new Error(
-      `AGENT_ENDPOINT_ALLOWED_HOSTS entry "${entry}" must be a host, optionally with a port, and not a URL.`,
+      `ORBO_AGENT_ENDPOINT_ALLOWED_HOSTS entry "${entry}" must be a host, optionally with a port, and not a URL.`,
     );
   if (port && !/^:\d{1,5}$/.test(port)) throw refusal();
   let hostname: string;
@@ -993,7 +996,9 @@ function normalizeAllowedHost(entry: string, host: string): string {
 }
 
 function privateHostsAllowed(environment: Environment): boolean {
-  if (optional(environment, "AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS") !== "true") {
+  if (
+    optional(environment, "ORBO_AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS") !== "true"
+  ) {
     return false;
   }
 
@@ -1001,11 +1006,11 @@ function privateHostsAllowed(environment: Environment): boolean {
   // env file would slip past a gate that the switch beside it, which does trim, would still trip.
   if (isProduction(environment)) {
     throw new Error(
-      "AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS=true is for local development only: it lets a Bot reach this deployment's own network. Remove it from this deployment's environment.",
+      "ORBO_AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS=true is for local development only: it lets a Bot reach this deployment's own network. Remove it from this deployment's environment.",
     );
   }
   console.warn(
-    "AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS=true lets a Bot reach this machine's own services. Fine locally, and for local development only. Remove it before deploying.",
+    "ORBO_AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS=true lets a Bot reach this machine's own services. Fine locally, and for local development only. Remove it before deploying.",
   );
 
   return true;
@@ -1040,9 +1045,15 @@ export function durationMs(value: string): number {
 }
 
 function computerConfig(environment: Environment): ComputerConfig | undefined {
-  const supervisorAddress = optional(environment, "COMPUTER_SUPERVISOR_URL");
-  const sharedAddress = optional(environment, "AGENT_COMPUTER_URL");
-  const sandboxNamespace = optional(environment, "COMPUTER_SANDBOX_NAMESPACE");
+  const supervisorAddress = optional(
+    environment,
+    "ORBO_COMPUTER_SUPERVISOR_URL",
+  );
+  const sharedAddress = optional(environment, "ORBO_AGENT_COMPUTER_URL");
+  const sandboxNamespace = optional(
+    environment,
+    "ORBO_COMPUTER_SANDBOX_NAMESPACE",
+  );
   if (!supervisorAddress && !sharedAddress && !sandboxNamespace) {
     return undefined;
   }
@@ -1052,14 +1063,14 @@ function computerConfig(environment: Environment): ComputerConfig | undefined {
    * intended failure: `agent-computer` drives a browser holding real logins and must not answer
    * unauthenticated callers that can reach its port.
    */
-  const computerToken = optional(environment, "COMPUTER_TOKEN");
+  const computerToken = optional(environment, "ORBO_COMPUTER_TOKEN");
 
   const allowPrivateHosts = privateHostsAllowed(environment);
   const policy = actionPolicy(environment);
 
   /*
    * Checked before the other two, because a deployment that named a namespace means the cluster to
-   * make the computers, and a stray `AGENT_COMPUTER_URL` left in an environment would otherwise
+   * make the computers, and a stray `ORBO_AGENT_COMPUTER_URL` left in an environment would otherwise
    * quietly put every Bot back on one shared browser.
    */
   if (sandboxNamespace) {
@@ -1067,10 +1078,10 @@ function computerConfig(environment: Environment): ComputerConfig | undefined {
       provider: "sandbox",
       namespace: sandboxNamespace,
       idleAfterMs: durationMs(
-        optional(environment, "COMPUTER_SANDBOX_IDLE_AFTER") ?? "30m",
+        optional(environment, "ORBO_COMPUTER_SANDBOX_IDLE_AFTER") ?? "30m",
       ),
       templateFile:
-        optional(environment, "COMPUTER_SANDBOX_TEMPLATE_FILE") ??
+        optional(environment, "ORBO_COMPUTER_SANDBOX_TEMPLATE_FILE") ??
         "/etc/orbo/sandbox-template.json",
       allowPrivateHosts,
       ...(computerToken ? { token: computerToken } : {}),
@@ -1078,7 +1089,7 @@ function computerConfig(environment: Environment): ComputerConfig | undefined {
     };
   }
 
-  const supervisorUrl = url(environment, "COMPUTER_SUPERVISOR_URL");
+  const supervisorUrl = url(environment, "ORBO_COMPUTER_SUPERVISOR_URL");
   if (supervisorUrl) {
     const supervisorToken = optional(environment, "SUPERVISOR_TOKEN");
     return {
@@ -1091,7 +1102,7 @@ function computerConfig(environment: Environment): ComputerConfig | undefined {
     };
   }
 
-  const baseUrl = url(environment, "AGENT_COMPUTER_URL");
+  const baseUrl = url(environment, "ORBO_AGENT_COMPUTER_URL");
   if (!baseUrl) {
     return undefined;
   }
@@ -1114,7 +1125,7 @@ function computerConfig(environment: Environment): ComputerConfig | undefined {
  * Configuration the product cannot honour belongs at the boot boundary; see the note at the top.
  */
 function actionPolicy(environment: Environment): ActionPolicy | undefined {
-  const raw = optional(environment, "AGENT_COMPUTER_POLICY");
+  const raw = optional(environment, "ORBO_AGENT_COMPUTER_POLICY");
   if (!raw) {
     return undefined;
   }
@@ -1123,12 +1134,12 @@ function actionPolicy(environment: Environment): ActionPolicy | undefined {
   try {
     parsed = JSON.parse(raw);
   } catch {
-    throw new Error("AGENT_COMPUTER_POLICY must be valid JSON");
+    throw new Error("ORBO_AGENT_COMPUTER_POLICY must be valid JSON");
   }
 
   const result = parseActionPolicy(parsed);
   if (!result.ok) {
-    throw new Error(`AGENT_COMPUTER_POLICY is invalid: ${result.error}`);
+    throw new Error(`ORBO_AGENT_COMPUTER_POLICY is invalid: ${result.error}`);
   }
   return result.policy;
 }
@@ -1189,7 +1200,7 @@ function auditRetentionDays(environment: Environment): number | undefined {
 }
 
 function agentStallTimeoutMs(environment: Environment): number {
-  const raw = optional(environment, "AGENT_STALL_TIMEOUT_MS");
+  const raw = optional(environment, "ORBO_AGENT_STALL_TIMEOUT_MS");
   if (!raw) {
     return 0;
   }
@@ -1197,7 +1208,7 @@ function agentStallTimeoutMs(environment: Environment): number {
   const milliseconds = Number(raw);
   if (!Number.isInteger(milliseconds) || milliseconds < 0) {
     throw new Error(
-      "AGENT_STALL_TIMEOUT_MS must be a whole number of milliseconds, or 0 to switch the watchdog off",
+      "ORBO_AGENT_STALL_TIMEOUT_MS must be a whole number of milliseconds, or 0 to switch the watchdog off",
     );
   }
   return milliseconds;
@@ -1299,8 +1310,13 @@ export function loadConfig(
       : {}),
     computer: computerConfig(environment),
     handoff: handoffCaps(environment),
-    ...(optional(environment, "AGENT_TOOL_TOKEN")
-      ? { agentToolToken: optional(environment, "AGENT_TOOL_TOKEN") as string }
+    ...(optional(environment, "ORBO_AGENT_TOOL_TOKEN")
+      ? {
+          agentToolToken: optional(
+            environment,
+            "ORBO_AGENT_TOOL_TOKEN",
+          ) as string,
+        }
       : {}),
     ...(workerSharedSecret ? { workerSharedSecret } : {}),
   };

@@ -14,7 +14,7 @@ function appWithHostDispatcher(
   return createApp(
     loadConfig(
       testEnvironment({
-        AGENT_TOOL_TOKEN: "legacy-agent-tool-token",
+        ORBO_AGENT_TOOL_TOKEN: "legacy-agent-tool-token",
         KEY_ENCRYPTION_KEY: KEY,
       }),
     ),

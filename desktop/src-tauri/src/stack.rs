@@ -729,7 +729,7 @@ fn computer_namespace(engine: &Address, root: &Path) -> Result<Option<String>, S
         format!("could not resolve computer namespace: unreadable Compose response ({error})")
     })?;
     let configured = config
-        .pointer("/services/supervisor/environment/COMPUTER_NAMESPACE")
+        .pointer("/services/supervisor/environment/ORBO_COMPUTER_NAMESPACE")
         .and_then(serde_json::Value::as_str)
         .ok_or("could not resolve computer namespace: supervisor configuration has no namespace")?;
     // Match supervisor/src/names.ts: trim, default only an empty value, then the same 64-character
@@ -6989,7 +6989,7 @@ fn main() {
         let source = include_str!("../../../docker-compose.yml");
         std::fs::write(root.join("docker-compose.yml"), source).unwrap();
         std::fs::write(root.join(MACOS_PODMAN_PORTS_FILE), MACOS_PODMAN_PORTS).unwrap();
-        std::fs::write(root.join("docker-compose.override.yml"), "services:\n  supervisor:\n    environment:\n      COMPUTER_NAMESPACE: regression-kept\n    labels:\n      regression: kept\n").unwrap();
+        std::fs::write(root.join("docker-compose.override.yml"), "services:\n  supervisor:\n    environment:\n      ORBO_COMPUTER_NAMESPACE: regression-kept\n    labels:\n      regression: kept\n").unwrap();
         let docker =
             std::env::var_os("ORBO_TEST_COMPOSE_DOCKER").unwrap_or_else(|| "docker".into());
         let config = |overlay: bool| {
@@ -7138,7 +7138,7 @@ fn main() {
     }
 
     fn resolved_namespace_fixture(namespace: &str) -> String {
-        serde_json::json!({"services":{"supervisor":{"environment":{"COMPUTER_NAMESPACE":namespace}}}}).to_string()
+        serde_json::json!({"services":{"supervisor":{"environment":{"ORBO_COMPUTER_NAMESPACE":namespace}}}}).to_string()
     }
 
     fn computer_stop_addresses(path: &PathFixture) -> [Address; 2] {
@@ -7349,7 +7349,7 @@ fn main() {
         let configs = [
             "not json".to_string(),
             "{\"services\":{}}".to_string(),
-            "{\"services\":{\"supervisor\":{\"environment\":{\"COMPUTER_NAMESPACE\":12}}}}"
+            "{\"services\":{\"supervisor\":{\"environment\":{\"ORBO_COMPUTER_NAMESPACE\":12}}}}"
                 .to_string(),
             resolved_namespace_fixture("_invalid"),
             resolved_namespace_fixture("bad/value"),

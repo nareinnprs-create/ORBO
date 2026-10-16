@@ -320,7 +320,7 @@ test("plan selection requires the matching deployment-owned harness and does not
     PICKED_HARNESS_IMAGE:
       "ghcr.io/nareinnprs-create/orbo/agent-langgraph-agui:0.0.13",
     PICKED_HARNESS_URL: "http://127.0.0.1:9876/ag-ui",
-    MANAGED_AGENT_TOKEN: "owned",
+    ORBO_MANAGED_AGENT_TOKEN: "owned",
   };
   expect(planModelForEnvironment(selected)?.provider).toBe("chatgpt");
   expect(
@@ -340,7 +340,7 @@ test("plan selection requires the matching deployment-owned harness and does not
     }),
   ).toThrow("installed");
   expect(() =>
-    planModelForEnvironment({ ...selected, MANAGED_AGENT_TOKEN: "" }),
+    planModelForEnvironment({ ...selected, ORBO_MANAGED_AGENT_TOKEN: "" }),
   ).toThrow("token");
 });
 

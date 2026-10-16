@@ -33,7 +33,7 @@ const FORBIDDEN =
 describe("connector tokens never reach a Bot's computer", () => {
   test("the computer and the server's computer module import no credential or connector code", async () => {
     const files = [
-      ...(await sources(join(root, "agent-computer", "src"))),
+      ...(await sources(join(root, "agent-orbo-computer", "src"))),
       ...(await sources(join(root, "server", "src", "computer"))),
     ];
     expect(files.length).toBeGreaterThan(10);
@@ -48,7 +48,7 @@ describe("connector tokens never reach a Bot's computer", () => {
   test("a computer's environment carries none of the deployment's secrets", () => {
     const placeholder = "placeholder-connector-value-0000";
     const env = environmentFor("bot-1", {
-      COMPUTER_TOKEN: "computer-token",
+      ORBO_COMPUTER_TOKEN: "computer-token",
       KEY_ENCRYPTION_KEY: placeholder,
       COMPOSIO_API_KEY: placeholder,
       GOOGLE_OAUTH_CLIENT_SECRET: placeholder,
@@ -58,6 +58,6 @@ describe("connector tokens never reach a Bot's computer", () => {
       EGRESS_PROXY_BOT_1: "http://127.0.0.1:3128",
     });
     expect(env.join("\n")).not.toContain(placeholder);
-    expect(env).toContain("COMPUTER_BOT_ID=bot-1");
+    expect(env).toContain("ORBO_COMPUTER_BOT_ID=bot-1");
   });
 });

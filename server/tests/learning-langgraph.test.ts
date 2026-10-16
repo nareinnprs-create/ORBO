@@ -94,7 +94,7 @@ for (const framework of ["langgraph", "bot"]) {
         env: {
           PATH: process.env.PATH ?? "/usr/bin:/bin",
           PORT: String(port),
-          MANAGED_AGENT_TOKEN: "synthetic-managed-token",
+          ORBO_MANAGED_AGENT_TOKEN: "synthetic-managed-token",
           BOT_PROVIDER: "openai",
           BOT_MODEL: "gpt-4.1-mini",
           OPENAI_API_KEY: "synthetic-provider-key",

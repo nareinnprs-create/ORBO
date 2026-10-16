@@ -6,7 +6,7 @@ services:
     # With no `networks:` anywhere, Compose puts every service on one network with DNS by service
     # name, so `agent-computer` could open `postgres:5432` and the credentials three lines below are
     # in this file. That is the audit trail, the policy store and the agent tables, reachable from
-    # the one container whose whole job is to run what a Bot asks for. `agent-computer/src/shell.ts`
+    # the one container whose whole job is to run what a Bot asks for. `agent-orbo-computer/src/shell.ts`
     # says it plainly: isolation is the container's job, a shell can reach whatever the container
     # can reach.
     #
@@ -73,20 +73,20 @@ services:
   agent-computer:
     build:
       context: .
-      dockerfile: agent-computer/Dockerfile
+      dockerfile: agent-orbo-computer/Dockerfile
     # Tagged explicitly because the supervisor starts one computer per Bot from this image by name,
     # and a Compose-derived name would change with the project.
-    image: ${COMPUTER_IMAGE:-orbo-agent-computer:latest}
+    image: ${ORBO_COMPUTER_IMAGE:-orbo-agent-computer:latest}
     pull_policy: ${IMAGE_PULL_POLICY:-build}
     ports:
-      # Loopback only. This process drives a browser holding real logins; COMPUTER_TOKEN is the
+      # Loopback only. This process drives a browser holding real logins; ORBO_COMPUTER_TOKEN is the
       # request control, and loopback keeps the surface off routed networks.
-      - "127.0.0.1:${COMPUTER_PORT:-4100}:4100"
-      - "[::1]:${COMPUTER_PORT:-4100}:4100"
+      - "127.0.0.1:${ORBO_COMPUTER_PORT:-4100}:4100"
+      - "[::1]:${ORBO_COMPUTER_PORT:-4100}:4100"
     # Per-Bot egress, in a file of its own because the names are not knowable here.
     #
     # `EGRESS_PROXY_<BOT>` is derived from the Bot's id, so there is no fixed list to write out the
-    # way COMPUTER_TOKEN is. Not `.env`: that holds the deployment's secrets, and this container
+    # way ORBO_COMPUTER_TOKEN is. Not `.env`: that holds the deployment's secrets, and this container
     # drives a browser and runs a Bot's shell, so it is given what it needs and not the rest.
     # Optional, because going out directly is the ordinary case and must still start.
     env_file:
@@ -100,16 +100,16 @@ services:
       # the stack up working, while a plain `docker compose up -d` -- which this project's own
       # shutdown notes tell you to use -- hands the container an empty string instead. Reaches only
       # a loopback-bound port; a deployment sets a real value in .env.
-      COMPUTER_TOKEN: ${COMPUTER_TOKEN:-orbo-dev-computer-token}
+      ORBO_COMPUTER_TOKEN: ${ORBO_COMPUTER_TOKEN:-orbo-dev-computer-token}
       # `headed` runs full Chromium behind the same streamed screen, so a person taking the wheel
       # gets a browser sites treat like their ordinary desktop browser. Headless remains the default.
-      COMPUTER_BROWSER_MODE: ${COMPUTER_BROWSER_MODE:-headless}
+      ORBO_COMPUTER_BROWSER_MODE: ${ORBO_COMPUTER_BROWSER_MODE:-headless}
       # How many Bots may hold a running browser at once, and how long an untouched one is kept.
       # A few hundred MB each, so on a deployment with many Bots these are the difference between
       # a container that holds steady and one that is killed for memory. Defaults are 8 and 30
       # minutes; closing a browser costs only a relaunch, because the profile is on the volume below.
-      COMPUTER_MAX_BROWSERS: ${COMPUTER_MAX_BROWSERS:-}
-      COMPUTER_BROWSER_IDLE_MS: ${COMPUTER_BROWSER_IDLE_MS:-}
+      ORBO_COMPUTER_MAX_BROWSERS: ${ORBO_COMPUTER_MAX_BROWSERS:-}
+      ORBO_COMPUTER_BROWSER_IDLE_MS: ${ORBO_COMPUTER_BROWSER_IDLE_MS:-}
     volumes:
       - agent-workspace:/workspace
       # Chromium's user-data directory is volume-backed so logins survive container restarts.
@@ -199,20 +199,20 @@ services:
       # configures the same stack scripts/start.sh does, rather than a silently unauthenticated one.
       SUPERVISOR_TOKEN: ${SUPERVISOR_TOKEN:-orbo-dev-supervisor-token}
       # Handed to every computer this creates, so the server and the computers share one secret.
-      COMPUTER_TOKEN: ${COMPUTER_TOKEN:-orbo-dev-computer-token}
+      ORBO_COMPUTER_TOKEN: ${ORBO_COMPUTER_TOKEN:-orbo-dev-computer-token}
       # Forwarded into every per-Bot computer the supervisor creates.
-      COMPUTER_BROWSER_MODE: ${COMPUTER_BROWSER_MODE:-headless}
-      COMPUTER_IMAGE: ${COMPUTER_IMAGE:-orbo-agent-computer:latest}
+      ORBO_COMPUTER_BROWSER_MODE: ${ORBO_COMPUTER_BROWSER_MODE:-headless}
+      ORBO_COMPUTER_IMAGE: ${ORBO_COMPUTER_IMAGE:-orbo-agent-computer:latest}
       # Which deployment the computers it creates belong to, so two stacks on one Docker host never
       # derive the same container and volume names for the same Bot.
-      COMPUTER_NAMESPACE: ${COMPUTER_NAMESPACE:-orbo}
+      ORBO_COMPUTER_NAMESPACE: ${ORBO_COMPUTER_NAMESPACE:-orbo}
       # Empty by default because the API server runs on the host in local development and reaches
       # computers by published loopback ports. Deployments running the server inside this network set
       # the network name so computers publish no host ports.
-      COMPUTER_NETWORK: ${COMPUTER_NETWORK:-}
+      ORBO_COMPUTER_NETWORK: ${ORBO_COMPUTER_NETWORK:-}
       # Set to runsc to run every computer under gVisor, when the host has it. Left unset each
       # computer is an ordinary container and shares the host kernel.
-      COMPUTER_RUNTIME: ${COMPUTER_RUNTIME:-}
+      ORBO_COMPUTER_RUNTIME: ${ORBO_COMPUTER_RUNTIME:-}
       # Identity, when SPIRE is part of this deployment. The supervisor registers an entry per Bot
       # and mounts the agent's socket into that Bot's computer so it can fetch its own SVID.
       SPIRE_SOCKET: /tmp/spire-server/private/api.sock
@@ -228,7 +228,7 @@ services:
       # interface in front of it this answered every address the host has.
       #
       # A deployment running the server inside this network does not use this mapping at all: it sets
-      # COMPUTER_NETWORK and reaches the supervisor as `supervisor:4300`, which is unaffected because
+      # ORBO_COMPUTER_NETWORK and reaches the supervisor as `supervisor:4300`, which is unaffected because
       # the process still listens on every interface inside its own container.
       - "127.0.0.1:${SUPERVISOR_PORT:-4500}:4300"
       - "[::1]:${SUPERVISOR_PORT:-4500}:4300"
@@ -259,7 +259,7 @@ services:
   agent-bot:
     build:
       context: .
-      dockerfile: agent-bot/Dockerfile
+      dockerfile: agent-orbo-bot/Dockerfile
     # Published by a release; see migrate above for what pull_policy decides.
     image: ${BOT_IMAGE:-orbo-agent-bot:latest}
     pull_policy: ${IMAGE_PULL_POLICY:-build}
@@ -272,14 +272,14 @@ services:
     environment:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       # Server sends this on every call to the managed Bot. It refuses to start without it.
-      MANAGED_AGENT_TOKEN: ${MANAGED_AGENT_TOKEN:-}
+      ORBO_MANAGED_AGENT_TOKEN: ${ORBO_MANAGED_AGENT_TOKEN:-}
       # Unset means OpenAI. Set, it is any endpoint speaking the same API, and BOT_MODEL is sent
       # to it verbatim.
       OPENAI_BASE_URL: ${OPENAI_CONTAINER_BASE_URL:-${OPENAI_BASE_URL:-}}
       # gpt-5.5, not the deployment default: this Bot writes /v1/chat/completions by hand, and
       # gpt-5.6-* rejects function tools there unless reasoning is turned off. Its own variable, so
       # a BOT_MODEL set for the framework Bot cannot silently take its tools away.
-      BOT_MODEL: ${AGENT_BOT_MODEL:-gpt-5.5}
+      BOT_MODEL: ${ORBO_AGENT_BOT_MODEL:-gpt-5.5}
     healthcheck:
       test: ["CMD-SHELL", "bun -e \"await fetch('http://localhost:4200/health')\""]
       interval: 10s
@@ -310,10 +310,10 @@ services:
       - "[::1]:${PICKED_HARNESS_PORT:-4202}:${PICKED_HARNESS_PORT:-4202}"
     environment:
       # Every harness refuses without this; it is what makes the endpoint the server's alone.
-      MANAGED_AGENT_TOKEN: ${MANAGED_AGENT_TOKEN:-}
+      ORBO_MANAGED_AGENT_TOKEN: ${ORBO_MANAGED_AGENT_TOKEN:-}
       # Deployment-owned tools use the same signed callback as agent-langgraph.
       ORBO_TOOL_URL: ${ORBO_TOOL_URL:-http://host.docker.internal:3001/api/agent-tools/call}
-      AGENT_TOOL_TOKEN: ${AGENT_TOOL_TOKEN:-}
+      ORBO_AGENT_TOOL_TOKEN: ${ORBO_AGENT_TOOL_TOKEN:-}
       # Whichever the model screen chose. A harness reads the one its provider needs and ignores the
       # rest, and the ones the choice did not imply are written empty rather than left stale: see
       # `ModelCredential`.
@@ -344,7 +344,7 @@ services:
   agent-langgraph:
     build:
       context: .
-      dockerfile: agent-langgraph/Dockerfile
+      dockerfile: agent-orbo-langgraph/Dockerfile
     # Published by a release; see migrate above for what pull_policy decides.
     image: ${LANGGRAPH_IMAGE:-orbo-agent-langgraph:latest}
     pull_policy: ${IMAGE_PULL_POLICY:-build}
@@ -357,7 +357,7 @@ services:
       # BOT_RESPONSES_API instead of changing the streaming loop here.
       BOT_PROVIDER: ${BOT_PROVIDER:-openai}
       # Same server-to-Bot request boundary as agent-bot above.
-      MANAGED_AGENT_TOKEN: ${MANAGED_AGENT_TOKEN:-}
+      ORBO_MANAGED_AGENT_TOKEN: ${ORBO_MANAGED_AGENT_TOKEN:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_BASE_URL: ${OPENAI_CONTAINER_BASE_URL:-${OPENAI_BASE_URL:-}}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
@@ -377,7 +377,7 @@ services:
       # Where this Bot runs a tool: back through the deployment that granted it, never at the vendor.
       # `host.docker.internal` because the API server runs on the host, not in this network.
       ORBO_TOOL_URL: ${ORBO_TOOL_URL:-http://host.docker.internal:3001/api/agent-tools/call}
-      AGENT_TOOL_TOKEN: ${AGENT_TOOL_TOKEN:-}
+      ORBO_AGENT_TOOL_TOKEN: ${ORBO_AGENT_TOOL_TOKEN:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:

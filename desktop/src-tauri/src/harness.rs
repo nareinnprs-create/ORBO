@@ -158,7 +158,7 @@ pub fn catalogue() -> Vec<Harness> {
      * A release publishes `orbo-<directory>`, taken from the Dockerfile paths in the tree, so
      * the image name belongs to the directory and not to whatever this list calls the row. Derived
      * from the id it was wrong for every row — `orbo-harness-crewai` against a published
-     * `orbo-agent-crewai` — and wrong twice for the four whose id does not match their folder.
+     * `orbo-agent-orbo-crewai` — and wrong twice for the four whose id does not match their folder.
      * A picker that names an image nobody publishes fails at the pull, on a first run, with nothing
      * on screen to say why. `every_image_is_one_a_release_publishes` holds it.
      */
@@ -186,7 +186,7 @@ pub fn catalogue() -> Vec<Harness> {
     vec![
         ours(
             "crewai",
-            "agent-crewai",
+            "agent-orbo-crewai",
             4202,
             "",
             "CrewAI",
@@ -195,7 +195,7 @@ pub fn catalogue() -> Vec<Harness> {
         ),
         ours(
             "llamaindex",
-            "agent-llamaindex",
+            "agent-orbo-llamaindex",
             4204,
             "/run",
             "LlamaIndex",
@@ -204,7 +204,7 @@ pub fn catalogue() -> Vec<Harness> {
         ),
         ours(
             "agno",
-            "agent-agno",
+            "agent-orbo-agno",
             4203,
             "/agui",
             "Agno",
@@ -213,7 +213,7 @@ pub fn catalogue() -> Vec<Harness> {
         ),
         ours(
             "langgraph",
-            "agent-langgraph-agui",
+            "agent-orbo-langgraph-agui",
             4206,
             "",
             "LangGraph",
@@ -222,7 +222,7 @@ pub fn catalogue() -> Vec<Harness> {
         ),
         ours(
             "google-adk",
-            "agent-adk",
+            "agent-orbo-adk",
             4208,
             "",
             "Google ADK",
@@ -231,7 +231,7 @@ pub fn catalogue() -> Vec<Harness> {
         ),
         ours(
             "pydantic-ai",
-            "agent-pydantic-ai",
+            "agent-orbo-pydantic-ai",
             4205,
             "",
             "Pydantic AI",
@@ -240,7 +240,7 @@ pub fn catalogue() -> Vec<Harness> {
         ),
         ours(
             "microsoft-agent-framework",
-            "agent-microsoft",
+            "agent-orbo-microsoft",
             4211,
             "",
             "Microsoft Agent Framework",
@@ -251,7 +251,7 @@ pub fn catalogue() -> Vec<Harness> {
             id: "claude-agent-sdk".into(),
             name: "Claude Agent SDK".into(),
             summary: "Anthropic's own. The one that takes a Claude plan instead of a key.".into(),
-            image: Some("agent-claude-sdk".into()),
+            image: Some("agent-orbo-claude-sdk".into()),
             port: Some(4212),
             health_path: Some("/health".into()),
             run_path: String::new(),
@@ -261,7 +261,7 @@ pub fn catalogue() -> Vec<Harness> {
         },
         ours(
             "strands",
-            "agent-strands",
+            "agent-orbo-strands",
             4207,
             "",
             "AWS Strands",
@@ -270,7 +270,7 @@ pub fn catalogue() -> Vec<Harness> {
         ),
         ours(
             "ag2",
-            "agent-ag2",
+            "agent-orbo-ag2",
             4210,
             "",
             "AG2",
@@ -279,7 +279,7 @@ pub fn catalogue() -> Vec<Harness> {
         ),
         ours(
             "langroid",
-            "agent-langroid",
+            "agent-orbo-langroid",
             4209,
             "",
             "Langroid",
@@ -288,7 +288,7 @@ pub fn catalogue() -> Vec<Harness> {
         ),
         ours(
             "mastra",
-            "agent-mastra",
+            "agent-orbo-mastra",
             4213,
             "",
             "Mastra",
@@ -581,8 +581,8 @@ mod tests {
         std::fs::write(
             crate::deployment::images_path(root),
             "{ \"version\": \"v9.9.9\", \"images\": { \
-             \"agent-crewai\": { \
-             \"reference\": \"ghcr.io/nareinnprs-create/orbo-agent-crewai@sha256:abc\" } } }",
+             \"agent-orbo-crewai\": { \
+             \"reference\": \"ghcr.io/nareinnprs-create/orbo-agent-orbo-crewai@sha256:abc\" } } }",
         )
         .expect("manifest is written");
     }
@@ -619,7 +619,7 @@ mod tests {
         };
         assert_eq!(
             image,
-            "ghcr.io/nareinnprs-create/orbo-agent-crewai@sha256:abc"
+            "ghcr.io/nareinnprs-create/orbo-agent-orbo-crewai@sha256:abc"
         );
         let _ = std::fs::remove_dir_all(&root);
     }
@@ -757,7 +757,7 @@ mod tests {
         };
         assert_eq!(
             image,
-            "ghcr.io/nareinnprs-create/orbo-agent-crewai@sha256:abc"
+            "ghcr.io/nareinnprs-create/orbo-agent-orbo-crewai@sha256:abc"
         );
         assert_eq!(port, 4202);
         assert!(!mastra);
@@ -830,7 +830,7 @@ mod tests {
         .unwrap();
 
         let refused = picked(Some(&choice("crewai")), &root).expect_err("it should be refused");
-        assert!(refused.contains("agent-crewai"), "{refused}");
+        assert!(refused.contains("agent-orbo-crewai"), "{refused}");
         assert!(refused.contains("v1.2.3"), "{refused}");
         assert!(!refused.contains("denied"), "{refused}");
         let _ = std::fs::remove_dir_all(&root);

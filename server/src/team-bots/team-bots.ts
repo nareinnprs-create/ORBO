@@ -62,17 +62,6 @@ export class TeamBotNotFoundError extends Error {
   }
 }
 
-export type TeamBotSummary = {
-  id: string;
-  name: string;
-  title: string;
-  roleDescription: string;
-  ownerUserId: string | null;
-  audience: "team" | "people";
-  publishedAt: string;
-  assigned: boolean;
-};
-
 export type TeamBotConsentDecision =
   | "allow_once"
   | "allow_always"

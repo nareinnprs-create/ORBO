@@ -45,7 +45,7 @@ export function approvalKindOf(toolRef: string): ApprovalKind {
 
 /* OpenMuse `ActionProposal` (packages/domain + apps/server/src/actions.ts). */
 
-export const OPENMUSE_STATUSES = [
+export const PROPOSAL_STATUSES = [
   "awaiting_review",
   "executing",
   "succeeded",
@@ -56,9 +56,9 @@ export const OPENMUSE_STATUSES = [
   "expired",
 ] as const;
 
-export type OpenMuseActionStatus = (typeof OPENMUSE_STATUSES)[number];
+export type ActionProposalStatus = (typeof PROPOSAL_STATUSES)[number];
 
-export type OpenMuseProposal = {
+export type ActionProposal = {
   id: string;
   kind: string;
   data: Record<string, unknown>;
@@ -66,11 +66,11 @@ export type OpenMuseProposal = {
   account?: string;
   targetVersion?: string;
   hash: string;
-  status: OpenMuseActionStatus;
+  status: ActionProposalStatus;
   expiresAt: string;
 };
 
-export type OpenMuseMappedDecision = {
+export type ActionProposalMappedDecision = {
   status: ApprovalRecord["status"];
   decision: ApprovalDecision | null;
 };
@@ -82,9 +82,9 @@ export type OpenMuseMappedDecision = {
  * OpenMuse records it), and `expired`/`cancelled` deny so the person re-asks —
  * an expired review is never executed.
  */
-const OPENMUSE_STATUS_MAP: Record<
-  OpenMuseActionStatus,
-  OpenMuseMappedDecision
+const PROPOSAL_STATUS_MAP: Record<
+  ActionProposalStatus,
+  ActionProposalMappedDecision
 > = {
   awaiting_review: { status: "pending", decision: null },
   executing: { status: "consumed", decision: "allow_once" },
@@ -96,15 +96,15 @@ const OPENMUSE_STATUS_MAP: Record<
   expired: { status: "denied", decision: "deny" },
 };
 
-export function mapOpenMuseStatus(
-  status: OpenMuseActionStatus,
-): OpenMuseMappedDecision {
-  return { ...OPENMUSE_STATUS_MAP[status] };
+export function mapActionProposalStatus(
+  status: ActionProposalStatus,
+): ActionProposalMappedDecision {
+  return { ...PROPOSAL_STATUS_MAP[status] };
 }
 
 /** The 30-minute review window: an expired proposal maps to denied, never runs. */
 export function isProposalExpired(
-  proposal: Pick<OpenMuseProposal, "expiresAt">,
+  proposal: Pick<ActionProposal, "expiresAt">,
   now: number = Date.now(),
 ): boolean {
   const expires = Date.parse(proposal.expiresAt);
@@ -130,7 +130,7 @@ function stableJson(value: unknown): unknown {
  */
 export function proposalDigest(
   proposal: Pick<
-    OpenMuseProposal,
+    ActionProposal,
     "kind" | "data" | "connectionId" | "targetVersion"
   >,
 ): string {
@@ -154,7 +154,7 @@ export function proposalDigest(
  */
 export function assertProposalUnchanged(
   proposal: Pick<
-    OpenMuseProposal,
+    ActionProposal,
     "hash" | "kind" | "data" | "connectionId" | "targetVersion"
   >,
   hash: string,
@@ -172,7 +172,7 @@ export function assertProposalUnchanged(
  */
 export function actionProposalToCandidate(
   ownerUserId: string,
-  proposal: OpenMuseProposal,
+  proposal: ActionProposal,
   options: { botId?: string; continuation?: ApprovalContinuation } = {},
 ): ApprovalCandidate {
   return {

@@ -1,7 +1,7 @@
 import { expect, spyOn, test } from "bun:test";
 import {
   type OpenDotsMcpApproval,
-  type OpenMuseProposal,
+  type ActionProposal,
   MCP_APPROVAL_TTL_MS,
   actionProposalToCandidate,
   approvalKindOf,
@@ -9,7 +9,7 @@ import {
   defaultMcpRequiresApproval,
   isMcpApprovalExpired,
   isProposalExpired,
-  mapOpenMuseStatus,
+  mapActionProposalStatus,
   mcpApprovalToCandidate,
   mcpReceiptKey,
   proposalDigest,
@@ -320,9 +320,7 @@ test("a decline persists until the person speaks again", async () => {
   expect(DECLINED_BY_PERSON).toContain("declined");
 });
 
-const museProposal = (
-  over: Partial<OpenMuseProposal> = {},
-): OpenMuseProposal => ({
+const museProposal = (over: Partial<ActionProposal> = {}): ActionProposal => ({
   id: "proposal-1",
   kind: "email.send",
   data: { to: "sam@example.com", subject: "Notes", body: "Hello" },
@@ -335,21 +333,21 @@ const museProposal = (
 });
 
 test("OpenMuse ActionProposal: status vocabulary collapses, hash re-check refuses change", () => {
-  expect(mapOpenMuseStatus("awaiting_review")).toEqual({
+  expect(mapActionProposalStatus("awaiting_review")).toEqual({
     status: "pending",
     decision: null,
   });
-  expect(mapOpenMuseStatus("executing")).toEqual({
+  expect(mapActionProposalStatus("executing")).toEqual({
     status: "consumed",
     decision: "allow_once",
   });
   for (const status of ["succeeded", "failed", "outcome_unknown"] as const)
-    expect(mapOpenMuseStatus(status)).toEqual({
+    expect(mapActionProposalStatus(status)).toEqual({
       status: "completed",
       decision: "allow_once",
     });
   for (const status of ["denied", "cancelled", "expired"] as const)
-    expect(mapOpenMuseStatus(status)).toEqual({
+    expect(mapActionProposalStatus(status)).toEqual({
       status: "denied",
       decision: "deny",
     });

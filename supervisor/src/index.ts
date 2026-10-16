@@ -61,10 +61,12 @@ if (!token) {
   process.exit(1);
 }
 const image =
-  process.env.COMPUTER_IMAGE?.trim() || "orbo-agent-computer:latest";
-const network = process.env.COMPUTER_NETWORK?.trim() || undefined;
-const runtime = process.env.COMPUTER_RUNTIME?.trim() || undefined;
-const resolvedMemory = computerMemoryBytes(process.env.COMPUTER_MEMORY_BYTES);
+  process.env.ORBO_COMPUTER_IMAGE?.trim() || "orbo-agent-computer:latest";
+const network = process.env.ORBO_COMPUTER_NETWORK?.trim() || undefined;
+const runtime = process.env.ORBO_COMPUTER_RUNTIME?.trim() || undefined;
+const resolvedMemory = computerMemoryBytes(
+  process.env.ORBO_COMPUTER_MEMORY_BYTES,
+);
 if (!resolvedMemory.ok) {
   console.error(resolvedMemory.reason);
   process.exit(1);

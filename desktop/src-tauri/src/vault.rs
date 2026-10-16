@@ -38,9 +38,9 @@ pub fn is_secret(key: &str) -> bool {
             | "CHATGPT_OAUTH_TOKEN"
             // Generated here, and no less a credential for it. These are what the services prove
             // themselves to each other with, and what a Bot's computer is driven with.
-            | "MANAGED_AGENT_TOKEN"
-            | "AGENT_TOOL_TOKEN"
-            | "COMPUTER_TOKEN"
+            | "ORBO_MANAGED_AGENT_TOKEN"
+            | "ORBO_AGENT_TOOL_TOKEN"
+            | "ORBO_COMPUTER_TOKEN"
             | "SUPERVISOR_TOKEN"
             | "WORKER_SHARED_SECRET"
             | "KEY_ENCRYPTION_KEY"
@@ -1455,9 +1455,9 @@ mod tests {
             "ANTHROPIC_API_KEY",
             "CLAUDE_CODE_OAUTH_TOKEN",
             "CHATGPT_OAUTH_TOKEN",
-            "MANAGED_AGENT_TOKEN",
-            "AGENT_TOOL_TOKEN",
-            "COMPUTER_TOKEN",
+            "ORBO_MANAGED_AGENT_TOKEN",
+            "ORBO_AGENT_TOOL_TOKEN",
+            "ORBO_COMPUTER_TOKEN",
             "SUPERVISOR_TOKEN",
             "WORKER_SHARED_SECRET",
             "KEY_ENCRYPTION_KEY",
@@ -1517,7 +1517,7 @@ mod tests {
         let path = dir.join(".env");
         std::fs::write(
             &path,
-            "AGENT_TOOL_TOKEN=old-agent-token\n\
+            "ORBO_AGENT_TOOL_TOKEN=old-agent-token\n\
 KEY_ENCRYPTION_KEY=old-key\n\
 OPENAI_API_KEY=old-openai-key\n\
 SERVER_PORT=3001\n\
@@ -1529,7 +1529,7 @@ SOMETHING_ELSE=kept\n",
         let settings = BTreeMap::from([("SERVER_PORT".to_string(), "3001".to_string())]);
         let secrets = BTreeMap::from([
             (
-                "AGENT_TOOL_TOKEN".to_string(),
+                "ORBO_AGENT_TOOL_TOKEN".to_string(),
                 "new-agent-token".to_string(),
             ),
             ("KEY_ENCRYPTION_KEY".to_string(), "new-key".to_string()),
@@ -1572,15 +1572,15 @@ SOMETHING_ELSE=kept\n",
         assert_eq!(
             remembered,
             [
-                (
-                    "AGENT_TOOL_TOKEN".to_string(),
-                    "new-agent-token".to_string()
-                ),
                 ("KEY_ENCRYPTION_KEY".to_string(), "new-key".to_string()),
                 ("OPENAI_API_KEY".to_string(), "new-openai-key".to_string()),
+                (
+                    "ORBO_AGENT_TOOL_TOKEN".to_string(),
+                    "new-agent-token".to_string()
+                ),
             ]
         );
-        assert!(!written.contains("AGENT_TOOL_TOKEN"), "{written}");
+        assert!(!written.contains("ORBO_AGENT_TOOL_TOKEN"), "{written}");
         assert!(!written.contains("KEY_ENCRYPTION_KEY"), "{written}");
         assert!(!written.contains("OPENAI_API_KEY"), "{written}");
         assert!(!written.contains("BOT_MODEL"), "{written}");
@@ -1597,7 +1597,7 @@ SOMETHING_ELSE=kept\n",
         let path = dir.join(".env");
         std::fs::write(
             &path,
-            "AGENT_TOOL_TOKEN=old-agent-token\n\
+            "ORBO_AGENT_TOOL_TOKEN=old-agent-token\n\
 KEY_ENCRYPTION_KEY=old-key\n\
 OPENAI_API_KEY=old-openai-key\n\
 SERVER_PORT=3001\n\
@@ -1608,7 +1608,7 @@ SOMETHING_ELSE=kept\n",
         let settings = BTreeMap::from([("SERVER_PORT".to_string(), "3001".to_string())]);
         let secrets = BTreeMap::from([
             (
-                "AGENT_TOOL_TOKEN".to_string(),
+                "ORBO_AGENT_TOOL_TOKEN".to_string(),
                 "new-agent-token".to_string(),
             ),
             ("KEY_ENCRYPTION_KEY".to_string(), "new-key".to_string()),
@@ -1633,10 +1633,10 @@ SOMETHING_ELSE=kept\n",
         let written = std::fs::read_to_string(&path).unwrap();
         let _ = std::fs::remove_dir_all(&dir);
 
-        assert_eq!(error.said, "refused AGENT_TOOL_TOKEN");
-        assert_eq!(attempted, ["AGENT_TOOL_TOKEN"]);
+        assert_eq!(error.said, "refused KEY_ENCRYPTION_KEY");
+        assert_eq!(attempted, ["KEY_ENCRYPTION_KEY"]);
         assert!(
-            written.contains("AGENT_TOOL_TOKEN=old-agent-token"),
+            written.contains("ORBO_AGENT_TOOL_TOKEN=old-agent-token"),
             "{written}"
         );
         assert!(written.contains("KEY_ENCRYPTION_KEY=old-key"), "{written}");

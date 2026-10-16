@@ -29,7 +29,7 @@ import { type PolicyStore, parseActionPolicy } from "./policy-store";
  * The Bot computer's surface, behind the same session guard as every other API route.
  *
  * The computer has token authentication but no user/session identity. These server routes require a
- * session guard because `COMPUTER_TOKEN` proves the caller is an internal service, not which user is
+ * session guard because `ORBO_COMPUTER_TOKEN` proves the caller is an internal service, not which user is
  * asking to drive the browser.
  *
  * Every computer call goes through the gateway. That is the governance seam: each acting route in

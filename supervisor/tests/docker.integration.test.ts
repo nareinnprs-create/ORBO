@@ -29,7 +29,7 @@ test.skipIf(!(await available()))(
         env: {
           ...process.env,
           DOCKER_SOCKET: socket,
-          COMPUTER_NAMESPACE: namespace,
+          ORBO_COMPUTER_NAMESPACE: namespace,
         },
         stdout: "pipe",
         stderr: "pipe",

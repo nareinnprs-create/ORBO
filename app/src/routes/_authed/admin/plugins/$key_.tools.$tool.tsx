@@ -206,7 +206,7 @@ function RouteComponent() {
                         {held
                           ? canCallBack(bot)
                             ? "May call this tool. Every call is still checked against the boundaries and written to the audit trail."
-                            : "Granted, but this Bot has no credential for calling tools back, so every call is refused before it reaches the boundary. Issue one on its own page, or set AGENT_TOOL_TOKEN for the deployment."
+                            : "Granted, but this Bot has no credential for calling tools back, so every call is refused before it reaches the boundary. Issue one on its own page, or set ORBO_AGENT_TOOL_TOKEN for the deployment."
                           : "Cannot call this tool. It is not offered to the model at all, so it has nothing to refuse."}
                       </ItemDescription>
                     </ItemContent>

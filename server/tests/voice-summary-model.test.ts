@@ -166,7 +166,7 @@ test.each(["claude", "chatgpt"] as const)(
               ? "agent-claude-sdk:test"
               : "agent-langgraph-agui:test",
           PICKED_HARNESS_URL: server.url.origin,
-          MANAGED_AGENT_TOKEN: "owned-harness-token",
+          ORBO_MANAGED_AGENT_TOKEN: "owned-harness-token",
         },
         {
           readModelSecret: async () => {
@@ -341,7 +341,7 @@ test.each(["claude", "chatgpt"] as const)(
             ? "agent-claude-sdk:test"
             : "agent-langgraph-agui:test",
         PICKED_HARNESS_URL: server.url.origin,
-        MANAGED_AGENT_TOKEN: "owned-harness-token",
+        ORBO_MANAGED_AGENT_TOKEN: "owned-harness-token",
       });
       await expect(summarize(transcript)).rejects.toThrow(
         "Synthetic plan refusal",

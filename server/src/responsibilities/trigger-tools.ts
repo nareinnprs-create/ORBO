@@ -139,12 +139,6 @@ export const TRIGGER_TOOLS: readonly McpToolShape[] = Object.freeze([
     inputSchema: id,
   },
 ]);
-export const TRIGGER_WRITE_TOOLS = [
-  "create_trigger",
-  "pause_trigger",
-  "resume_trigger",
-  "delete_trigger",
-] as const;
 export const isTriggerTool = (name: string) =>
   TRIGGER_TOOLS.some((tool) => tool.name === name);
 

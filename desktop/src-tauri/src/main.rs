@@ -1362,7 +1362,7 @@ async fn start_stack_inner<R: tauri::Runtime>(
     };
     let picked = harness::picked(harness.as_ref(), &root).map_err(|error| {
         // Two registers, because one of these refusals is about a release and the other is
-        // about a pick. "ORBO v0.0.8 does not include agent-langgraph-agui" is the
+        // about a pick. "ORBO v0.0.8 does not include agent-orbo-langgraph-agui" is the
         // evidence, not the sentence: it names a published image, which is not a thing the
         // person chose or can change.
         Problem::with(
@@ -1504,7 +1504,7 @@ async fn start_stack_inner<R: tauri::Runtime>(
          * had given. Anything the writer owns and did not produce this time is taken out.
          */
         let mut purge = secrets.clone();
-        for key in ["BOT_PROVIDER", "BOT_MODEL", "AGENT_BOT_MODEL"] {
+        for key in ["BOT_PROVIDER", "BOT_MODEL", "ORBO_AGENT_BOT_MODEL"] {
             if !settings.contains_key(key) {
                 purge.insert(key.into(), String::new());
             }
@@ -2726,8 +2726,8 @@ fn ask_saved_settings(root: &Path) -> Result<std::collections::BTreeMap<String, 
             "PICKED_HARNESS_KIND",
             "PICKED_HARNESS_SOURCE",
             "PICKED_HARNESS_AGENT_ID",
-            "MANAGED_AGENT_AG_UI_URL",
-            "MANAGED_AGENT_TOKEN",
+            "ORBO_MANAGED_AGENT_AG_UI_URL",
+            "ORBO_MANAGED_AGENT_TOKEN",
         ],
     )
 }
@@ -2754,7 +2754,7 @@ async fn ask_the_bot_with_settings(
         ),
         None => (
             settings
-                .get("MANAGED_AGENT_AG_UI_URL")
+                .get("ORBO_MANAGED_AGENT_AG_UI_URL")
                 .cloned()
                 .unwrap_or_default(),
             Some("agent-langgraph"),
@@ -2763,7 +2763,7 @@ async fn ask_the_bot_with_settings(
         ),
     };
     let token = settings
-        .get("MANAGED_AGENT_TOKEN")
+        .get("ORBO_MANAGED_AGENT_TOKEN")
         .cloned()
         .unwrap_or_default();
     if endpoint.trim().is_empty() || token.trim().is_empty() {
@@ -4857,14 +4857,14 @@ mod tests {
             std::fs::create_dir_all(root).unwrap();
             std::fs::write(
                 root.join(".env"),
-                format!("MANAGED_AGENT_AG_UI_URL=https://agent-{label}.example\n"),
+                format!("ORBO_MANAGED_AGENT_AG_UI_URL=https://agent-{label}.example\n"),
             )
             .unwrap();
             orbo_desktop_lib::vault::remember(root, "OPENAI_API_KEY", &format!("openai-{label}"))
                 .unwrap();
             orbo_desktop_lib::vault::remember(
                 root,
-                "MANAGED_AGENT_TOKEN",
+                "ORBO_MANAGED_AGENT_TOKEN",
                 &format!("agent-{label}"),
             )
             .unwrap();
@@ -4894,11 +4894,13 @@ mod tests {
 
         let settings = ask_saved_settings(&root_b).unwrap();
         assert_eq!(
-            settings.get("MANAGED_AGENT_AG_UI_URL").map(String::as_str),
+            settings
+                .get("ORBO_MANAGED_AGENT_AG_UI_URL")
+                .map(String::as_str),
             Some("https://agent-b.example")
         );
         assert_eq!(
-            settings.get("MANAGED_AGENT_TOKEN").map(String::as_str),
+            settings.get("ORBO_MANAGED_AGENT_TOKEN").map(String::as_str),
             Some("agent-b")
         );
 
@@ -6364,7 +6366,7 @@ fn main() {
             if cwd.join("fail-up").exists() { eprintln!("synthetic partial up failure");std::process::exit(71); }
         }
         ["compose","run","--rm","--pull","never","migrate"] => { eprintln!("synthetic migration barrier");std::process::exit(72); }
-        ["compose","-f","docker-compose.yml","config","--format","json"] => println!("{{\"services\":{{\"supervisor\":{{\"environment\":{{\"COMPUTER_NAMESPACE\":\"fixture\"}}}}}}}}"),
+        ["compose","-f","docker-compose.yml","config","--format","json"] => println!("{{\"services\":{{\"supervisor\":{{\"environment\":{{\"ORBO_COMPUTER_NAMESPACE\":\"fixture\"}}}}}}}}"),
         ["compose","-f","docker-compose.yml","stop","supervisor"] => (),
         ["ps","--quiet","--filter",_,"--filter",_] => (),
         ["compose","-f","docker-compose.yml","--profile","harness","down"] => {
@@ -7261,7 +7263,7 @@ fn main() {
         let mut images: deployment::Images =
             serde_json::from_str(&std::fs::read_to_string(deployment::images_path(&root)).unwrap())
                 .unwrap();
-        for name in ["agent-langgraph-agui", "agent-claude-sdk"] {
+        for name in ["agent-orbo-langgraph-agui", "agent-orbo-claude-sdk"] {
             images.images.insert(
                 name.into(),
                 deployment::Image {
@@ -7293,7 +7295,7 @@ fn main() {
             "anthropic-api" => {
                 model = serde_json::json!({"provider":"anthropic", "login":"api-key", "apiKey":"synthetic-anthropic-key"});
                 choice = serde_json::json!({"id":"langgraph"});
-                ("compose --profile harness up -d --no-build --pull never postgres supervisor agent-computer agent-langgraph agent-harness", Some("agent-langgraph-agui"))
+                ("compose --profile harness up -d --no-build --pull never postgres supervisor agent-computer agent-langgraph agent-harness", Some("agent-orbo-langgraph-agui"))
             }
             "compatible" => {
                 model = serde_json::json!({"provider":"openai-compatible", "login":"endpoint", "baseUrl":"http://127.0.0.1:11434/v1", "model":"synthetic-model", "apiKey":""});
@@ -7301,7 +7303,7 @@ fn main() {
             }
             "installed" => {
                 choice = serde_json::json!({"id":"langgraph"});
-                ("compose --profile harness up -d --no-build --pull never postgres supervisor agent-computer agent-bot agent-langgraph agent-harness", Some("agent-langgraph-agui"))
+                ("compose --profile harness up -d --no-build --pull never postgres supervisor agent-computer agent-bot agent-langgraph agent-harness", Some("agent-orbo-langgraph-agui"))
             }
             "none" => {
                 choice = serde_json::Value::Null;
@@ -7309,18 +7311,18 @@ fn main() {
             }
             "chatgpt-plan" => {
                 model = serde_json::json!({"provider":"openai", "login":"plan", "token":"{\"refresh_token\":\"synthetic-plan\"}"});
-                ("compose --profile harness up -d --no-build --pull never postgres supervisor agent-computer agent-harness", Some("agent-langgraph-agui"))
+                ("compose --profile harness up -d --no-build --pull never postgres supervisor agent-computer agent-harness", Some("agent-orbo-langgraph-agui"))
             }
             "claude-plan" => {
                 model = serde_json::json!({"provider":"anthropic", "login":"plan", "token":"synthetic-claude-plan"});
-                ("compose --profile harness up -d --no-build --pull never postgres supervisor agent-computer agent-harness", Some("agent-claude-sdk"))
+                ("compose --profile harness up -d --no-build --pull never postgres supervisor agent-computer agent-harness", Some("agent-orbo-claude-sdk"))
             }
             _ => panic!("unknown test case"),
         };
         if case.ends_with("-plan") {
             std::fs::write(
                 root.join(".env"),
-                "MANAGED_AGENT_AG_UI_URL=http://127.0.0.1:4201/ag-ui\n",
+                "ORBO_MANAGED_AGENT_AG_UI_URL=http://127.0.0.1:4201/ag-ui\n",
             )
             .unwrap();
         }
@@ -7398,7 +7400,7 @@ fn main() {
             &root.join(".env"),
             &[
                 "TENANT_PACKAGE_DIR",
-                "MANAGED_AGENT_AG_UI_URL",
+                "ORBO_MANAGED_AGENT_AG_UI_URL",
                 "PICKED_HARNESS_NAME",
                 "PICKED_HARNESS_URL",
                 "PICKED_HARNESS_KIND",
@@ -7411,7 +7413,7 @@ fn main() {
             Some("../examples/orbo")
         );
         let bundled_url = settings
-            .get("MANAGED_AGENT_AG_UI_URL")
+            .get("ORBO_MANAGED_AGENT_AG_UI_URL")
             .map(String::as_str)
             .unwrap_or("");
         assert_eq!(
@@ -7718,7 +7720,7 @@ fn main() {
                 ),
                 ("PICKED_HARNESS_AGENT_ID".to_string(), "orbo".to_string()),
                 (
-                    "MANAGED_AGENT_TOKEN".to_string(),
+                    "ORBO_MANAGED_AGENT_TOKEN".to_string(),
                     "managed-token".to_string(),
                 ),
             ]),
@@ -7762,11 +7764,11 @@ fn main() {
                     "remote-ag-ui".to_string(),
                 ),
                 (
-                    "MANAGED_AGENT_AG_UI_URL".to_string(),
+                    "ORBO_MANAGED_AGENT_AG_UI_URL".to_string(),
                     "http://127.0.0.1:9/ag-ui".to_string(),
                 ),
                 (
-                    "MANAGED_AGENT_TOKEN".to_string(),
+                    "ORBO_MANAGED_AGENT_TOKEN".to_string(),
                     "managed-token".to_string(),
                 ),
             ]),
@@ -7807,7 +7809,7 @@ fn main() {
                     "remote-ag-ui".to_string(),
                 ),
                 (
-                    "MANAGED_AGENT_TOKEN".to_string(),
+                    "ORBO_MANAGED_AGENT_TOKEN".to_string(),
                     "managed-token".to_string(),
                 ),
             ]),
@@ -7910,7 +7912,7 @@ fn main() {
                     &[],
                     harness,
                     &std::collections::BTreeMap::from([(
-                        "MANAGED_AGENT_TOKEN".into(),
+                        "ORBO_MANAGED_AGENT_TOKEN".into(),
                         "synthetic-ask-token".into(),
                     )]),
                 )
@@ -7953,7 +7955,7 @@ fn main() {
                     "PICKED_HARNESS_SOURCE",
                     "PICKED_HARNESS_IMAGE",
                     "PICKED_HARNESS_PORT",
-                    "MANAGED_AGENT_AG_UI_URL",
+                    "ORBO_MANAGED_AGENT_AG_UI_URL",
                 ],
             )
             .unwrap();
@@ -8060,9 +8062,12 @@ fn main() {
             root.clone(),
             "What is 17 times 23?".to_string(),
             std::collections::BTreeMap::from([
-                ("MANAGED_AGENT_AG_UI_URL".to_string(), server.url.clone()),
                 (
-                    "MANAGED_AGENT_TOKEN".to_string(),
+                    "ORBO_MANAGED_AGENT_AG_UI_URL".to_string(),
+                    server.url.clone(),
+                ),
+                (
+                    "ORBO_MANAGED_AGENT_TOKEN".to_string(),
                     "managed-token".to_string(),
                 ),
             ]),
@@ -8128,11 +8133,11 @@ fn main() {
                     "remote-ag-ui".to_string(),
                 ),
                 (
-                    "MANAGED_AGENT_AG_UI_URL".to_string(),
+                    "ORBO_MANAGED_AGENT_AG_UI_URL".to_string(),
                     "http://127.0.0.1:9/ag-ui".to_string(),
                 ),
                 (
-                    "MANAGED_AGENT_TOKEN".to_string(),
+                    "ORBO_MANAGED_AGENT_TOKEN".to_string(),
                     "managed-token".to_string(),
                 ),
             ]),

@@ -40,7 +40,7 @@ Mount the volume at `/var/lib/postgresql`, the parent, not `/var/lib/postgresql/
 not initialise into a directory that already contains `lost+found`.
 
 The one-container image does not carry the separate framework Bot images that `docker-compose.yml`
-starts. Leave MANAGED_AGENT_AG_UI_URL unset unless a Bot endpoint is actually reachable from this
+starts. Leave ORBO_MANAGED_AGENT_AG_UI_URL unset unless a Bot endpoint is actually reachable from this
 container. If their `.env` still has the laptop default `http://localhost:4201/ag-ui`, unset it for
 this path. See docs/deployment.md for platform notes, sizing and migrations.
 
@@ -62,8 +62,8 @@ Requirements for the clone path:
 Fresh managed OpenAI clone setup needs a CopilotKit sign-in and an OPENAI_API_KEY model credential.
 The setup helper writes the project runtime key and Learning container assignment.
 
-`scripts/start.sh` fills the local secrets it owns: COMPUTER_TOKEN and WORKER_SHARED_SECRET have dev
-defaults, and MANAGED_AGENT_TOKEN plus AGENT_TOOL_TOKEN are generated and written back into `.env`.
+`scripts/start.sh` fills the local secrets it owns: ORBO_COMPUTER_TOKEN and WORKER_SHARED_SECRET have dev
+defaults, and ORBO_MANAGED_AGENT_TOKEN plus ORBO_AGENT_TOOL_TOKEN are generated and written back into `.env`.
 Everything else in `.env.example` is either already correct, optional, or generated. Do not walk the
 person through every blank line.
 

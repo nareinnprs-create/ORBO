@@ -92,7 +92,7 @@ async function runPicked(options: {
   let storedEndpoint = endpoint(options.target ?? "picked");
   if (options.packageProducer) {
     const publicEnvironment = {
-      MANAGED_AGENT_AG_UI_URL: options.bundled ? endpoint("bundled") : "",
+      ORBO_MANAGED_AGENT_AG_UI_URL: options.bundled ? endpoint("bundled") : "",
       PICKED_HARNESS_URL: endpoint("picked"),
       PICKED_HARNESS_KIND: "remote-ag-ui",
     };
@@ -123,8 +123,8 @@ async function runPicked(options: {
     testEnvironment({
       KEY_ENCRYPTION_KEY: Buffer.alloc(32, 17).toString("base64"),
       DATABASE_URL: "postgres://fixture:fixture@127.0.0.1:1/never-connect",
-      MANAGED_AGENT_AG_UI_URL: options.bundled ? endpoint("bundled") : "",
-      MANAGED_AGENT_TOKEN: fixtureToken,
+      ORBO_MANAGED_AGENT_AG_UI_URL: options.bundled ? endpoint("bundled") : "",
+      ORBO_MANAGED_AGENT_TOKEN: fixtureToken,
       PICKED_HARNESS_URL: endpoint("picked"),
       PICKED_HARNESS_IMAGE: options.installed
         ? "localhost/synthetic-harness:fixture"
@@ -330,13 +330,13 @@ test("a picked installed harness requires a token even when the bundled Bot is o
   expect(() =>
     loadConfig(
       testEnvironment({
-        MANAGED_AGENT_AG_UI_URL: "",
-        MANAGED_AGENT_TOKEN: "",
+        ORBO_MANAGED_AGENT_AG_UI_URL: "",
+        ORBO_MANAGED_AGENT_TOKEN: "",
         PICKED_HARNESS_IMAGE: "localhost/synthetic-harness:fixture",
         PICKED_HARNESS_URL: "http://127.0.0.1:4206/ag-ui",
       }),
     ),
-  ).toThrow("MANAGED_AGENT_TOKEN");
+  ).toThrow("ORBO_MANAGED_AGENT_TOKEN");
 });
 
 test("the default package's case-only picked URL authenticates through the real HTTP client", async () => {

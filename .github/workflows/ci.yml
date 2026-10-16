@@ -68,7 +68,7 @@ jobs:
       # One red package must not hide whether the other is red too.
       fail-fast: false
       matrix:
-        package: [agent-computer, supervisor]
+        package: [agent-orbo-computer, supervisor]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -121,13 +121,13 @@ jobs:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile
       - run: bun install --frozen-lockfile
-        working-directory: agent-computer
+        working-directory: agent-orbo-computer
       - run: bunx playwright install --with-deps chromium
-        working-directory: agent-computer
+        working-directory: agent-orbo-computer
       - run: >-
           bun test tests/sign-in.test.ts tests/session-cookies.test.ts tests/follows-popup.test.ts
           tests/demonstration-live.test.ts tests/webrtc-proxy.test.ts
-        working-directory: agent-computer
+        working-directory: agent-orbo-computer
         env:
           ORBO_COMPUTER_BROWSER: '1'
           ORBO_DEMONSTRATION_LIVE: '1'
@@ -287,15 +287,15 @@ jobs:
       # The Bots are not root workspaces and each keeps its own lockfile. The startup tests spawn
       # the real entrypoint, so its dependencies have to be installed as well.
       - run: bun install --frozen-lockfile
-        working-directory: agent-bot
+        working-directory: agent-orbo-bot
       # Same for the LangGraph Bot: its history tests import @langchain/core, which lives in that
       # Bot's own tree and not in the root one.
       - run: bun install --frozen-lockfile
-        working-directory: agent-langgraph
+        working-directory: agent-orbo-langgraph
       # Same for the Mastra Bot: root test discovery imports its receiver tests, which load Mastra
       # from that Bot's own dependency tree.
       - run: bun install
-        working-directory: agent-mastra
+        working-directory: agent-orbo-mastra
       # Same for the desktop app: root test discovery imports its React tests, whose JSX runtime is
       # pinned by the desktop lockfile rather than the root one.
       - run: bun install --frozen-lockfile
@@ -343,78 +343,78 @@ jobs:
           set -euo pipefail
           python -m venv .venv-crewai
           . .venv-crewai/bin/activate
-          python -m pip install --requirement agent-crewai/requirements.txt --requirement agent-crewai/requirements-test.txt
-          python -m pytest agent-crewai/tests -q
+          python -m pip install --requirement agent-orbo-crewai/requirements.txt --requirement agent-orbo-crewai/requirements-test.txt
+          python -m pytest agent-orbo-crewai/tests -q
       - name: Claude client-tool continuation regressions
         run: |
           set -euo pipefail
           python -m venv .venv-claude-sdk
           . .venv-claude-sdk/bin/activate
-          python -m pip install --requirement agent-claude-sdk/requirements.txt --requirement agent-claude-sdk/requirements-test.txt
-          python -m pytest agent-claude-sdk/tests -q
+          python -m pip install --requirement agent-orbo-claude-sdk/requirements.txt --requirement agent-orbo-claude-sdk/requirements-test.txt
+          python -m pytest agent-orbo-claude-sdk/tests -q
       - name: LangGraph AG-UI provider-boundary regressions
         run: |
           set -euo pipefail
           python -m venv .venv-langgraph-agui
           . .venv-langgraph-agui/bin/activate
-          python -m pip install --requirement agent-langgraph-agui/requirements.txt --requirement agent-langgraph-agui/requirements-test.txt
-          python -m pytest agent-langgraph-agui/tests -q
+          python -m pip install --requirement agent-orbo-langgraph-agui/requirements.txt --requirement agent-orbo-langgraph-agui/requirements-test.txt
+          python -m pytest agent-orbo-langgraph-agui/tests -q
       - name: LlamaIndex model-choice regression
         run: |
           set -euo pipefail
           python -m venv .venv-llamaindex
           . .venv-llamaindex/bin/activate
-          python -m pip install --requirement agent-llamaindex/requirements.txt --requirement agent-llamaindex/requirements-test.txt
-          python -m pytest agent-llamaindex/tests -q
+          python -m pip install --requirement agent-orbo-llamaindex/requirements.txt --requirement agent-orbo-llamaindex/requirements-test.txt
+          python -m pytest agent-orbo-llamaindex/tests -q
       - name: Agno model-choice regression
         run: |
           set -euo pipefail
           python -m venv .venv-agno
           . .venv-agno/bin/activate
-          python -m pip install --requirement agent-agno/requirements.txt --requirement agent-agno/requirements-test.txt
-          python -m pytest agent-agno/tests -q
+          python -m pip install --requirement agent-orbo-agno/requirements.txt --requirement agent-orbo-agno/requirements-test.txt
+          python -m pytest agent-orbo-agno/tests -q
       - name: Strands model-choice regression
         run: |
           set -euo pipefail
           python -m venv .venv-strands
           . .venv-strands/bin/activate
-          python -m pip install --requirement agent-strands/requirements.txt --requirement agent-strands/requirements-test.txt
-          python -m pytest agent-strands/tests -q
+          python -m pip install --requirement agent-orbo-strands/requirements.txt --requirement agent-orbo-strands/requirements-test.txt
+          python -m pytest agent-orbo-strands/tests -q
       - name: Pydantic AI model-choice regression
         run: |
           set -euo pipefail
           python -m venv .venv-pydantic-ai
           . .venv-pydantic-ai/bin/activate
-          python -m pip install --requirement agent-pydantic-ai/requirements.txt --requirement agent-pydantic-ai/requirements-test.txt
-          python -m pytest agent-pydantic-ai/tests -q
+          python -m pip install --requirement agent-orbo-pydantic-ai/requirements.txt --requirement agent-orbo-pydantic-ai/requirements-test.txt
+          python -m pytest agent-orbo-pydantic-ai/tests -q
       - name: Google ADK tool-call regressions
         run: |
           set -euo pipefail
           python -m venv .venv-adk
           . .venv-adk/bin/activate
-          python -m pip install --requirement agent-adk/requirements.txt --requirement agent-adk/requirements-test.txt
-          python -m pytest agent-adk/tests -q
+          python -m pip install --requirement agent-orbo-adk/requirements.txt --requirement agent-orbo-adk/requirements-test.txt
+          python -m pytest agent-orbo-adk/tests -q
       - name: Langroid model-choice and tool-call regressions
         run: |
           set -euo pipefail
           python -m venv .venv-langroid
           . .venv-langroid/bin/activate
-          python -m pip install --requirement agent-langroid/requirements.txt --requirement agent-langroid/requirements-test.txt
-          python -m pytest agent-langroid/tests -q
+          python -m pip install --requirement agent-orbo-langroid/requirements.txt --requirement agent-orbo-langroid/requirements-test.txt
+          python -m pytest agent-orbo-langroid/tests -q
       - name: AG2 model-choice regression
         run: |
           set -euo pipefail
           python -m venv .venv-ag2
           . .venv-ag2/bin/activate
-          python -m pip install --requirement agent-ag2/requirements.txt --requirement agent-ag2/requirements-test.txt
-          python -m pytest agent-ag2/tests -q
+          python -m pip install --requirement agent-orbo-ag2/requirements.txt --requirement agent-orbo-ag2/requirements-test.txt
+          python -m pytest agent-orbo-ag2/tests -q
       - name: Microsoft Agent Framework model-choice regression
         run: |
           set -euo pipefail
           python -m venv .venv-microsoft
           . .venv-microsoft/bin/activate
-          python -m pip install --requirement agent-microsoft/requirements.txt --requirement agent-microsoft/requirements-test.txt
-          python -m pytest agent-microsoft/tests -q
+          python -m pip install --requirement agent-orbo-microsoft/requirements.txt --requirement agent-orbo-microsoft/requirements-test.txt
+          python -m pytest agent-orbo-microsoft/tests -q
       - run: bun install --frozen-lockfile
       - run: bun test tests/compose.test.ts
       - run: docker compose --env-file /dev/null --profile harness config --format json >/dev/null
@@ -640,9 +640,9 @@ jobs:
       - name: The computer image starts
         run: |
           set -euo pipefail
-          docker buildx build --file agent-computer/Dockerfile --platform linux/amd64 --load \
+          docker buildx build --file agent-orbo-computer/Dockerfile --platform linux/amd64 --load \
             --tag orbo-agent-computer:ci .
-          docker run -d --name computer-ci -e COMPUTER_TOKEN=ci-token-0123456789abcdef \
+          docker run -d --name computer-ci -e ORBO_COMPUTER_TOKEN=ci-token-0123456789abcdef \
             -p 127.0.0.1:4100:4100 orbo-agent-computer:ci
           for _ in $(seq 1 60); do
             if curl -fsS http://127.0.0.1:4100/health >/dev/null; then

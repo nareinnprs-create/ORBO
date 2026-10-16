@@ -3,7 +3,7 @@
 #
 # `EMBEDDED_COMPUTER=on` is the default, because one container that just works is what this image is
 # for. Off, this service exits 0 immediately and s6 leaves it alone, the same way `postgres` does,
-# and the API reaches a computer elsewhere through `AGENT_COMPUTER_URL` or a supervisor.
+# and the API reaches a computer elsewhere through `ORBO_AGENT_COMPUTER_URL` or a supervisor.
 #
 # That switch is what lets this image be a stateless replica. A browser is a few hundred megabytes of
 # memory holding one Bot's logins, so an API pod carrying one is neither stateless nor cheap to run
@@ -16,7 +16,7 @@ set -eu
 if [ "${EMBEDDED_COMPUTER:-on}" != "on" ]; then
   exec /bin/true
 fi
-cd /app/agent-computer
+cd /app/agent-orbo-computer
 
 set --
 for name in \
@@ -24,9 +24,9 @@ for name in \
   HTTP_PROXY HTTPS_PROXY NO_PROXY ALL_PROXY FTP_PROXY \
   http_proxy https_proxy no_proxy all_proxy ftp_proxy \
   BUN_INSTALL PLAYWRIGHT_BROWSERS_PATH SPIFFE_ENDPOINT_SOCKET \
-  COMPUTER_TOKEN COMPUTER_BOT_ID COMPUTER_BROWSER_MODE COMPUTER_MAX_BROWSERS \
-  COMPUTER_BROWSER_IDLE_MS COMPUTER_SANDBOX COMPUTER_SHELL_ENV COMPUTER_STOPPED \
-  ACTION_TIMEOUT_MS NAVIGATION_TIMEOUT_MS AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS
+  ORBO_COMPUTER_TOKEN ORBO_COMPUTER_BOT_ID ORBO_COMPUTER_BROWSER_MODE ORBO_COMPUTER_MAX_BROWSERS \
+  ORBO_COMPUTER_BROWSER_IDLE_MS ORBO_COMPUTER_SANDBOX ORBO_COMPUTER_SHELL_ENV COMPUTER_STOPPED \
+  ACTION_TIMEOUT_MS NAVIGATION_TIMEOUT_MS ORBO_AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS
 do
   eval "isset=\${$name+x}"
   [ -n "${isset:-}" ] && eval "set -- \"\$@\" \"$name=\${$name}\""
@@ -34,10 +34,10 @@ done
 for name in $(printenv | sed -n 's/=.*//p' | grep -E '^(LC_[A-Za-z0-9_]+|EGRESS_PROXY_[A-Za-z0-9_]+)$' || true); do
   eval "set -- \"\$@\" \"$name=\${$name}\""
 done
-if [ -n "${COMPUTER_SHELL_ENV:-}" ]; then
+if [ -n "${ORBO_COMPUTER_SHELL_ENV:-}" ]; then
   oldifs=$IFS
   IFS=,
-  for name in $COMPUTER_SHELL_ENV; do
+  for name in $ORBO_COMPUTER_SHELL_ENV; do
     IFS=$oldifs
     name=$(printf %s "$name" | tr -d '[:space:]')
     case "$name" in

@@ -23,7 +23,7 @@ function rootDockerfile() {
 
 function agentComputerDockerfile() {
   return readFileSync(
-    join(import.meta.dir, "..", "agent-computer", "Dockerfile"),
+    join(import.meta.dir, "..", "agent-orbo-computer", "Dockerfile"),
     "utf8",
   );
 }
@@ -142,7 +142,7 @@ function runLangGraphAguiModelProbe(
       ...process.env,
       BOT_MODEL: options.botModel ?? "gpt-test",
       OPENAI_API_KEY: options.openaiApiKey ?? "sk-test",
-      PYTHONPATH: `${dir}:${join(import.meta.dir, "..", "agent-langgraph-agui")}`,
+      PYTHONPATH: `${dir}:${join(import.meta.dir, "..", "agent-orbo-langgraph-agui")}`,
     };
     delete env.CHATGPT_AUTH_FILE;
     if (options.botProvider !== undefined) {
@@ -235,7 +235,7 @@ test("publishes every service on a settable port with the documented default", (
 
   const published = [
     ["POSTGRES_PORT", "5432", "5432"],
-    ["COMPUTER_PORT", "4100", "4100"],
+    ["ORBO_COMPUTER_PORT", "4100", "4100"],
     ["SUPERVISOR_PORT", "4500", "4300"],
     ["BOT_PORT", "4200", "4200"],
     ["LANGGRAPH_PORT", "4201", "4201"],
@@ -265,7 +265,7 @@ test("publishes every service that holds a secret on loopback only", () => {
   for (const name of [
     "POSTGRES_PORT",
     "SUPERVISOR_PORT",
-    "COMPUTER_PORT",
+    "ORBO_COMPUTER_PORT",
     "BOT_PORT",
     "LANGGRAPH_PORT",
     "PICKED_HARNESS_PORT",
@@ -480,7 +480,7 @@ test("builds the deployment image with Playwright's Chromium payload only", () =
       "agent-computer:",
       "    build:",
       "      context: .",
-      "      dockerfile: agent-computer/Dockerfile",
+      "      dockerfile: agent-orbo-computer/Dockerfile",
     ].join("\n"),
   );
 });
@@ -514,7 +514,7 @@ test("takes Bun from the same immutable release in both computer images", () => 
  * Per-Bot egress reaches the processes that read it.
  *
  * `EGRESS_PROXY_<BOT>` and `EGRESS_PROXY_DEFAULT` are resolved from `process.env` by the computer
- * itself (`agent-computer/src/egress.ts`), and the supervisor forwards every `EGRESS_PROXY` key out
+ * itself (`agent-orbo-computer/src/egress.ts`), and the supervisor forwards every `EGRESS_PROXY` key out
  * of its own environment into each computer it creates (`supervisor/src/index.ts`). Compose gives a
  * container only what its `environment:` and `env_file:` blocks name, and for a long time neither
  * named these, so an operator who configured a proxy per the documentation got a browser that went
@@ -542,12 +542,12 @@ test("carries per-Bot egress into the computer and the supervisor", () => {
 test("gives the selected harness the same governed callback as the framework Bot", () => {
   const config = runComposeConfig({
     ORBO_TOOL_URL: "http://callback.example/api/agent-tools/call",
-    AGENT_TOOL_TOKEN: "synthetic-callback-token",
+    ORBO_AGENT_TOOL_TOKEN: "synthetic-callback-token",
   });
   for (const service of ["agent-harness", "agent-langgraph"] as const) {
     expect(config.services[service].environment).toMatchObject({
       ORBO_TOOL_URL: "http://callback.example/api/agent-tools/call",
-      AGENT_TOOL_TOKEN: "synthetic-callback-token",
+      ORBO_AGENT_TOOL_TOKEN: "synthetic-callback-token",
     });
     expect(config.services[service].extra_hosts).toContain(
       "host.docker.internal=host-gateway",

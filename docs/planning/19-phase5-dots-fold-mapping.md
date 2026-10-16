@@ -75,13 +75,13 @@ Source: `server/src/db/schema/core.ts:271-282` (`agents`), `server/src/db/schema
 | Layer | Fields |
 |---|---|
 | `agents` | `id` PK, `name`, `type` enum (`built_in\|remote_ag_ui\|remote_mastra`), `configuration` jsonb (`{endpoint,auth:{credentialId},systemPrompt,remoteAgentId}` — see `profile-store.ts:205-235`), `packageId`, `override` |
-| `agent_profiles` | `agentId` PK, `ownerUserId` (nullable, set-null), `title`, `roleDescription` (≤1000), `avatarSeed`, `visibility` enum (`public\|private`), `callbackTokenHash` + `callbackTokenIssuedAt` (hash-only), `deletedAt` (soft-delete) |
+| `agent_profiles` | `agentId` PK, `ownerUserId` (nullable, set-null), `title`, `roleDescription` (≤2000), `avatarSeed`, `visibility` enum (`public\|private`), `callbackTokenHash` + `callbackTokenIssuedAt` (hash-only), `deletedAt` (soft-delete) |
 | `agent_preferences` | `(userId,agentId)` PK, `hiddenAt`, `pinnedAt` (per-person display, not grants) |
 | Lifecycle (per-person) | `bot_lifecycle(ownerUserId,agentId,pausedAt,notify)` + `update_routing_preferences(kind,transports[])` (`lifecycle.ts`); routes `GET /api/bots/attention`, `POST :id/pause|resume`, `PUT :id/notifications`, `GET|POST :id/reset`, `GET :id/activity` (`lifecycle-routes.ts`) |
 | Team publishing | `team_bot_{publications,audience,assignments,consents,consent_defaults}` (`team-bots.ts`); `PUT|DELETE /api/team-bots/:botId/publication`, assignments, consents |
 | Grants | `plugin_grants(kind,ref,agentId)` PK, handoff (`GET /api/agents/:id/handoff` → `{enabled,canGrant,reachable,grantable}`), `shared_use_*` exposure check on publish (`routes.ts:570-579`) |
 | Computer | **No per-agent row.** `computer_snapshot(computerId PK,…)` + `computer_page_frame(computerId,toolCallId)` are ephemeral state; `action_policy` is deployment-global. Access rule: owner/admin/public-only (`computer-access.ts:13-23`) |
-| Identity/lifecycle routes | `POST /api/agents` (validates endpoint/auth, `bot.created`), `PATCH`, `POST :id/duplicate`, `hide|unhide`, `pin|unpin`, `POST|DELETE :id/callback-token`, `DELETE` soft (`routes.ts:319-756`); form `app/src/lib/agents/form.ts` (`name≤80,title≤120,roleDescription≤1000,visibility,endpoint,authValue` write-only) |
+| Identity/lifecycle routes | `POST /api/agents` (validates endpoint/auth, `bot.created`), `PATCH`, `POST :id/duplicate`, `hide|unhide`, `pin|unpin`, `POST|DELETE :id/callback-token`, `DELETE` soft (`routes.ts:319-756`); form `app/src/lib/agents/form.ts` (`name≤80,title≤120,roleDescription≤2000,visibility,endpoint,authValue` write-only) |
 | UI | 10 routes `app/src/routes/_authed/_app/bots.*` (roster + 8 subpages + direct chat `bot.tsx`), components `app/src/components/{bots,bot-profile,agents}/`, data `app/src/lib/{agents/*,bot-lifecycle/*,team-bots.ts}` (see doc 10 §1–§4) |
 
 Field count: Agents identity = 6 (`agents`) + 8 (`agent_profiles`) + 2 (`agent_preferences`) = **16 columns** + 4 satellite groups (lifecycle, team-bots×5, grants, computer-ephemeral).
@@ -96,7 +96,7 @@ Field count: Agents identity = 6 (`agents`) + 8 (`agent_profiles`) + 2 (`agent_p
 | `spaceId` (default page dest) | new `agents.default_space_id` NULLABLE FK → `spaces` | **transform** | Scalar→FK; must be member of `spaceIds` (keep `validateSpaceAccess` rule, `workspace.ts:175-181`) |
 | `spaceIds[]` | new `agent_spaces` join | **transform** | `INSERT INTO dot_spaces SELECT id,spaceId` rows move verbatim; default = `spaceId` |
 | `name` (1–40) | `agents.name` (≤80) | **map** | Widen only; `parseAgentInput` bound stays 80 (`routes.ts:55-60`) |
-| `instructions` (3–2000) | `agent_profiles.roleDescription` (1–1000) | **transform** | Truncation conflict: cap 2000→1000 needs owner decision (cut vs extend column); `built_in` also mirrors into `configuration.systemPrompt` (`profile-store.ts:490`) |
+| `instructions` (3–2000) | `agent_profiles.roleDescription` (1–2000) | **transform** | No truncation: both cap 2000; `built_in` also mirrors into `configuration.systemPrompt` (`profile-store.ts:490`) |
 | `researchAllowed` | new `agents.research_allowed` NULLABLE bool | **transform** | INTEGER 0/1→boolean; NULL = unset (ORBO has no equivalent; 01 §5 proposes same) |
 | `memoryAllowed` | new `agents.memory_allowed` NULLABLE bool | **transform** | Same as above; memory enforcement stays in Memory subsystem, flag only gates |
 | `createdAt` (epoch-ms) | `agents.created_at` timestamptz | **transform** | `to_timestamp(ms/1000)` in importer; roster keeps `ORDER BY createdAt` |
@@ -139,7 +139,7 @@ permissions jsonb)`, `computer_audit`; ETL Dots→these; Dots routes/UI retired.
 
 **Data** (one Drizzle migration + importer):
 1. `ALTER TABLE agents ADD COLUMN research_allowed boolean, memory_allowed boolean, learning_container_id text, skill_delivery_enabled boolean NOT NULL DEFAULT false, default_space_id text REFERENCES spaces(id)`; `CREATE TABLE spaces/agent_spaces/computers/computer_audit` (list in `server/drizzle.config.ts`).
-2. Importer `scripts/import-dots.ts` (one-shot): read SQLite `dots`+`dot_spaces`+`computer_permissions` (+`mcp_connections`→vault encrypt, `thread_bindings`→`threads`); epoch-ms→timestamptz, int→bool, `spaceId∈spaceIds` check, `validateLearningSettings`; `instructions>1000` → truncate+flag file for owner review (see §6 R3).
+2. Importer `scripts/import-dots.ts` (one-shot): read SQLite `dots`+`dot_spaces`+`computer_permissions` (+`mcp_connections`→vault encrypt, `thread_bindings`→`threads`); epoch-ms→timestamptz, int→bool, `spaceId∈spaceIds` check, `validateLearningSettings`; `instructions>2000` → truncate+flag file for owner review (see §6 R3).
 3. `type` mapping: every imported Dot → `agents.type='built_in'`, `configuration={systemPrompt: instructions}` (mirrors `profile-store.ts:490`); `agent_profiles.visibility='private'`, `ownerUserId`=bootstrap user.
 
 **Routes** (server, additive then retire):
@@ -159,7 +159,7 @@ permissions jsonb)`, `computer_audit`; ETL Dots→these; Dots routes/UI retired.
 |---|---|---|---|
 | R1 | Plaintext tokens | `mcp_connections.token` in clear (`connection-store.ts:14`) | Encrypt→`credentials` before any surface reads it; audit importer output |
 | R2 | Single-owner → multi-user | `ownerId` string, no users table; ORBO rows are per-person | Map to bootstrap user; Dots start `private`; computer access = owner-only until shared |
-| R3 | Instructions truncation | 2000 vs `roleDescription` 1000 | Owner decision: extend column to 2000 vs truncate+review file; do not silently cut |
+| R3 | Instructions truncation | 2000 vs `roleDescription` 2000 (bounds match) | No truncation needed; keep the guard — do not silently cut |
 | R4 | Timestamp/bool conversion | epoch-ms INTEGER, int-bool vs timestamptz/boolean | One importer conversion; spot-check DST/UTC + `ORDER BY createdAt` parity |
 | R5 | Threads vs channels | `thread_bindings` vs `channels`+`intelligence_channel_mappings` (01 §8.1) | Import to `threads`; channels stay team surface; needs owner sign-off before chat port |
 | R6 | Snapshot churn | Dots copy touches the same roster/profile snapshots mid Bot→Agent rename (C1) | Sequence: Bot UI copy lands first; Dots strings map directly to final copy in one PR |

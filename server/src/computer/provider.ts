@@ -67,9 +67,9 @@ export function describeComputerIsolation(
 
   return {
     isolation: "one shared computer",
-    note: "No supervisor is configured, so every Bot uses the same browser. Sessions, files and logins are shared between them. Set COMPUTER_SUPERVISOR_URL to give each Bot its own.",
+    note: "No supervisor is configured, so every Bot uses the same browser. Sessions, files and logins are shared between them. Set ORBO_COMPUTER_SUPERVISOR_URL to give each Bot its own.",
     warning:
-      "Every Bot shares one browser. Set COMPUTER_SUPERVISOR_URL for a computer each.",
+      "Every Bot shares one browser. Set ORBO_COMPUTER_SUPERVISOR_URL for a computer each.",
   };
 }
 

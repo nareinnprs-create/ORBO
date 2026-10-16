@@ -17,8 +17,8 @@ const baseEnvironment = {
   INTELLIGENCE_GATEWAY_WS_URL: "ws://localhost:7103",
   INTELLIGENCE_API_KEY: "tenant-api-key",
   COPILOTKIT_LICENSE_TOKEN: "license-token",
-  MANAGED_AGENT_AG_UI_URL: " http://localhost:4200/ag-ui ",
-  MANAGED_AGENT_TOKEN: "managed-agent-token",
+  ORBO_MANAGED_AGENT_AG_UI_URL: " http://localhost:4200/ag-ui ",
+  ORBO_MANAGED_AGENT_TOKEN: "managed-agent-token",
 };
 
 /**
@@ -89,8 +89,9 @@ describe("deployment configuration", () => {
       INTELLIGENCE_API_URL: baseEnvironment.INTELLIGENCE_API_URL,
       INTELLIGENCE_GATEWAY_WS_URL: baseEnvironment.INTELLIGENCE_GATEWAY_WS_URL,
       INTELLIGENCE_API_KEY: baseEnvironment.INTELLIGENCE_API_KEY,
-      MANAGED_AGENT_AG_UI_URL: baseEnvironment.MANAGED_AGENT_AG_UI_URL,
-      MANAGED_AGENT_TOKEN: baseEnvironment.MANAGED_AGENT_TOKEN,
+      ORBO_MANAGED_AGENT_AG_UI_URL:
+        baseEnvironment.ORBO_MANAGED_AGENT_AG_UI_URL,
+      ORBO_MANAGED_AGENT_TOKEN: baseEnvironment.ORBO_MANAGED_AGENT_TOKEN,
       // Explicit, because no provider means every visitor is the administrator and a deployment has
       // to say it meant that. See single-user.test.ts.
       ORBO_SINGLE_USER: "true",
@@ -153,8 +154,9 @@ describe("deployment configuration", () => {
       loadConfig({
         DATABASE_URL: baseEnvironment.DATABASE_URL,
         KEY_ENCRYPTION_KEY: baseEnvironment.KEY_ENCRYPTION_KEY,
-        MANAGED_AGENT_AG_UI_URL: baseEnvironment.MANAGED_AGENT_AG_UI_URL,
-        MANAGED_AGENT_TOKEN: baseEnvironment.MANAGED_AGENT_TOKEN,
+        ORBO_MANAGED_AGENT_AG_UI_URL:
+          baseEnvironment.ORBO_MANAGED_AGENT_AG_UI_URL,
+        ORBO_MANAGED_AGENT_TOKEN: baseEnvironment.ORBO_MANAGED_AGENT_TOKEN,
       }),
     ).toThrow("ORBO Intelligence is required and is not configured");
   });
@@ -175,8 +177,8 @@ describe("deployment configuration", () => {
     const environment: Record<string, string | undefined> = {
       ...baseEnvironment,
     };
-    delete environment.MANAGED_AGENT_AG_UI_URL;
-    delete environment.MANAGED_AGENT_TOKEN;
+    delete environment.ORBO_MANAGED_AGENT_AG_UI_URL;
+    delete environment.ORBO_MANAGED_AGENT_TOKEN;
 
     expect(loadConfig(environment).managedAgent).toBeUndefined();
   });
@@ -185,10 +187,10 @@ describe("deployment configuration", () => {
     const environment: Record<string, string | undefined> = {
       ...baseEnvironment,
     };
-    delete environment.MANAGED_AGENT_TOKEN;
+    delete environment.ORBO_MANAGED_AGENT_TOKEN;
 
     expect(() => loadConfig(environment)).toThrow(
-      "MANAGED_AGENT_TOKEN must be set when MANAGED_AGENT_AG_UI_URL is set",
+      "ORBO_MANAGED_AGENT_TOKEN must be set when ORBO_MANAGED_AGENT_AG_UI_URL is set",
     );
   });
 
@@ -196,18 +198,18 @@ describe("deployment configuration", () => {
     const environment: Record<string, string | undefined> = {
       ...baseEnvironment,
     };
-    delete environment.MANAGED_AGENT_AG_UI_URL;
+    delete environment.ORBO_MANAGED_AGENT_AG_UI_URL;
 
     expect(loadConfig(environment).managedAgent).toBeUndefined();
   });
 
-  test("refuses a non-HTTP MANAGED_AGENT_AG_UI_URL", () => {
+  test("refuses a non-HTTP ORBO_MANAGED_AGENT_AG_UI_URL", () => {
     expect(() =>
       loadConfig({
         ...baseEnvironment,
-        MANAGED_AGENT_AG_UI_URL: "ftp://localhost:4200/ag-ui",
+        ORBO_MANAGED_AGENT_AG_UI_URL: "ftp://localhost:4200/ag-ui",
       }),
-    ).toThrow("MANAGED_AGENT_AG_UI_URL");
+    ).toThrow("ORBO_MANAGED_AGENT_AG_UI_URL");
   });
 
   test("requires a base64-encoded 32-byte key-encryption key", () => {
@@ -636,11 +638,11 @@ describe("deployment configuration", () => {
 
   test("takes a timeout in milliseconds, and zero as switching it off", () => {
     expect(
-      loadConfig({ ...baseEnvironment, AGENT_STALL_TIMEOUT_MS: "120000" })
+      loadConfig({ ...baseEnvironment, ORBO_AGENT_STALL_TIMEOUT_MS: "120000" })
         .agentStallTimeoutMs,
     ).toBe(120_000);
     expect(
-      loadConfig({ ...baseEnvironment, AGENT_STALL_TIMEOUT_MS: "0" })
+      loadConfig({ ...baseEnvironment, ORBO_AGENT_STALL_TIMEOUT_MS: "0" })
         .agentStallTimeoutMs,
     ).toBe(0);
   });
@@ -648,11 +650,11 @@ describe("deployment configuration", () => {
   // Refused rather than defaulted, for the same reason a malformed policy is: an operator who meant
   // to write a boundary and mistyped it would otherwise get a deployment enforcing something else.
   test.each(["two minutes", "-1", "1.5"])(
-    "refuses to start on AGENT_STALL_TIMEOUT_MS=%p",
+    "refuses to start on ORBO_AGENT_STALL_TIMEOUT_MS=%p",
     (value) => {
       expect(() =>
-        loadConfig({ ...baseEnvironment, AGENT_STALL_TIMEOUT_MS: value }),
-      ).toThrow("AGENT_STALL_TIMEOUT_MS");
+        loadConfig({ ...baseEnvironment, ORBO_AGENT_STALL_TIMEOUT_MS: value }),
+      ).toThrow("ORBO_AGENT_STALL_TIMEOUT_MS");
     },
   );
 
@@ -660,23 +662,23 @@ describe("deployment configuration", () => {
    * AND THE EMPTY STRING IS NOT ONE OF THEM, which is why it is not a row of the list above.
    *
    * It rode along in that `test.each` behind an `if` that returned early, so the generated case was
-   * named "refuses to start on AGENT_STALL_TIMEOUT_MS=\"\"" over a body asserting that it STARTS.
+   * named "refuses to start on ORBO_AGENT_STALL_TIMEOUT_MS=\"\"" over a body asserting that it STARTS.
    * A reader picking a failure out of a run would have been told the opposite of what was checked,
    * and either half could have been changed to agree with the other — a config that began refusing
    * an empty value would have gone on passing under a name that said it should.
    *
    * OFF RATHER THAN REFUSED IS THE BEHAVIOUR, and it is the same one `PORT` has for the same
    * reason: `optional` trims and coerces empty to undefined, so an unset variable declared in a
-   * compose file or left as `AGENT_STALL_TIMEOUT_MS=` in a `.env` arrives here as absent, which it
+   * compose file or left as `ORBO_AGENT_STALL_TIMEOUT_MS=` in a `.env` arrives here as absent, which it
    * is. Refusing it would fail a deployment for writing down the default.
    */
-  test("reads an empty AGENT_STALL_TIMEOUT_MS as the absent one, and starts", () => {
+  test("reads an empty ORBO_AGENT_STALL_TIMEOUT_MS as the absent one, and starts", () => {
     expect(
-      loadConfig({ ...baseEnvironment, AGENT_STALL_TIMEOUT_MS: "" })
+      loadConfig({ ...baseEnvironment, ORBO_AGENT_STALL_TIMEOUT_MS: "" })
         .agentStallTimeoutMs,
     ).toBe(0);
     expect(
-      loadConfig({ ...baseEnvironment, AGENT_STALL_TIMEOUT_MS: "   " })
+      loadConfig({ ...baseEnvironment, ORBO_AGENT_STALL_TIMEOUT_MS: "   " })
         .agentStallTimeoutMs,
     ).toBe(0);
   });
@@ -737,9 +739,9 @@ describe("deployment configuration", () => {
   test("configures Docker as the per-Bot computer provider", () => {
     const config = loadConfig({
       ...baseEnvironment,
-      COMPUTER_SUPERVISOR_URL: "http://localhost:4000",
+      ORBO_COMPUTER_SUPERVISOR_URL: "http://localhost:4000",
       SUPERVISOR_TOKEN: "supervisor-token",
-      COMPUTER_TOKEN: "computer-token",
+      ORBO_COMPUTER_TOKEN: "computer-token",
     });
 
     expect(config.computer?.provider).toBe("docker");
@@ -755,8 +757,8 @@ describe("deployment configuration", () => {
   test("configures one shared computer", () => {
     const config = loadConfig({
       ...baseEnvironment,
-      AGENT_COMPUTER_URL: "http://localhost:4100",
-      COMPUTER_TOKEN: "computer-token",
+      ORBO_AGENT_COMPUTER_URL: "http://localhost:4100",
+      ORBO_COMPUTER_TOKEN: "computer-token",
     });
 
     expect(config.computer?.provider).toBe("shared");
@@ -772,7 +774,7 @@ describe("deployment configuration", () => {
     expect(loadConfig(baseEnvironment).computer).toBeUndefined();
   });
 
-  // `.env.example` used to ship AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS=true, and copying that file is the
+  // `.env.example` used to ship ORBO_AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS=true, and copying that file is the
   // ordinary way a deployment gets its environment. So the way a hosted deployment ends up reaching
   // its own network is not forgetting to set something, it is inheriting something. Refused in
   // production for the same reason the example encryption key is: convenient locally, and an opening
@@ -781,10 +783,10 @@ describe("deployment configuration", () => {
     expect(() =>
       loadConfig({
         ...productionEnvironment,
-        AGENT_COMPUTER_URL: "http://localhost:4100",
-        AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS: "true",
+        ORBO_AGENT_COMPUTER_URL: "http://localhost:4100",
+        ORBO_AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS: "true",
       }),
-    ).toThrow("AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS");
+    ).toThrow("ORBO_AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS");
   });
 
   // Both sides of the comparison come out of the same env file, and the switch is read through
@@ -795,10 +797,10 @@ describe("deployment configuration", () => {
       loadConfig({
         ...productionEnvironment,
         NODE_ENV: "production ",
-        AGENT_COMPUTER_URL: "http://localhost:4100",
-        AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS: "true",
+        ORBO_AGENT_COMPUTER_URL: "http://localhost:4100",
+        ORBO_AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS: "true",
       }),
-    ).toThrow("AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS");
+    ).toThrow("ORBO_AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS");
   });
 
   // The refusal has to name the way out, because the person reading it at boot is looking at a file
@@ -807,8 +809,8 @@ describe("deployment configuration", () => {
     const attempt = () =>
       loadConfig({
         ...productionEnvironment,
-        AGENT_COMPUTER_URL: "http://localhost:4100",
-        AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS: "true",
+        ORBO_AGENT_COMPUTER_URL: "http://localhost:4100",
+        ORBO_AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS: "true",
       });
 
     expect(attempt).toThrow("local development only");
@@ -820,8 +822,8 @@ describe("deployment configuration", () => {
   test("starts in production when nothing asked for private hosts", () => {
     const config = loadConfig({
       ...productionEnvironment,
-      AGENT_COMPUTER_URL: "http://localhost:4100",
-      COMPUTER_TOKEN: "computer-token",
+      ORBO_AGENT_COMPUTER_URL: "http://localhost:4100",
+      ORBO_COMPUTER_TOKEN: "computer-token",
     });
 
     expect(config.computer?.allowPrivateHosts).toBe(false);
@@ -839,8 +841,8 @@ describe("deployment configuration", () => {
         const config = loadConfig({
           ...baseEnvironment,
           ...(nodeEnv ? { NODE_ENV: nodeEnv } : {}),
-          AGENT_COMPUTER_URL: "http://localhost:4100",
-          AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS: "true",
+          ORBO_AGENT_COMPUTER_URL: "http://localhost:4100",
+          ORBO_AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS: "true",
         });
 
         expect(config.computer?.allowPrivateHosts).toBe(true);
@@ -848,7 +850,9 @@ describe("deployment configuration", () => {
         // warns on its own account first.
         const warning = consoleWarn.mock.calls
           .map(([first]) => String(first))
-          .find((line) => line.includes("AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS"));
+          .find((line) =>
+            line.includes("ORBO_AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS"),
+          );
 
         expect(warning).toBeDefined();
         expect(warning).toContain("local development only");
@@ -872,7 +876,7 @@ describe("deployment configuration", () => {
     const live = example
       .split("\n")
       .filter((line) =>
-        /^\s*AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS\s*=/.test(line),
+        /^\s*ORBO_AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS\s*=/.test(line),
       );
 
     expect(live).toEqual([]);
@@ -881,12 +885,12 @@ describe("deployment configuration", () => {
   // Anything that is not the exact opt-in is not an opt-in, so it is not the thing being refused
   // either. A deployment that wrote something else has private hosts off and starts.
   test.each(["false", "1", "yes", ""])(
-    "starts in production on AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS=%p",
+    "starts in production on ORBO_AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS=%p",
     (value) => {
       const config = loadConfig({
         ...productionEnvironment,
-        AGENT_COMPUTER_URL: "http://localhost:4100",
-        AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS: value,
+        ORBO_AGENT_COMPUTER_URL: "http://localhost:4100",
+        ORBO_AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS: value,
       });
 
       expect(config.computer?.allowPrivateHosts).toBe(false);
@@ -894,8 +898,8 @@ describe("deployment configuration", () => {
   );
 
   test.each([
-    ["Docker", "COMPUTER_SUPERVISOR_URL"],
-    ["shared", "AGENT_COMPUTER_URL"],
+    ["Docker", "ORBO_COMPUTER_SUPERVISOR_URL"],
+    ["shared", "ORBO_AGENT_COMPUTER_URL"],
   ] as const)("refuses an invalid %s computer provider URL", (_, urlName) => {
     expect(() =>
       loadConfig({
@@ -995,7 +999,7 @@ describe("generated interfaces", () => {
  * list somebody believed was working, and finding out at the first registration that silently never
  * matches is worse than being told at boot.
  */
-describe("AGENT_ENDPOINT_ALLOWED_HOSTS", () => {
+describe("ORBO_AGENT_ENDPOINT_ALLOWED_HOSTS", () => {
   // The suite's own base, so this describes only its subject rather than re-deriving a whole
   // deployment and failing on whichever requirement it forgot.
   const base = () => ({ ...baseEnvironment });
@@ -1007,7 +1011,7 @@ describe("AGENT_ENDPOINT_ALLOWED_HOSTS", () => {
   test("a comma-separated list is parsed, lower-cased and trimmed", () => {
     const hosts = loadConfig({
       ...base(),
-      AGENT_ENDPOINT_ALLOWED_HOSTS: " Agents.Internal , 10.0.0.42:9000 ",
+      ORBO_AGENT_ENDPOINT_ALLOWED_HOSTS: " Agents.Internal , 10.0.0.42:9000 ",
     }).agentEndpointAllowedHosts;
     expect([...hosts].sort()).toEqual(["10.0.0.42:9000", "agents.internal"]);
   });
@@ -1017,7 +1021,7 @@ describe("AGENT_ENDPOINT_ALLOWED_HOSTS", () => {
     // as the operator wrote it was a line that silently never matched.
     const hosts = loadConfig({
       ...base(),
-      AGENT_ENDPOINT_ALLOWED_HOSTS:
+      ORBO_AGENT_ENDPOINT_ALLOWED_HOSTS:
         "[0:0:0:0:0:0:0:1]:8443, [FE80::1], [::1:8443]",
     }).agentEndpointAllowedHosts;
     expect([...hosts].sort()).toEqual([
@@ -1031,11 +1035,11 @@ describe("AGENT_ENDPOINT_ALLOWED_HOSTS", () => {
     expect(() =>
       loadConfig({
         ...base(),
-        AGENT_ENDPOINT_ALLOWED_HOSTS: "[not-an-address]",
+        ORBO_AGENT_ENDPOINT_ALLOWED_HOSTS: "[not-an-address]",
       }),
     ).toThrow(/must be a host/);
     expect(() =>
-      loadConfig({ ...base(), AGENT_ENDPOINT_ALLOWED_HOSTS: "[::1]junk" }),
+      loadConfig({ ...base(), ORBO_AGENT_ENDPOINT_ALLOWED_HOSTS: "[::1]junk" }),
     ).toThrow(/must be a host/);
   });
 
@@ -1043,7 +1047,7 @@ describe("AGENT_ENDPOINT_ALLOWED_HOSTS", () => {
     expect(() =>
       loadConfig({
         ...base(),
-        AGENT_ENDPOINT_ALLOWED_HOSTS: "http://agents.internal/ag-ui",
+        ORBO_AGENT_ENDPOINT_ALLOWED_HOSTS: "http://agents.internal/ag-ui",
       }),
     ).toThrow(/must be a host/);
   });
@@ -1052,7 +1056,10 @@ describe("AGENT_ENDPOINT_ALLOWED_HOSTS", () => {
     // A pattern that widens by accident is the usual way a host check fails, so there are no
     // patterns to get wrong.
     expect(() =>
-      loadConfig({ ...base(), AGENT_ENDPOINT_ALLOWED_HOSTS: "*.internal" }),
+      loadConfig({
+        ...base(),
+        ORBO_AGENT_ENDPOINT_ALLOWED_HOSTS: "*.internal",
+      }),
     ).toThrow(/Patterns are not accepted/);
   });
 });

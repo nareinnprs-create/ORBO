@@ -46,7 +46,7 @@ setting() {
 
 APP_PORT="$(setting APP_PORT 3010)"
 SERVER_PORT="$(setting SERVER_PORT 3001)"
-COMPUTER_PORT="$(setting COMPUTER_PORT 4100)"
+ORBO_COMPUTER_PORT="$(setting ORBO_COMPUTER_PORT 4100)"
 BOT_PORT="$(setting BOT_PORT 4200)"
 LANGGRAPH_PORT="$(setting LANGGRAPH_PORT 4201)"
 BOT_PROVIDER="$(setting BOT_PROVIDER openai | tr '[:upper:]' '[:lower:]' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
@@ -57,14 +57,14 @@ SUPERVISOR_PORT="$(setting SUPERVISOR_PORT 4500)"
 ONE_COMPUTER_EACH="$(setting ORBO_ONE_COMPUTER_EACH true)"
 export APP_PORT SERVER_PORT
 SUPERVISOR_TOKEN="$(setting SUPERVISOR_TOKEN orbo-dev-supervisor-token)"
-COMPUTER_TOKEN="$(setting COMPUTER_TOKEN orbo-dev-computer-token)"
-# A fixed default is fine here, unlike `AGENT_TOOL_TOKEN` below, but not because of where the server
+ORBO_COMPUTER_TOKEN="$(setting ORBO_COMPUTER_TOKEN orbo-dev-computer-token)"
+# A fixed default is fine here, unlike `ORBO_AGENT_TOOL_TOKEN` below, but not because of where the server
 # listens — it binds no hostname, so this port is reachable from the network like any other. It is
 # fine because this is a dev-only default on a machine's own dev stack, and the endpoint it guards
 # accepts nothing but an unguessable `routine_run_<uuid>` id: the server re-reads the routine, the
 # owner and the channel from its own tables rather than trusting anything else the caller says, so
 # the fixed default gates nothing sensitive here. That is also why it is generated fresh and
-# persisted for AGENT_TOOL_TOKEN (see the SECRETS_ROTATED block) but not for this one — production
+# persisted for ORBO_AGENT_TOOL_TOKEN (see the SECRETS_ROTATED block) but not for this one — production
 # must set a real WORKER_SHARED_SECRET.
 WORKER_SHARED_SECRET="$(setting WORKER_SHARED_SECRET orbo-dev-worker-secret)"
 
@@ -80,8 +80,8 @@ WORKER_SHARED_SECRET="$(setting WORKER_SHARED_SECRET orbo-dev-worker-secret)"
 # The laptop stack runs agent-langgraph on LANGGRAPH_PORT. The one-container image does not, so
 # this default stays in the script rather than in .env: a `docker run --env-file .env` must not
 # inherit a URL that points at a process the image does not contain.
-MANAGED_AGENT_AG_UI_URL="$(setting MANAGED_AGENT_AG_UI_URL "http://localhost:${LANGGRAPH_PORT}/ag-ui")"
-export MANAGED_AGENT_AG_UI_URL
+ORBO_MANAGED_AGENT_AG_UI_URL="$(setting ORBO_MANAGED_AGENT_AG_UI_URL "http://localhost:${LANGGRAPH_PORT}/ag-ui")"
+export ORBO_MANAGED_AGENT_AG_UI_URL
 
 # Whether this run minted a secret that something already running may not have.
 #
@@ -90,22 +90,22 @@ export MANAGED_AGENT_AG_UI_URL
 # skips work because a service "is already up" has to consult this first.
 SECRETS_ROTATED=false
 
-MANAGED_AGENT_TOKEN="$(setting MANAGED_AGENT_TOKEN "")"
-if [ -z "$MANAGED_AGENT_TOKEN" ]; then
+ORBO_MANAGED_AGENT_TOKEN="$(setting ORBO_MANAGED_AGENT_TOKEN "")"
+if [ -z "$ORBO_MANAGED_AGENT_TOKEN" ]; then
   SECRETS_ROTATED=true
-  MANAGED_AGENT_TOKEN="$(openssl rand -base64 32)"
-  if grep -qE '^MANAGED_AGENT_TOKEN=' "$ROOT/.env"; then
+  ORBO_MANAGED_AGENT_TOKEN="$(openssl rand -base64 32)"
+  if grep -qE '^ORBO_MANAGED_AGENT_TOKEN=' "$ROOT/.env"; then
     # A present but empty line, which is what .env.example ships.
     tmp="$(mktemp)"
-    grep -vE '^MANAGED_AGENT_TOKEN=' "$ROOT/.env" > "$tmp"
-    printf 'MANAGED_AGENT_TOKEN=%s\n' "$MANAGED_AGENT_TOKEN" >> "$tmp"
+    grep -vE '^ORBO_MANAGED_AGENT_TOKEN=' "$ROOT/.env" > "$tmp"
+    printf 'ORBO_MANAGED_AGENT_TOKEN=%s\n' "$ORBO_MANAGED_AGENT_TOKEN" >> "$tmp"
     mv "$tmp" "$ROOT/.env"
   else
-    printf '\nMANAGED_AGENT_TOKEN=%s\n' "$MANAGED_AGENT_TOKEN" >> "$ROOT/.env"
+    printf '\nORBO_MANAGED_AGENT_TOKEN=%s\n' "$ORBO_MANAGED_AGENT_TOKEN" >> "$ROOT/.env"
   fi
-  printf '\033[2m%s\033[0m\n' "Generated MANAGED_AGENT_TOKEN and wrote it to .env."
+  printf '\033[2m%s\033[0m\n' "Generated ORBO_MANAGED_AGENT_TOKEN and wrote it to .env."
 fi
-export MANAGED_AGENT_TOKEN
+export ORBO_MANAGED_AGENT_TOKEN
 
 # The secret a framework Bot presents when it calls a tool back through this server. The other
 # direction of the pair above: that one is the server proving itself to the Bot, this one is the Bot
@@ -118,22 +118,22 @@ export MANAGED_AGENT_TOKEN
 # on the grant screen, and get "This Bot has no credential for calling tools back through its
 # deployment" on every single call, with no audit row, because the call never reached the server to
 # be recorded.
-AGENT_TOOL_TOKEN="$(setting AGENT_TOOL_TOKEN "")"
-if [ -z "$AGENT_TOOL_TOKEN" ]; then
+ORBO_AGENT_TOOL_TOKEN="$(setting ORBO_AGENT_TOOL_TOKEN "")"
+if [ -z "$ORBO_AGENT_TOOL_TOKEN" ]; then
   SECRETS_ROTATED=true
-  AGENT_TOOL_TOKEN="$(openssl rand -base64 32)"
-  if grep -qE '^AGENT_TOOL_TOKEN=' "$ROOT/.env"; then
+  ORBO_AGENT_TOOL_TOKEN="$(openssl rand -base64 32)"
+  if grep -qE '^ORBO_AGENT_TOOL_TOKEN=' "$ROOT/.env"; then
     # A present but empty line, which is what .env.example ships.
     tmp="$(mktemp)"
-    grep -vE '^AGENT_TOOL_TOKEN=' "$ROOT/.env" > "$tmp"
-    printf 'AGENT_TOOL_TOKEN=%s\n' "$AGENT_TOOL_TOKEN" >> "$tmp"
+    grep -vE '^ORBO_AGENT_TOOL_TOKEN=' "$ROOT/.env" > "$tmp"
+    printf 'ORBO_AGENT_TOOL_TOKEN=%s\n' "$ORBO_AGENT_TOOL_TOKEN" >> "$tmp"
     mv "$tmp" "$ROOT/.env"
   else
-    printf '\nAGENT_TOOL_TOKEN=%s\n' "$AGENT_TOOL_TOKEN" >> "$ROOT/.env"
+    printf '\nORBO_AGENT_TOOL_TOKEN=%s\n' "$ORBO_AGENT_TOOL_TOKEN" >> "$ROOT/.env"
   fi
-  printf '\033[2m%s\033[0m\n' "Generated AGENT_TOOL_TOKEN and wrote it to .env."
+  printf '\033[2m%s\033[0m\n' "Generated ORBO_AGENT_TOOL_TOKEN and wrote it to .env."
 fi
-export AGENT_TOOL_TOKEN
+export ORBO_AGENT_TOOL_TOKEN
 
 green() { printf '\033[32m%s\033[0m\n' "$1"; }
 red()   { printf '\033[31m%s\033[0m\n' "$1"; }
@@ -233,7 +233,7 @@ fi
 # matches the deployment's. A skipped service is never handed to `docker compose up`, so compose
 # never compares its configuration and never recreates it.
 #
-# Which is how a Bot ends up holding a secret this deployment no longer accepts. `AGENT_TOOL_TOKEN`
+# Which is how a Bot ends up holding a secret this deployment no longer accepts. `ORBO_AGENT_TOOL_TOKEN`
 # is generated above and written to .env; if the container was answering, it kept the previous one,
 # and every tool call it made was refused at the door. It returns nothing to its own model, and the
 # model tells the person there were no results — a false negative delivered as an answer.
@@ -251,8 +251,8 @@ else
 fi
 SERVICES+=(agent-langgraph)
 
-export SUPERVISOR_TOKEN COMPUTER_TOKEN WORKER_SHARED_SECRET
-export COMPUTER_PORT BOT_PORT LANGGRAPH_PORT SUPERVISOR_PORT
+export SUPERVISOR_TOKEN ORBO_COMPUTER_TOKEN WORKER_SHARED_SECRET
+export ORBO_COMPUTER_PORT BOT_PORT LANGGRAPH_PORT SUPERVISOR_PORT
 # Quiet progress, because stdout is /dev/null while stderr is still the terminal. Seeing that
 # terminal, newer Compose (v5 and later) picks its interactive build display and tries to draw it on
 # stdout, and stops with "failed to get console: provided file is not a console". An environment
@@ -264,7 +264,7 @@ if ! docker compose run --rm --build migrate >"$LOGS/migrate.log" 2>&1; then
   red "  Log: $LOGS/migrate.log"
   exit 1
 fi
-wait_for "http://localhost:$COMPUTER_PORT/health" "agent-computer"
+wait_for "http://localhost:$ORBO_COMPUTER_PORT/health" "agent-computer"
 if [ "$BOT_PROVIDER" != "anthropic" ]; then
   wait_for "http://localhost:$BOT_PORT/health" "agent-bot"
 fi
@@ -289,7 +289,7 @@ green "  coworker tables migrated"
 # pipeline, and `set -e` then aborts the assignment before the check below could say why. The same
 # grep survives inside `setting()` only because `local v="$(...)"` takes `local`'s own exit status
 # and masks it. So: report what was resolved, and do not re-read the file.
-green "  managed coworker endpoint: $MANAGED_AGENT_AG_UI_URL"
+green "  managed coworker endpoint: $ORBO_MANAGED_AGENT_AG_UI_URL"
 
 info "2/4  Server"
 require_free_or_ours "$SERVER_PORT" server
@@ -299,7 +299,7 @@ require_free_or_ours "$SERVER_PORT" server
 #
 # Skipping it on "already answering" is the same mistake the Bot containers had: answering proves the
 # process is alive, not that it agrees with the deployment. A server holding the previous
-# `AGENT_TOOL_TOKEN` refuses every callback its own Bots make, which reaches a person as "no results"
+# `ORBO_AGENT_TOOL_TOKEN` refuses every callback its own Bots make, which reaches a person as "no results"
 # rather than as an error.
 if [ "$SECRETS_ROTATED" = "true" ]; then
   info "  a secret was generated this run, so the server is restarted to pick it up"
@@ -342,9 +342,9 @@ fi
 if ! identifies_as_orbo "$SERVER_PORT" server; then
   if [ "$ONE_COMPUTER_EACH" = "true" ]; then
     (cd server && PORT="$SERVER_PORT" \
-      COMPUTER_SUPERVISOR_URL="http://localhost:$SUPERVISOR_PORT" \
+      ORBO_COMPUTER_SUPERVISOR_URL="http://localhost:$SUPERVISOR_PORT" \
       SUPERVISOR_TOKEN="$SUPERVISOR_TOKEN" \
-      COMPUTER_TOKEN="$COMPUTER_TOKEN" \
+      ORBO_COMPUTER_TOKEN="$ORBO_COMPUTER_TOKEN" \
       WORKER_SHARED_SECRET="$WORKER_SHARED_SECRET" \
       bun --env-file=../.env src/production-entry.ts >"$LOGS/server.log" 2>&1 &)
   else
@@ -367,7 +367,7 @@ wait_for_orbo "$SERVER_PORT" server
 #
 # Launched from `$ROOT` with `bun worker/src/index.ts`, not `cd worker && bun src/index.ts`: on a
 # Linux host, container processes are visible to `pgrep` too, and `server/Dockerfile`,
-# `agent-computer/Dockerfile`, and `supervisor/Dockerfile` all run `bun src/index.ts` as their argv.
+# `agent-orbo-computer/Dockerfile`, and `supervisor/Dockerfile` all run `bun src/index.ts` as their argv.
 # The old pattern matched those containers, the guard false-positived, and the worker silently never
 # started. `bun worker/src/index.ts` matches nothing else in the repo. Running from `$ROOT` is safe:
 # relative imports resolve from the importing file, not from the process's cwd.

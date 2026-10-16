@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
-import { createContext, useContext, useMemo, type ReactNode } from "react";
+import { createContext, useMemo, type ReactNode } from "react";
 import { useColorScheme } from "react-native";
 
 // QueryClient mirrors the web-app defaults from app/src/query-client.ts
@@ -55,10 +55,6 @@ const darkTheme: AppTheme = {
 };
 
 const ThemeContext = createContext<AppTheme>(lightTheme);
-
-export function useAppTheme(): AppTheme {
-  return useContext(ThemeContext);
-}
 
 function ThemeProvider({ children }: { children: ReactNode }) {
   const systemScheme = useColorScheme();

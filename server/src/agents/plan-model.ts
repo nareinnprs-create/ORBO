@@ -46,7 +46,7 @@ export function planModelForEnvironment(
     );
   }
   const address = environment.PICKED_HARNESS_URL?.trim();
-  const token = environment.MANAGED_AGENT_TOKEN?.trim();
+  const token = environment.ORBO_MANAGED_AGENT_TOKEN?.trim();
   if (!address || !token)
     throw new Error(
       "The selected plan's owned harness endpoint and token are missing.",

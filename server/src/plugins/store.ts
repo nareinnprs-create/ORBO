@@ -785,14 +785,6 @@ type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
  */
 export const toolNameFor = (ref: string) => `mcp__${ref.replace("/", "__")}`;
 
-export function refFromToolName(toolName: string): string | null {
-  if (!toolName.startsWith("mcp__")) return null;
-  const rest = toolName.slice("mcp__".length);
-  const separator = rest.indexOf("__");
-  if (separator <= 0) return null;
-  return `${rest.slice(0, separator)}/${rest.slice(separator + 2)}`;
-}
-
 /**
  * Advertised tool names this deployment's write list does not name, where that list is the whole
  * barrier.

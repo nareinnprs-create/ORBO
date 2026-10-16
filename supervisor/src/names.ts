@@ -28,11 +28,11 @@ const ALLOWED = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 export const DEFAULT_NAMESPACE = "orbo";
 
 export const NAMESPACE = (() => {
-  const configured = process.env.COMPUTER_NAMESPACE?.trim();
+  const configured = process.env.ORBO_COMPUTER_NAMESPACE?.trim();
   if (!configured) return DEFAULT_NAMESPACE;
   if (!ALLOWED.test(configured) || configured.length > MAX_BOT_ID) {
     throw new Error(
-      "COMPUTER_NAMESPACE may contain only letters, digits, hyphen and underscore, and must start with a letter or digit.",
+      "ORBO_COMPUTER_NAMESPACE may contain only letters, digits, hyphen and underscore, and must start with a letter or digit.",
     );
   }
   return configured;

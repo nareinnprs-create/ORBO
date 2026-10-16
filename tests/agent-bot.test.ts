@@ -10,14 +10,14 @@ import { join } from "node:path";
 
 async function startBot(environment: Record<string, string>) {
   const proc = Bun.spawn(
-    ["bun", join(import.meta.dir, "..", "agent-bot", "src", "index.ts")],
+    ["bun", join(import.meta.dir, "..", "agent-orbo-bot", "src", "index.ts")],
     {
       // Every variable the repository's `.env` could inject is named explicitly: bun loads that
       // file into the child, and a leaked token or key would let a configuration under test pass
       // a check it is supposed to fail.
       env: {
         PATH: process.env.PATH ?? "",
-        MANAGED_AGENT_TOKEN: "",
+        ORBO_MANAGED_AGENT_TOKEN: "",
         OPENAI_API_KEY: "",
         ...environment,
       },
@@ -39,7 +39,7 @@ test("agent-bot refuses to start when the model key is empty", async () => {
   // Compose passes `${OPENAI_API_KEY:-}`, so an unset key arrives as an empty
   // string rather than missing altogether.
   const { exitCode, stderr } = await startBot({
-    MANAGED_AGENT_TOKEN: "test-token",
+    ORBO_MANAGED_AGENT_TOKEN: "test-token",
     OPENAI_API_KEY: "",
   });
 
@@ -53,13 +53,13 @@ test("agent-bot still refuses to start without its server token", async () => {
   });
 
   expect(exitCode).toBe(1);
-  expect(stderr).toContain("MANAGED_AGENT_TOKEN is not set");
+  expect(stderr).toContain("ORBO_MANAGED_AGENT_TOKEN is not set");
 });
 
 test("agent-bot refuses a model it cannot drive however the name is spaced", async () => {
   for (const model of ["gpt-5.6-terra", " gpt-5.6-terra", "\tgpt-6 "]) {
     const { exitCode, stderr } = await startBot({
-      MANAGED_AGENT_TOKEN: "test-token",
+      ORBO_MANAGED_AGENT_TOKEN: "test-token",
       OPENAI_API_KEY: "sk-test",
       BOT_MODEL: model,
     });

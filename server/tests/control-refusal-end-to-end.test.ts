@@ -28,7 +28,7 @@ afterEach(() => {
   for (const server of servers.splice(0)) server.stop(true);
 });
 
-/** The computer, refusing exactly the way `agent-computer/src/index.ts` does. */
+/** The computer, refusing exactly the way `agent-orbo-computer/src/index.ts` does. */
 function computerAnswering(body: unknown, status: number) {
   const server = Bun.serve({
     port: 0,
@@ -139,7 +139,7 @@ describe("a refusal because a person has the wheel", () => {
   });
 
   test("reaches the caller from navigate too, which is the other place the computer refuses", async () => {
-    // The computer marks the takeover on its action path and on navigate (agent-computer/src/index.ts
+    // The computer marks the takeover on its action path and on navigate (agent-orbo-computer/src/index.ts
     // 938 and 721). Navigate does not go through the shared acting helper, so carrying the flag in
     // that helper alone would fix one of the two and leave the other telling a Bot to re-snapshot.
     const { status, body } = await navigate(
