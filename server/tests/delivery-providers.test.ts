@@ -208,7 +208,7 @@ describe("real HTTP provider adapters", () => {
       channelId: "ch1",
       kind: "question",
       requestId: "q1",
-      url: "orbomobile://approvals?channelId=ch1&requestId=q1",
+      url: "orbo://approvals?channelId=ch1&requestId=q1",
     });
     expect(await push.receipt("ticket1")).toEqual({
       status: "failed",

@@ -5,11 +5,9 @@
 > (on disk 2026-10-14 — the "absent" notes in §§2–5/N8/footer below are corrected in place);
 > this doc otherwise treats all other `docs/planning/` files as read-only snapshots taken 2026-10-14.
 > Reconcile against their FINAL versions before cutting Phase 6 work orders.
-> **Reconciliation 2026-10-14:** landed since draft — 27/28 inventories; `packages/ui` scaffold
-> (14 primitives at the time: button/checkbox/dialog/empty/field/input-group/input/item/label/select/separator/skeleton/switch/textarea + tokens — grown to 36 primitives, verified on disk 2026-10-16); `apps/app` Expo placeholder shell;
-> DIYA `diya` seed row in `examples/orbo/agents.yaml`; coverage tripwire + floors in `scripts/test-ci.ts`.
-> Still-open owner gates: threads identity, spaces ownership, route freeze, `packages/ui` RN runtime, brand assets.
-> Wave-1 (verified on disk 2026-10-16): `threads` + `notifications` tables + `0053` migration plus `monitors` table + `0054` migration exist; `roleDescription` 2000 in form (`app/src/lib/agents/form.ts`) + server parser (`server/src/agents/routes.ts`); diya-first rule LANDED (`diya`-first clause in `app/src/lib/agents/default-agent.ts`). Owner gates stay open (reversible per decision).
+> **Reconciliation 2026-10-16:** landed since draft — 27/28 inventories; `packages/ui` 34/34 canonical primitives (`packages/ui/src/` holds 36 component files incl. extras + tokens, verified on disk); `apps/app` Expo placeholder shell (QueryClientProvider + ThemeContext ThemeProvider in root `_layout.tsx`; `eas.json` present; A1 Agents-list screen landed); DIYA `diya` seed row in `examples/orbo/agents.yaml` + `permitted_agents` wiring in `examples/orbo/channels.yaml` + diya-first rule LANDED; coverage tripwire + floors in `scripts/test-ci.ts`.
+> W0 decisions DECIDED per freehand directive (reversible): D1:A D2:A D3:A D4:A D9:A D10:A D12:A D14:A (plus D5:A D6:A D7:A D8:B D11:A D13:A D16:A U1:B). Truly still gated: accounts/domain/certs/legal sign-off, R1 assembly, R2, store submissions, EAS builds.
+> Wave-1 (verified on disk): `threads` + `notifications` tables + `0053` migration plus `monitors` table + `0054` migration exist; `roleDescription` 2000 end-to-end — form (`app/src/lib/agents/form.ts`) + server parser (`server/src/agents/routes.ts`) + model hint (`app/src/lib/agents/proposal.ts`); compose short service keys in `deploy/compose/docker-compose.yml`; `deploy/` layout landed (`deploy/compose/` + `deploy/charts/orbo-diya/`).
 > Phase 6 = PLAN.md §8 item 6: *"Port OpenMuse screens (Documents/Finance/Goals/Activity/Ideas)
 > into the unified IA."*
 
@@ -141,7 +139,7 @@ timestamp/owner mapping, R9 coverage floor). Deltas new or sharpened by 23–26:
 | N6 | 771-line `computer.ts` interlock (26 R9) sharpens 09 R3 | Lease/stop/exec jail + stop-quarantine + receipts is the subtlest tree; clean-room rewrite loses safety | Port with `computer*.test.ts` + `prepare-lease-loss` or not at all; no partial port |
 | N7 | Sample-vs-live branching infects surfaces (26 R10) — new | `workspace.ts`/`service.ts` sample mode seeds mails/events behind the same code paths | Cut sample mode at the route boundary; ORBO fixtures replace seeded mails; demo determinism test |
 | N8 | `27-app` / `28-gmail` missing at draft time — **LANDED 2026-10-14** | P6-08 card inventory and P6-09 Gmail depth (860-line client) were estimated from `23/26` proxies, not the dedicated inventories | Re-verify P6-08/P6-09 UI + send-path line refs against landed `27`/`28` before work orders; server logic proceeds regardless |
-| N9 | Notifications homelessness blocks watches (25 R6, 02 risk #11) sharpens 09 W4 | Watch alerts + task-done fan-out have no resource home; P6-04 slice M6 cannot land | `notifications` table landed via `0053` (verified on disk; reversible per decision) — decide notifications home in W0; until signed watches run quiet (no fan-out) with backoff tests green |
+| N9 | Notifications homelessness blocks watches (25 R6, 02 risk #11) sharpens 09 W4 | Watch alerts + task-done fan-out have no resource home; P6-04 slice M6 cannot land | DECIDED — D9:A (standalone `GET /api/notifications`) per freehand directive (reversible); `notifications` table landed via `0053` (verified on disk); until R1 assembly watches run quiet (no fan-out) with backoff tests green |
 | N10 | pdf-lib/XFA/encrypted + font chain (23 R3–R4) — new supply risk | Third-party native dep; only text/checkbox fill; dropdown/radio inspect as `unsupported`; fill failures surface as font errors | Pin + Phase 9 license scan; preserve verbatim 422s; viewer renders (never fills) unsupported forms |
 
 09 R6 (RN-port stall) and R7 (voice/media) are unchanged but bite P6-02/P6-08
@@ -155,17 +153,17 @@ the per-platform picker contract (24 R1).
 
 ### A. Required before W1 work orders (block tables/API/UI)
 
-1. **Threads vs channels authority** (01 §9 #1) — blocks P6-01 reply/thread binding, P6-05 review linkage, P6-04 alert keys (`threads` + `notifications` tables landed via `0053`, `monitors` via `0054`, verified on disk 2026-10-16; sign-off still open, reversible). Build P6-01 steps 1–4 + P6-05 tables first; defer bindings (same deferral as 16 §5 #4).
-2. **Spaces ownership** (01 §9 #3: flatten vs container) — blocks P6-01 `artifacts` bytes decision (N1) and P6-02/P6-08 viewer homes.
-3. **Notifications home** (02 risk #11) — blocks P6-04 alert fan-out (N9) (`notifications` table landed via `0053`, verified on disk; sign-off still open, reversible).
-4. **C24 route freeze**: finance home (Work artifact vs `work/finance` route, 24 Q1) + viewer routes — blocks P6-08 UI work; server logic proceeds regardless.
-5. **`records` keep-or-retire + `monitors`/`goals`/`ideas` table scope** (26 §5; 01 §8) — blocks P6-07 importer + P6-04 tables.
-6. **27/28 reconciliation sign-off** — confirm P6-08 card list and P6-09 client subset against the landed inventories (N8).
+1. **Threads vs channels authority** (01 §9 #1) — DECIDED D1:A (`channels` team surface + unified `threads` attach) per freehand directive (reversible); `threads` + `notifications` tables landed via `0053`, `monitors` via `0054` (verified on disk). Build P6-01 steps 1–4 + P6-05 tables first; defer bindings (same deferral as 16 §5 #4).
+2. **Spaces ownership** (01 §9 #3: flatten vs container) — DECIDED D2:A (survive + `owner_user_id` + `agent_spaces`) per freehand directive (reversible); blocks P6-01 `artifacts` bytes decision (N1) and P6-02/P6-08 viewer homes.
+3. **Notifications home** (02 risk #11) — DECIDED D9:A (standalone `GET /api/notifications`) per freehand directive (reversible); `notifications` table landed via `0053` (verified on disk).
+4. **C24 route freeze**: finance home (Work artifact vs `work/finance` route, 24 Q1) + viewer routes — DECIDED D12:A (finance rides Work task kind) + D4:A (tree freeze) per freehand directive (reversible); blocks P6-08 UI work; server logic proceeds regardless (implementation pending R1 assembly).
+5. **`records` keep-or-retire + `monitors`/`goals`/`ideas` table scope** (26 §5; 01 §8) — DECIDED D3:A (normalize fully, shim only) per freehand directive (reversible); `monitors` table landed via `0054`; blocks P6-07 importer + P6-04 tables.
+6. **27/28 reconciliation sign-off** — confirm P6-08 card list and P6-09 client subset against the landed inventories (N8). (OPEN — verification before work orders; work orders gated on R1 assembly.)
 
 ### B. Defaults executing unless vetoed (PLAN §10.B)
 
 Upstream pin = latest `main` SHA at clone; `0.1.0`; embedded Postgres on +
-`DATABASE_URL` override; keep upstream ports; TanStack Query + Zustand (replaces
+`DATABASE_URL` override; keep upstream ports; TanStack Query + Zustand (stands per freehand directive; QueryClient landed in `apps/app/app/_layout.tsx`; replaces
 3s poll in `agent-workspace.tsx`); Better Auth only; neutral DIYA persona;
 `finance` rides `tasks.kind` + `artifacts.kind` (no standalone table); fill is a
 governed tool, never a raw route; Google is a governed connector (no new mail
@@ -214,11 +212,11 @@ native viewer parity beyond the gated split; R2 signing/store accounts; public A
 | `jev*` + `demo-model` + `telemetry` + `openbot` + `computer-e2b` + worker/computer-image | Drop — no ORBO home (26 §4) | — |
 
 Reconciliation checklist before work orders: 27 landed (2026-10-14) → confirm P6-08 card/route
-rows above; 28 landed (2026-10-14) → confirm P6-09 client-subset + send-path rows; 01 FINAL →
-threads (#1), spaces (#3), `records` (#2); 02 FINAL → canonical `/api/files` +
-alias list; 03 FINAL → `(tabs)/spaces` + `(tabs)/work` route freeze incl. finance
-home; 05 FINAL → picker + native-split scope; 06 FINAL → coverage floors + runner
-rule; 22/09 deltas folded into §3 waves.
+rows above (OPEN — verification before work orders); 28 landed (2026-10-14) → confirm P6-09 client-subset + send-path rows (OPEN — same); 01 FINAL → DECIDED D1:A D2:A D3:A (threads #1, spaces #3, `records` #2; `0053`/`0054` landed); 02 FINAL → canonical `/api/files` +
+alias list (OPEN — alias freeze still needs final confirm); 03 FINAL → DECIDED D4:A + D12:A (`(tabs)/spaces` + `(tabs)/work` route freeze incl. finance
+home as Work artifact); 05 FINAL → DECIDED D8:B + D13:A + D5:A carve-out (picker + native-split scope decided; EAS builds owner-gated); 06 FINAL → LANDED (coverage floors + runner
+rule in `scripts/test-ci.ts`); 22/09 deltas folded into §3 waves.
+Truly still gated (stay unchecked/OPEN): accounts/domain/certs/legal sign-off, R1 assembly, R2, store submissions, EAS builds.
 
 ---
 

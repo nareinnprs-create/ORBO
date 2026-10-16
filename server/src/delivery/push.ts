@@ -53,7 +53,7 @@ export function createExpoPushTransport(
           channelId: input.channelId,
           kind: input.kind,
           ...(input.requestId ? { requestId: input.requestId } : {}),
-          url: `orbomobile://${path}?${query}`,
+          url: `orbo://${path}?${query}`,
         },
       });
       const ticket = result.data;

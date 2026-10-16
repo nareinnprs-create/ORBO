@@ -30,7 +30,7 @@ is untouched — it still prefers `picked-harness`, then a passed fallback, then
 
 **Blocked work:** WS-02 first slice (single agent CRUD + DIYA seed that answers in Home and delegates one canned task) + P5-09 (seeded DIYA answers in Home, delegates, collects result) + D3c smoke — all three assume a deterministic DIYA default; without D11 they cannot be accepted.
 
-**Status:** IN PROGRESS — executing on recommended slate per owner start directive (reversible per decision; overrides welcome)
+**Status:** DECIDED — A per owner freehand directive (reversible)
 
 Notes for the owner (not separate decisions):
 - Persona: the `agents.yaml:81-90` prompt matches the doc 20 §2 neutral-default draft (orchestration-first, attribution, explicit non-persona clause, no duplication of `shared/bot-prompt.ts` deployment guidance); approving D11 approves this wording. PLAN §10.B.18 + PLAN §1 ("Neutral default prompt, admin-customizable") are the authority.
@@ -58,7 +58,7 @@ Notes for the owner (not separate decisions):
 
 **Blocked work:** WS-11 slice (learning containers + `learning-*/demonstrations-*` tests) and WS-10 OrboTag/delivery slice (`delivery-routes` + approval-card resume paths) — both pin these names today; a rename decision (B) would gate them on a synchronized server+agent+test migration plan, while keep (A) unblocks them immediately.
 
-**Status:** IN PROGRESS — executing on recommended slate per owner start directive (reversible per decision; overrides welcome)
+**Status:** DECIDED — A per owner freehand directive (reversible)
 
 Notes for the owner (not separate decisions):
 - Precedent is explicit: doc 14 §4 lists `list_bots`/`read_bot` tool names, `BOT_*` env/config keys, and the `bots` spec key as non-goals for the same reason — wire contracts outlive branding passes; D14 extends that rule to the CopilotKit-owned names.
@@ -82,7 +82,7 @@ Notes for the owner (not separate decisions):
 
 **Blocked work:** None gated — U1 is report-only; a GO would *add* unplanned migration scope onto WS-01 (Expo Router tree + `packages/ui` runtime) and WS-14 (per-OS installers via desktop CI + EAS), and is therefore a scope decision, not an unblock.
 
-**Status:** IN PROGRESS — executing on recommended slate per owner start directive (reversible per decision; overrides welcome)
+**Status:** DECIDED — B (NO-GO) per owner freehand directive (reversible)
 
 Notes for the owner (not separate decisions):
 - On-disk baseline: `apps/app/package.json:15` and `mobile/package.json:19` both pin `expo ~55.0.0` (RN `0.83.10`, React `19.2.0`, router/linking/secure-store `~55.0.x`); any GO must move both trees together — they are two consumers of one SDK line.
@@ -154,7 +154,8 @@ Silence on any item keeps it `OPEN` and its blocked work stays gated.
 - U1:B → log the post-R1 revisit trigger (WS-01 parity + WS-14 installer matrix green,
   target ≥57.0.17); U1:A → file the migration work item against both Expo trees + EAS/CI
   images before any WS-01 route-shell work continues on the new SDK.
-- This section stays `OPEN` until all three answers are recorded; partial answers unblock
-  only the work items whose gates they clear (§Cross-decision sequencing).
+- This section is DECIDED — all three answers recorded per owner freehand
+  directive (reversible); partial answers had unblocked only the work items
+  whose gates they cleared (§Cross-decision sequencing).
 
 © Opraiz Technology Pvt Ltd · Developer: Narein Rao

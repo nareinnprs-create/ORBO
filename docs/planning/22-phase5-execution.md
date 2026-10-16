@@ -1,8 +1,9 @@
 # 22 — Phase 5 Execution Plan (PLAN.md §8.5: OpenDots surfaces + Dots→Agents + DIYA)
 
-> **Status: DRAFT pending reconciliation.** Research + this doc only — no product code modified.
+> **Status: DRAFT pending R1 assembly.** Research + this doc only — no product code modified.
 > Other docs/planning files treated as read-only snapshots; parallel workers may refine them.
-> Reconcile against final 01–08 and incoming 20/21 before cutting work orders.
+> W0 owner decisions G1–G8 DECIDED per freehand directive (reversible, 33 + sections).
+> Truly still gated before work orders: accounts/domain/certs/legal sign-off, R1 assembly.
 
 **Sources read once at draft time:** `PLAN.md` §6 (parity rows), §8.5 (Phase-5 scope),
 §9 (acceptance gates); `docs/planning/08-subsystem-unification.md` (§7 documents,
@@ -97,7 +98,7 @@ P5-10 → Connections/Browser rows (08 §§2/8; 19 §3 `mcp_connections`/`comput
 - P5-09 — §6 Agents catalog + PLAN §3 DIYA boss model (orchestrates, opens group channels,
   owns responsibilities/goals, unified approvals/audit). Proof: 09 WS-02 acceptance (DIYA
   delegates to specialist, group-thread receipt); persona neutral, admin-editable (PLAN §10.B.18).
-   `20-phase5-diya-seeding.md` has since landed (2026-10-14) — re-verify seed content + catalog names against it; owner approval per §10.B.17 still open. DIYA seed row (`diya`) also present in `examples/orbo/agents.yaml`. diya-first rule LANDED (`diya`-first clause in `app/src/lib/agents/default-agent.ts`, verified on disk 2026-10-16).
+   `20-phase5-diya-seeding.md` has since landed (2026-10-14) — re-verified against it; owner approval RECORDED (D11:A per freehand directive, reversible). DIYA seed row (`diya`) present in `examples/orbo/agents.yaml` + `permitted_agents` wiring in `examples/orbo/channels.yaml`. diya-first rule LANDED (`diya`-first clause in `app/src/lib/agents/default-agent.ts`, verified on disk 2026-10-16).
 - P5-10 — §6 Connections: governed MCP + per-tool approval + read-only browser + Parallel +
   Channels Slack reach. Proof: 19 §3 (`mcp_connections`→vault, `mcp_approvals`/`mcp_actions`→
   rules+receipts) + 08 §§2/8 (browser worker, connectors). Respects 02 risk #4 (no raw routes).
@@ -167,7 +168,7 @@ contract and writes no product code, so it never blocks R1.
 | D6 | Global single-call guard vs multi-user caps (17 §5.6: `jobs.size` vs 5/min + 8 concurrent) | Naive port serializes calls across users | Keep both with per-user scope; test two-user concurrency |
 | D7 | Control-supervision cost (17 §5.9: 2s poll + `active` route) | Reintroduces per-call server lifecycle ORBO avoids | Explicit adopt/drop decision in P5-04; no silent default |
 | D8 | No voice home in 08 (17 §5.3: only "per-call approval" + one receipts line) | Phase 7 re-litigates the voice contract | Slot voice receipts with threads, delegation approval with approvals; rule in 08 or "stays in channels" before Phase 7 |
-| D9 | Instructions truncation 2000→1000 (19 §6 R3) | Silent persona cut on import | Implementation landed at 2000 in form + server parser (verified on disk; reversible per decision); owner sign-off still open vs truncate+flag file |
+| D9 | Instructions truncation 2000→1000 (19 §6 R3) | Silent persona cut on import | DECIDED — D10:A at 2000 (reversible); landed end-to-end in form (`app/src/lib/agents/form.ts`) + server parser (`server/src/agents/routes.ts`) + model hint (`app/src/lib/agents/proposal.ts`), verified on disk |
 | D10 | Plaintext `mcp_connections.token` cut-over (19 §6 R1; 09 R2) | Credential leak at import | Vault-first: encrypt→`credentials`, row holds pointer; assert no plaintext in storage/logs |
 | D11 | Dots/API shape collision (19 §4 C6: `GET /workspace` vs `/api/agents` envelope) | Compat mount temptation | ETL only, no `/dots/*` compat mount; canonical `GET /api/agents` unchanged |
 | D12 | Snapshot churn mid Bot→Agent rename (19 §4 C1/C6) | Roster/profile snapshots re-churn | Bot UI copy lands first; Dots strings map straight to final `Agent(s)` copy in one PR |
@@ -179,23 +180,23 @@ contract and writes no product code, so it never blocks R1.
 
 | Gate | Question | Options + default | Blocks |
 |---|---|---|---|
-| G1 — Spaces ownership (01 §9 #3; 16 §5.3; 08 §7 risk) | Do `spaces` survive with `owner_user_id`, and what is the multi-user ACL? | A) survive + `owner_user_id` + `agent_spaces` join (default, 01 §5) / B) flatten pages to owner scope | P5-01, P5-07, P5-08, P5-02 |
-| G2 — Threads identity (01 §9 #1; 08 §5; 09 R1) | Canonical conversation identity? (`threads` + `notifications` tables landed via `0053`, `monitors` via `0054`, verified on disk 2026-10-16; sign-off still open, reversible) | A) `channels` team surface + unified `threads` attach (default, 08 §5 absorb) / B) channels-only | P5-01 (`page_threads`), P5-04 (receipts), P5-07, P5-08 (`thread_bindings`), P5-10 |
-| G3 — Route freeze (03 route tree; 16 §4 step 3) | Final Expo paths for Spaces? | A) `(tabs)/spaces/[spaceId]/pages/[pageId]` + hash→path redirect map (default) / B) alternate tree | P5-02, P5-03, P5-05 mount point, P5-07 Open-page link |
-| G4 — Editor native shape (16 §5.1; 05 R6) | Tiptap adapter vs native editor? | A) markdown-first + Tiptap web-only (default) / B) native editor investment | P5-02 scope; P5-06 spike brief |
-| G5 — Voice caps + supervision (17 §4.1 a–c; §5.7/§5.9) | Adopt 15-min/6-turn caps + `active`/control-poll? | A) adopt with per-user scope (default lean) / B) drop with reason recorded | P5-04 contract; P5-05 supervision |
-| G6 — Instructions width (19 §6 R3) | Extend `roleDescription` to 2000 or truncate+review? (implementation landed at 2000 in form + parser, verified on disk; sign-off still open, reversible) | Owner picks; no silent cut | P5-08 importer |
-| G7 — DIYA catalog + persona (PLAN §10.B.17–18; 20 landed 2026-10-14 — re-verify) | Agent names/roles + neutral DIYA prompt approved? | Default: neutral prompt, admin-editable; catalog draft approved | P5-09 seed content |
-| G8 — W0 reconciliation | 01–08 finals + landed 20/21 reviewed? | 09 appendix checklist + D13 | Any Phase-5 work order |
+| G1 — Spaces ownership (01 §9 #3; 16 §5.3; 08 §7 risk) | Do `spaces` survive with `owner_user_id`, and what is the multi-user ACL? | A) survive + `owner_user_id` + `agent_spaces` join (DECIDED, 01 §5) / B) flatten pages to owner scope | P5-01, P5-07, P5-08, P5-02 |
+| G2 — Threads identity (01 §9 #1; 08 §5; 09 R1) | Canonical conversation identity? (`threads` + `notifications` tables landed via `0053`, `monitors` via `0054`, verified on disk 2026-10-16; DECIDED — A per freehand directive, reversible) | A) `channels` team surface + unified `threads` attach (DECIDED, 08 §5 absorb) / B) channels-only | P5-01 (`page_threads`), P5-04 (receipts), P5-07, P5-08 (`thread_bindings`), P5-10 |
+| G3 — Route freeze (03 route tree; 16 §4 step 3) | Final Expo paths for Spaces? | A) `(tabs)/spaces/[spaceId]/pages/[pageId]` + hash→path redirect map (DECIDED D4:A, reversible) / B) alternate tree | P5-02, P5-03, P5-05 mount point, P5-07 Open-page link |
+| G4 — Editor native shape (16 §5.1; 05 R6) | Tiptap adapter vs native editor? | A) markdown-first + Tiptap web-only (DECIDED — D5:A carve-out stands, reversible) / B) native editor investment | P5-02 scope; P5-06 spike brief |
+| G5 — Voice caps + supervision (17 §4.1 a–c; §5.7/§5.9) | Adopt 15-min/6-turn caps + `active`/control-poll? | A) adopt with per-user scope (DECIDED — D13:A, reversible) / B) drop with reason recorded | P5-04 contract; P5-05 supervision |
+| G6 — Instructions width (19 §6 R3) | Extend `roleDescription` to 2000 or truncate+review? (DECIDED — A at 2000, reversible; landed end-to-end in form + parser + model hint, verified on disk) | Owner picked A; no silent cut | P5-08 importer |
+| G7 — DIYA catalog + persona (PLAN §10.B.17–18; 20 landed 2026-10-14 — re-verified) | Agent names/roles + neutral DIYA prompt approved? | DECIDED — A: neutral prompt, admin-editable; catalog approved as seeded (`diya` in `examples/orbo/agents.yaml`, `permitted_agents` in `examples/orbo/channels.yaml`, diya-first rule landed) | P5-09 seed content |
+| G8 — W0 reconciliation | 01–08 finals + landed 20/21 reviewed? | RECORDED — G1–G8 DECIDED per freehand directive (reversible); 09 appendix checklist + D13 | Any Phase-5 work order |
 
 ---
 
 ## Reconciliation checklist (W0 exit)
 
-- [ ] G1–G8 recorded with owner sign-off; this doc lifted from DRAFT.
-- [x] 20-diya + 21-backend landed (on disk 2026-10-14); still open: fold P5-09/P5-10 deltas.
-- [ ] 01 §9 #1/#3 finals match G1/G2; 03 route freeze matches G3; 08 voice home ruled (D8).
-- [ ] No product code changed by this plan; next step is work orders, not ports.
+- [x] G1–G8 recorded DECIDED per owner freehand directive (reversible); this doc still DRAFT pending R1 assembly before work orders.
+- [x] 20-diya + 21-backend landed (on disk 2026-10-14); P5-09/P5-10 deltas folded (DIYA seed + `permitted_agents` + diya-first rule verified).
+- [x] 01 §9 #1/#3 finals match G1/G2; 03 route freeze matches G3; 08 voice home ruled (D13:A).
+- [ ] No product code changed by this plan; next step is work orders, not ports. (OPEN — work orders gated on R1 assembly + accounts/domain/certs/legal sign-off.)
 
 ## Appendix — traceability + verification
 

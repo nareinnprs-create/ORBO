@@ -22,14 +22,18 @@ const config = {
   keyEncryptionKey: Buffer.alloc(32, 7).toString("base64"),
 } as unknown as DeploymentConfig;
 /** What the Expo plugin's after hook consults before appending the session cookie to a redirect. */
-async function sendsSessionTo(auth: ReturnType<typeof createAuth>) {
+// D16: `orbo:` is canonical; `orbomobile:` is accepted for one release.
+async function sendsSessionTo(
+  auth: ReturnType<typeof createAuth>,
+  url = "orbo://",
+) {
   const context = (await auth.$context) as {
     isTrustedOrigin: (url: string) => boolean;
   };
   const expoLoaded = (auth.options.plugins ?? []).some(
     (plugin) => plugin.id === "expo",
   );
-  return expoLoaded && context.isTrustedOrigin("orbomobile://");
+  return expoLoaded && context.isTrustedOrigin(url);
 }
 afterEach(() => {
   delete process.env.EXPO_PROJECT_ID;
@@ -39,9 +43,13 @@ afterAll(async () => {
 });
 
 test("without the native app, no sign-in redirect carries a session to the app's scheme", async () => {
-  expect(await sendsSessionTo(createAuth(config, database))).toBe(false);
+  const auth = createAuth(config, database);
+  expect(await sendsSessionTo(auth, "orbo://")).toBe(false);
+  expect(await sendsSessionTo(auth, "orbomobile://")).toBe(false);
 });
 test("a deployment that runs the native app still lets it sign in", async () => {
   process.env.EXPO_PROJECT_ID = "0b6c3a0e-2a5e-4a4c-9d5a-2f3b8f0c1d2e";
-  expect(await sendsSessionTo(createAuth(config, database))).toBe(true);
+  const auth = createAuth(config, database);
+  expect(await sendsSessionTo(auth, "orbo://")).toBe(true);
+  expect(await sendsSessionTo(auth, "orbomobile://")).toBe(true);
 });

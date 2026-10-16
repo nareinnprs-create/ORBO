@@ -17,7 +17,7 @@ One line per decision (copy the slate, change letters as needed):
 D1:A D2:A D3:A D4:A D5:A D6:A D7:A D7.1:A D7.3:B D7.4:A D8:B D9:A D10:A D11:A D12:A D13:A D14:A D16:A U1:B
 ```
 
-> Status: IN PROGRESS — executing on recommended slate per owner start directive (reversible per decision; overrides welcome). Nothing marked SIGNED.
+> Status: DECIDED — full recommended slate per owner freehand directive (reversible): D1:A D2:A D3:A D4:A D5:A D6:A D7:A D7.1:A D7.3:B D7.4:A D8:B D9:A D10:A D11:A D12:A D13:A D14:A D16:A U1:B (NO-GO). Nothing marked SIGNED; edit any letter back to reopen.
 
 Per-decision format: `D<n>: <A|B> — <conditions, if any>`. A `B` (or redirect)
 must name the follow-up doc amendment it requires. `INPUTS-1..7` are supplied
@@ -52,6 +52,21 @@ means the desktop-role call. U1 is report-only scope (go/no-go, no work asked).
 | D16 | Deep-link scheme unify | **A** unify on `orbo:` (folds 03-D7.2) | auth/deep-link/EAS wiring |
 | U1 | Expo SDK 55→57 now? | **B** NO-GO for W0, revisit post-R1 | adds scope if GO |
 | INPUTS 1–7 | Brand assets, domain, git host, npm scope, EAS org, Intelligence owner, release accounts | Supply values (not votes) | signing/release/push |
+
+## Post-packet owner decisions (all DECIDED per freehand directive, reversible)
+
+- Phase-3 short service/image names: DECIDED — B (short keys; `deploy/compose/docker-compose.yml` on disk).
+- Phase-4 `deploy/` layout: DECIDED — approved (`deploy/compose/` + `deploy/charts/orbo-diya/` on disk).
+- Store/Square PNGs: DECIDED — A (delete; done — stubs gone, only `icon.*` + sized PNGs remain).
+- CODEOWNERS to nareinnprs-create: DECIDED — done.
+- mobile→bun merge: DECIDED — approved, in progress.
+- Wire freeze: DECIDED — stands (D14:A).
+- Expo 57: DECIDED — U1:B NO-GO stands (target ≥57.0.17 post-R1).
+- TanStack-only: DECIDED — stands (Query + Zustand; QueryClient landed in `apps/app/app/_layout.tsx`).
+- Handoff caps: DECIDED — depth-1 stays (`BOT_HANDOFF_MAX_DEPTH=1`).
+- skill-creator stays off DIYA: DECIDED — stands (D11 note).
+- DIYA catalog: DECIDED — approved as seeded (`diya` in `examples/orbo/agents.yaml` + `permitted_agents` in `examples/orbo/channels.yaml`; diya-first rule landed in `app/src/lib/agents/default-agent.ts`).
+- Scheme unify `orbo:` with compat: DECIDED — A with `orbomobile:` compat window, in progress.
 
 ## Critical path for the W0 session
 

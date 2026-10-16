@@ -33,7 +33,9 @@ import { recordProvisioned, scimOptions } from "./scim";
 
 /** What a person sees when SSO is required and they tried another way in. */
 /** The native app's custom scheme (mobile/app.config.ts). */
-const NATIVE_APP_ORIGIN = "orbomobile://";
+/** D16: `orbo:` is canonical; accept legacy `orbomobile:` for one release. */
+const NATIVE_APP_ORIGIN = "orbo://";
+const LEGACY_NATIVE_APP_ORIGIN = "orbomobile://";
 
 export const SSO_REQUIRED_MESSAGE =
   "This deployment requires signing in through your company's identity provider. Enter your work email to continue.";
@@ -321,7 +323,7 @@ export function createAuth(
     secret: authConfig.secret,
     trustedOrigins: [
       ...authConfig.trustedOrigins,
-      ...(nativeApp ? [NATIVE_APP_ORIGIN] : []),
+      ...(nativeApp ? [NATIVE_APP_ORIGIN, LEGACY_NATIVE_APP_ORIGIN] : []),
     ],
     /*
      * Wrapped, so a company's client secret is ciphertext in the column.

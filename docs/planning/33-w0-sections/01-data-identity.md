@@ -2,8 +2,8 @@
 
 > One section of the W0 owner-decision packet (research + planning only; no product
 > code touched). This file covers the six data/identity decisions: D1, D2, D3, D9,
-> D10, D12. All six are OPEN until the owner signs; nothing gated below starts until
-> its gate is recorded at the W0 exit review (22 §6 G8).
+> D10, D12. All six were OPEN until the owner signed; all six are now DECIDED
+> per freehand directive (reversible), recorded at the W0 exit review (22 §6 G8).
 >
 > Sources (read-only snapshots): `01-schema-unification.md` (esp §9 blockers),
 > `02-api-surface.md` (risks incl. notifications), `08-subsystem-unification.md`,
@@ -39,7 +39,7 @@ P6-01 (reply/thread binding), P6-04 (alert keys), P6-05 (review linkage).
 Phase 5 builds page CRUD first and defers step 7 bindings until this lands (16 §5.4).
 The QueryClient + WS-events replacement for the OpenDots 3s workspace poll (16 §1.1)
 also keys contact/thread lists on this identity — polling shape cannot freeze first.
-**Status:** IN PROGRESS — executing on recommended slate per owner start directive (reversible per decision; overrides welcome)
+**Status:** DECIDED — A per owner freehand directive (reversible)
 
 ## D2. Spaces ownership and multi-user semantics
 **Question:** Do Spaces survive into the unified IA, and with what ownership — `owner_user_id`
@@ -59,7 +59,7 @@ P6-01 (`artifacts` bytes decision N1), P6-02/P6-08 (viewer homes). Do not create
 `spaces` table until this is signed (16 §5.3).
 Seed content (`Everyday` space + first Dot, 16 §1) is a tenant-package concern (P5-09),
 not part of this gate — D2 settles shape/ownership only.
-**Status:** IN PROGRESS — executing on recommended slate per owner start directive (reversible per decision; overrides welcome)
+**Status:** DECIDED — A per owner freehand directive (reversible)
 
 ## D3. `records` keep-or-retire
 **Question:** Is OpenMuse's single-table `records` KV (`owner,kind,id` + jsonb, 01 §2)
@@ -79,7 +79,7 @@ go first per 26 §6 step 1); P6-04 (`monitors`/`goals`/`ideas` table scope, 29 �
 P6-05 (unified `tasks`/`task_runs`/`task_events` as the single ledger).
 OpenMuse `files`→`artifacts` vs `agent-artifacts` share one table (01 §6); the P6-01
 byte-store fork decision (N1) composes with, but does not reopen, this gate.
-**Status:** IN PROGRESS — executing on recommended slate per owner start directive (reversible per decision; overrides welcome)
+**Status:** DECIDED — A per owner freehand directive (reversible)
 
 ## D9. Notifications home
 **Question:** Where do watch alerts and task-done fan-out land — a standalone notifications
@@ -97,7 +97,7 @@ notifications carry firings and receipts — accepting an idea and firing an ale
 **Blocked work:** P6-04 M6 (alert fan-out with `timelessHash`/dedup keys; 25 M6 gated on
 this); P6-05 (task-done fan-out onto the same resource); P6-06 accept-mints-goal+task
 receipt visibility. Server watch/monitor logic itself proceeds quiet (29 §3 W3).
-**Status:** IN PROGRESS — executing on recommended slate per owner start directive (reversible per decision; overrides welcome)
+**Status:** DECIDED — A per owner freehand directive (reversible)
 
 ## D10. Dots instructions width (2000) vs `roleDescription` (1000)
 **Question:** Dots `instructions` (zod 3–2000 chars, `workspace-routes.ts:14` via 19 §1/16 §1.1)
@@ -115,7 +115,7 @@ epoch→timestamptz, int→bool, learning-slug validator all land in the same ET
 No UI slice is gated: roster order and `dot-<uuid>` id remap proceed either way.
 The same slice also converts SQLite bool-int→boolean and validates `learningContainerId`
 slugs (16 §1.1; 19 §3) — width, type, and slug rules land as one importer contract.
-**Status:** IN PROGRESS — executing on recommended slate per owner start directive (reversible per decision; overrides welcome)
+**Status:** DECIDED — A per owner freehand directive (reversible)
 
 ## D12. Finance home confirm (doc 24 recommends Work task kind)
 **Question:** Confirm doc 24's recommendation — finance rides the Work task kind with the
@@ -133,7 +133,7 @@ are P6-08 implementation details inside the confirmed home — they do not reope
 milestones); P6-08 (Finance card placement + delegate-sheet CSV field per 24 F-08).
 Gating UI only: CSV→summary logic, `finance.test.ts` + `finance-headers.test.ts` ports,
 and the milestone-link workflows are unblocked.
-**Status:** IN PROGRESS — executing on recommended slate per owner start directive (reversible per decision; overrides welcome)
+**Status:** DECIDED — A per owner freehand directive (reversible)
 
 ## Cross-decision notes (not gates; reading aid)
 

@@ -23,7 +23,7 @@ export const authClient = createAuthClient({
   baseURL: serverUrl,
   plugins: [
     expoClient({
-      scheme: "orbomobile",
+      scheme: "orbo",
       storagePrefix: `orbo-${endpoint.host.replace(/[^a-zA-Z0-9_-]/g, "-")}`,
       storage: SecureStore,
     }),
@@ -33,7 +33,7 @@ export const authClient = createAuthClient({
 export async function signIn(provider: "google" | "microsoft" | "okta") {
   const result = await authClient.signIn.social({
     provider: provider as "google",
-    callbackURL: "orbomobile://",
+    callbackURL: "orbo://",
   });
   if (result.error)
     throw new Error(result.error.message ?? "Could not sign in.");
@@ -41,7 +41,7 @@ export async function signIn(provider: "google" | "microsoft" | "okta") {
 export async function signInEnterprise(email: string) {
   const result = await authClient.signIn.sso({
     email,
-    callbackURL: "orbomobile://",
+    callbackURL: "orbo://",
   });
   if (result.error)
     throw new Error(

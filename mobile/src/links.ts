@@ -15,8 +15,9 @@ export function notificationDestination(value: unknown): {
   } catch {
     return null;
   }
+  // D16: `orbo:` is canonical. Accept legacy `orbomobile:` for one release.
   if (
-    url.protocol !== "orbomobile:" ||
+    (url.protocol !== "orbo:" && url.protocol !== "orbomobile:") ||
     url.username ||
     url.password ||
     url.hash ||

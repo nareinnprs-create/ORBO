@@ -5,7 +5,7 @@ const config: ExpoConfig = {
   name: "ORBO",
   slug: "orbo",
   version: "0.0.1",
-  scheme: "orbomobile",
+  scheme: "orbo",
   ios: { bundleIdentifier: "ai.orbo.mobile", supportsTablet: true },
   android: { package: "ai.orbo.mobile" },
   plugins: [

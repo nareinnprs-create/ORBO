@@ -1,9 +1,9 @@
 # 09 — Phase 3 Execution Plan (PLAN.md §8 Phases 3–7, §9 Gates)
 
-> **Status: DRAFT — 01–08 structurally verified 2026-10-14; owner decisions in §6 still pending before Wave 0 work orders.**
-> Reconcile open blockers (notably 01 §9 #1 threads-vs-channels, #3 spaces ownership) before cutting Wave 0 work orders.
+> **Status: DRAFT — 01–08 structurally verified 2026-10-14; W0 owner decisions DECIDED per freehand directive (reversible, 33 + sections). Truly still gated before Wave 0 work orders: accounts/domain/certs/legal sign-off, R1 assembly, R2, store submissions, EAS builds.**
+> Reconcile remaining gated blockers (accounts/domain/certs/legal, R1 assembly) before cutting Wave 0 work orders.
 > Research and docs only. No product code modified by this document.
-> **Reconciliation 2026-10-14:** landed since draft — `packages/ui` scaffold (14 primitives in `packages/ui/src/` at the time: button/checkbox/dialog/empty/field/input-group/input/item/label/select/separator/skeleton/switch/textarea + tokens/utils — grown to 36 primitives, verified on disk 2026-10-16); `apps/app` Expo placeholder shell (TODO stubs per 03 §5, Expo SDK 55; root `_layout.tsx` now wires QueryClientProvider + ThemeProvider, still no export script); DIYA seed row (`diya` in `examples/orbo/agents.yaml`); coverage tripwire + per-dir floors in `scripts/test-ci.ts` (MINIMUM_TESTS 400; server 80 / governance 95 / app 70 lines); `delivery-store` integration test env-gated (skips without live Postgres). Still-open owner gates: threads identity, spaces ownership, route freeze, `packages/ui` RN runtime (R6), brand assets (§6 A.1). Wave-1 (verified on disk 2026-10-16): `threads` + `notifications` tables + `0053` migration plus `monitors` table + `0054` migration exist; `roleDescription` 2000 in form (`app/src/lib/agents/form.ts`) + server parser (`server/src/agents/routes.ts`); diya-first rule LANDED (`diya`-first clause in `app/src/lib/agents/default-agent.ts`). Owner gates stay open (reversible per decision).
+> **Reconciliation 2026-10-16:** landed since draft — `packages/ui` 34/34 canonical primitives (`packages/ui/src/` holds 36 component files incl. extras + tokens/utils, verified on disk); `apps/app` Expo placeholder shell (TODO stubs per 03 §5, Expo SDK 55; root `_layout.tsx` wires QueryClientProvider + ThemeContext ThemeProvider; `eas.json` present; A1 Agents-list screen landed in `app/(app)/(tabs)/agents/index.tsx`); DIYA seed row (`diya` in `examples/orbo/agents.yaml`) + `permitted_agents` wiring (`examples/orbo/channels.yaml`) + diya-first rule LANDED (`diya`-first clause in `app/src/lib/agents/default-agent.ts`); coverage tripwire + per-dir floors in `scripts/test-ci.ts` (MINIMUM_TESTS 400; server 80 / governance 95 / app 70 lines); `delivery-store` integration test env-gated (skips without live Postgres). Wave-1 (verified on disk): `threads` + `notifications` tables + `0053` migration plus `monitors` table + `0054` migration exist; `roleDescription` 2000 end-to-end — form (`app/src/lib/agents/form.ts`) + server parser (`server/src/agents/routes.ts`) + model hint (`app/src/lib/agents/proposal.ts`); compose short service keys (`postgres`, `migrate`, `orbo-computer`, `supervisor`, `orbo-bot`, `orbo-harness`, `orbo-langgraph` in `deploy/compose/docker-compose.yml`); `deploy/` layout landed (`deploy/compose/` + `deploy/charts/orbo-diya/`). W0 decisions DECIDED per freehand directive (reversible): D1:A D2:A D3:A D4:A D5:A D6:A D7:A D7.1:A D7.3:B D7.4:A D8:B D9:A D10:A D11:A D12:A D13:A D14:A D16:A U1:B (NO-GO).
 
 **Sources:** `PLAN.md` §§3, 6, 7, 9, 10 (full read); `docs/planning/01`–`08`
 read once at draft time. Every workstream below is grounded in a PLAN §6
@@ -106,13 +106,13 @@ slip one wave without blocking R1.
 
 | # | Risk (source) | Impact | Mitigation |
 |---|---|---|---|
-| R1 | Conversation-identity ambiguity: `channels` vs `threads` vs Intelligence history (01 §8/§9 #1, 08 §5) | Gates threads, approvals continuation, pages, routines | Resolve 01 §9 #1 in W0; keep `channels` as team surface + `threads` attach; never mirror Intelligence silently — wrap for liveness only |
+| R1 | Conversation-identity ambiguity: `channels` vs `threads` vs Intelligence history (01 §8/§9 #1, 08 §5) | Gates threads, approvals continuation, pages, routines | DECIDED — D1:A (`channels` team surface + unified `threads` attach) per freehand directive (reversible); `threads` table + `0053` landed; never mirror Intelligence silently — wrap for liveness only |
 | R2 | OpenDots plaintext MCP tokens imported as-is (01 §8, 08 §9) | Credential leak; highest severity | Vault-first cut-over in W1: encrypt into `credentials`, server row holds pointer; test asserts no plaintext in storage/logs |
 | R3 | Ungoverned browser/computer routes mounted for parity speed (02 risk #4, 08 §1) | Bypasses policy/audit | Route every browser/desktop action through `computerGateway`; delete raw `/api/computer/*`, never alias; CI route-introspection test |
 | R4 | Bun single-process `mock.module` leakage from ported vitest files (06 gap #4) | Green suite that poisons later files; flaky CI | Convert every ported file to restorable `spyOn`; reserve `mock.module` for preload + `*.fixture.tsx`; fail CI on new `mock.module` in tests |
 | R5 | Three schedulers + two new task models collapse too early (01 §8, 08 §6) | Lose cron tz/fatigue/lease semantics | Keep ORBO schedulers as producers enqueueing unified `tasks` in step 1; unify orchestration only after parity tests prove fatigue + lease-expiry |
-| R6 | `packages/ui` RN-port stalls: web-only Base UI/Tailwind primitives don't run on native (04 G2, 05 R6) | No iOS/Android; §6 Surfaces fails | W0 decision: re-author on RN+RN-web, gallery web-only; reference screen A1 proves native render before fan-out — **still open 2026-10-16:** scaffold landed (`packages/ui/src/`: 36 primitives, verified on disk — the 14 named at draft time plus avatar/badge/brand-mark/bubble/carousel/combobox/composer/context-menu/detail-panel/dropdown-menu/live-waveform/message/message-scroller/page-empty/page-rows/page-section/page-shell/questionnaire/sheet/sidebar/tool-line/tooltip + tokens) but RN-runtime decision + A1 native proof pending |
-| R7 | Native voice/dictation has no media modules; TURN/STUN unknown (05 R1/R2) | Realtime calls + composer dictation miss parity | Spike in W1: `react-native-webrtc` vs server media path; server contract (`/api/voice`, `/api/audio`) shared regardless; degrade to receipts if blocked |
+| R6 | `packages/ui` RN-port stalls: web-only Base UI/Tailwind primitives don't run on native (04 G2, 05 R6) | No iOS/Android; §6 Surfaces fails | W0 decision DECIDED — D5:A (re-author on RN+RN-web, gallery web-only) per freehand directive (reversible); reference screen A1 landed (`app/(app)/(tabs)/agents/index.tsx`) + 34/34 canonical primitives present (`packages/ui/src/`, verified on disk) — still pending: A1 native-render proof, EAS builds (owner-gated) |
+| R7 | Native voice/dictation has no media modules; TURN/STUN unknown (05 R1/R2) | Realtime calls + composer dictation miss parity | DECIDED — D13:A (server-mediated caps in v1, native modules deferred) per freehand directive (reversible); spike in W1: `react-native-webrtc` vs server media path; server contract (`/api/voice`, `/api/audio`) shared regardless; degrade to receipts if blocked; push onboarding owner-gated (EAS + cert accounts) |
 | R8 | Timestamp/key conversion bugs: epoch-ms vs ISO vs timestamptz; single-owner strings vs `users.id` (01 §8) | Silent ordering/auth bugs across importers | One converter per importer + DST/UTC test; bootstrap single-owner → `users` row; never copy owner strings raw |
 | R9 | Coverage floor hides dropped suites: 400 floor vs ~3,500 static cases (06 gap #2); no coverage tool | Regressions ship green | Add `bun test --coverage` thresholds (06 §5: server 80%, gateway 95%) to `test-ci.ts`; assert per-directory file counts — **LANDED 2026-10-14:** `scripts/test-ci.ts` enforces MINIMUM_TESTS 400 + per-dir file floors + coverage tripwire (server 80 / governance 95 / app 70 lines) |
 | R10 | Desktop role confusion: current Tauri shell is a setup supervisor, PLAN §3 says web-export wrapper (05 R7) | Wrong installer ships | W0 decision: desktop = web export + local engine supervisor or pure wrapper; register `ai.orbo.*` deep links in both `tauri.conf.json` + Expo `app.json` |
@@ -138,6 +138,7 @@ on + `DATABASE_URL` override; keep upstream ports; bundle IDs `ai.orbo.app` /
 `ai.orbo.desktop`; MSI+DMG+AppImage/deb; Tauri updater placeholder; TanStack
 Query+Zustand; Better Auth only; agent catalog names/roles; neutral DIYA
 persona; GitHub Actions CI; in-repo docs; logs + `/api/health`, no APM v1.
+(TanStack-only stands per freehand directive; QueryClient landed in `apps/app/app/_layout.tsx`.)
 
 ### C. Design/engineering pending (PLAN §10.C.22–28 → docs 01–08)
 
@@ -163,14 +164,14 @@ changelog policy · support intake process.
 
 ## Appendix — reconciliation checklist for final 01–08
 
-- [ ] 01 final: threads-vs-channels (#1) + spaces ownership (#3) + `records` keep/retire (#2) resolved.
-- [ ] 02 final: `/api/pages` + `/api/browsers` canonical paths confirmed; alias list frozen.
-- [ ] 03 final: Expo route tree frozen; bots→agents redirects mapped.
-- [ ] 04 final: purple scale + Montserrat vendored; icon set fixed.
-- [ ] 05 final: mobile surface scope (R12) + desktop role (R7) + media path (R1/R2) decided.
-- [ ] 06 final: coverage tool + per-dir floors + ported-file runner rule set.
-- [ ] 07 final: reference screen choice + 4 wireframes approved.
-- [ ] 08 final: merge sequence unchanged or deltas folded into §3 waves above.
+- [x] 01 final: threads-vs-channels (#1) + spaces ownership (#3) + `records` keep/retire (#2) resolved — DECIDED D1:A D2:A D3:A per freehand directive (reversible); `threads` + `notifications` (`0053`) + `monitors` (`0054`) landed.
+- [ ] 02 final: `/api/pages` + `/api/browsers` canonical paths confirmed; alias list frozen. (OPEN — canonical paths + alias freeze still need final confirm; server slices proceed; public `/api/v1` deferred.)
+- [x] 03 final: Expo route tree frozen; bots→agents redirects mapped — DECIDED D4:A per freehand directive (reversible); route shell + A1 landed (redirect-map + finance/viewer homes tracked in 29 §6 A.4, implementation pending R1 assembly).
+- [x] 04 final: purple scale + Montserrat vendored; icon set fixed — DECIDED D6:A placeholder path per freehand directive (reversible); Montserrat vendored; Store/Square stubs deleted (done); final art pending INPUTS-1 (non-blocking).
+- [x] 05 final: mobile surface scope (R12) + desktop role (R7) + media path (R1/R2) decided — DECIDED D8:B D7:A D13:A per freehand directive (reversible).
+- [x] 06 final: coverage tool + per-dir floors + ported-file runner rule set — LANDED in `scripts/test-ci.ts` (MINIMUM_TESTS 400; server 80 / governance 95 / app 70 lines).
+- [ ] 07 final: reference screen choice + 4 wireframes approved. (PARTIAL — A1 Agents-list screen landed; 4 wireframes still pending owner review.)
+- [ ] 08 final: merge sequence unchanged or deltas folded into §3 waves above. (OPEN — pending R1 assembly order.)
 
 *Derived from PLAN.md §§3/6/7/9/10 and docs/planning/01–08 snapshots.
 © Opraiz Technology Pvt Ltd · Developer: Narein Rao*
