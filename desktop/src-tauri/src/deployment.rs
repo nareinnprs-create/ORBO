@@ -1,10 +1,11 @@
 //! Putting the deployment on disk, which is not what the installer carries.
 //!
 //! The installer stays small: a Tauri binary and nothing else. What it needs to run a deployment —
-//! `docker-compose.yml`, `server`, `app`, `worker`, the tenant package — is fetched on first run and
-//! kept beside it, at a version this app records. Two things follow from that split, and both are
-//! the reason for it: the download stays a download rather than becoming part of every installer,
-//! and the deployment can be moved forward on its own without shipping a new app.
+//! `deploy/compose/docker-compose.yml`, `server`, `app`, `worker`, the tenant package — is fetched
+//! on first run and kept beside it, at a version this app records. Two things follow from that
+//! split, and both are the reason for it: the download stays a download rather than becoming part
+//! of every installer, and the deployment can be moved forward on its own without shipping a new
+//! app.
 //!
 //! What is fetched is the release's own source tarball, at a tag. Not `main`: an app that pulls
 //! whatever is on a branch this morning is not a version anybody can be given, and the images the
@@ -36,8 +37,12 @@ pub struct Installed {
 ///
 /// A release asset rather than a branch, and https rather than git, so nothing needs a git client
 /// or credentials to get a deployment.
+///
+/// `codeload.github.com` rather than `github.com/.../archive/...`: the archive endpoint answers
+/// 404 to any request carrying an `Authorization` header, while codeload serves the same tarball
+/// with one (needed for a private repository) and without one (a public repository).
 pub fn tarball_url(version: &str) -> String {
-    format!("https://github.com/nareinnprs-create/ORBO/archive/refs/tags/{version}.tar.gz")
+    format!("https://codeload.github.com/nareinnprs-create/ORBO/tar.gz/refs/tags/{version}")
 }
 
 /// Where the release publishes its image manifest.
@@ -169,10 +174,14 @@ pub fn needs_fetch(root: &Path, wanted: &str) -> bool {
 
 /// Everything the three host processes and Compose need from the tree.
 ///
-/// Named rather than "the whole repository" because most of it is not needed to run: the charts, the
-/// docs, the tests and the Dockerfiles are not part of a deployment, and copying them makes the
-/// directory look like a place to develop rather than a place something runs.
-pub const REQUIRED: [&str; 4] = ["docker-compose.yml", "server", "app", "worker"];
+/// Named rather than "the whole repository" because most of it is not needed to run: the docs, the
+/// tests and the Dockerfiles are not part of a deployment, and copying them makes the directory
+/// look like a place to develop rather than a place something runs. `deploy` is one entry because
+/// matching happens on the tarball's first path component: it carries the Compose file the whole
+/// desktop runtime looks for at `deploy/compose/docker-compose.yml`, the s6 scripts and their
+/// environment templates. The Helm chart rides along under it; a small manifest is cheaper than a
+/// second, depth-aware copy rule.
+pub const REQUIRED: [&str; 4] = ["deploy", "server", "app", "worker"];
 
 /// The rest of what a deployment needs, which is not what it is checked for.
 pub const ALSO_COPIED: [&str; 7] = [
@@ -291,13 +300,50 @@ pub fn unpack(root: &Path, body: &[u8]) -> Result<(), String> {
 /// Parsed here rather than at start-up so a release missing an image fails while the person is
 /// still looking at a screen that says what is being fetched, not later inside Compose's output.
 fn fetch_images(root: &Path, version: &str) -> Result<(), String> {
-    let body = get(&images_url(version))
-        .map_err(|error| format!("could not fetch the image list for {version}: {error}"))?;
+    let direct = images_url(version);
+    let body = if releases_token(&direct).is_some() {
+        // A private repository: `github.com/.../releases/download` answers 404 to a request
+        // carrying `Authorization`, the same way the archive endpoint does, so the fetch goes
+        // through the API — asset id first, then the octet-stream endpoint whose redirect to the
+        // signed object URL needs no credential of its own.
+        release_asset(version, IMAGES)
+            .map_err(|error| format!("could not fetch the image list for {version}: {error}"))?
+    } else {
+        get(&direct)
+            .map_err(|error| format!("could not fetch the image list for {version}: {error}"))?
+    };
     let manifest: Images = serde_json::from_slice(&body)
         .map_err(|error| format!("the image list for {version} is not readable: {error}"))?;
     pin(&manifest)?;
     std::fs::write(images_path(root), &body)
         .map_err(|error| format!("could not write {IMAGES}: {error}"))
+}
+
+/// One release asset, through the API: find its id by name, then download it as bytes.
+///
+/// Used where a credential is in play, because the direct download URL rejects authenticated
+/// requests outright rather than redirecting them.
+fn release_asset(version: &str, name: &str) -> Result<Vec<u8>, String> {
+    let base = "https://api.github.com/repos/nareinnprs-create/ORBO/releases";
+    let release = get_request(
+        &format!("{base}/tags/{version}"),
+        &[("Accept", "application/vnd.github+json")],
+    )?;
+    let release: serde_json::Value = serde_json::from_slice(&release)
+        .map_err(|error| format!("the release for {version} is not readable: {error}"))?;
+    let id = release["assets"]
+        .as_array()
+        .and_then(|assets| {
+            assets
+                .iter()
+                .find(|asset| asset["name"].as_str() == Some(name))
+        })
+        .and_then(|asset| asset["id"].as_i64())
+        .ok_or_else(|| format!("the release for {version} has no {name}"))?;
+    get_request(
+        &format!("{base}/assets/{id}"),
+        &[("Accept", "application/octet-stream")],
+    )
 }
 
 /// Fetch a URL into memory.
@@ -309,6 +355,11 @@ fn fetch_images(root: &Path, version: &str) -> Result<(), String> {
 /// `nareinnprs-create/ORBO`, so a private repository's credential never reaches third-party hosts
 /// (the engine installers in `install.rs`).
 pub fn get(url: &str) -> Result<Vec<u8>, String> {
+    get_request(url, &[])
+}
+
+/// [`get`] with additional request headers, for endpoints whose answer depends on `Accept`.
+fn get_request(url: &str, headers: &[(&str, &str)]) -> Result<Vec<u8>, String> {
     let mut request = reqwest::blocking::Client::builder()
         .user_agent("orbo-desktop")
         .build()
@@ -316,6 +367,9 @@ pub fn get(url: &str) -> Result<Vec<u8>, String> {
         .get(url);
     if let Some(token) = releases_token(url) {
         request = request.header("Authorization", format!("Bearer {token}"));
+    }
+    for (name, value) in headers {
+        request = request.header(*name, *value);
     }
     let response = request
         .send()
@@ -547,19 +601,29 @@ mod tests {
 
         let archive = tarball(&[
             ("ORBO-0.0.8/app/index.ts", b"export {}"),
-            ("ORBO-0.0.8/docker-compose.yml", b"services: {}"),
-            // Not part of a deployment: skipped, not refused.
+            (
+                "ORBO-0.0.8/deploy/compose/docker-compose.yml",
+                b"services: {}",
+            ),
+            // Not part of a deployment: skipped, not refused. A root-level compose file from an
+            // older layout is in the same bucket — the runtime reads deploy/compose now.
             ("ORBO-0.0.8/docs/readme.md", b"# hi"),
+            ("ORBO-0.0.8/docker-compose.yml", b"services: {}"),
         ]);
         unpack(&dir, &archive).expect("an ordinary download is laid out");
 
         let app = std::fs::read_to_string(dir.join("app/index.ts")).ok();
-        let compose = std::fs::read_to_string(dir.join("docker-compose.yml")).ok();
+        let compose = std::fs::read_to_string(dir.join("deploy/compose/docker-compose.yml")).ok();
+        let stray_root = dir.join("docker-compose.yml").exists();
         let docs = dir.join("docs").exists();
         let _ = std::fs::remove_dir_all(&dir);
 
         assert_eq!(app.as_deref(), Some("export {}"));
         assert_eq!(compose.as_deref(), Some("services: {}"));
+        assert!(
+            !stray_root,
+            "a pre-move compose file is not where the runtime looks"
+        );
         assert!(!docs, "the rest of the tree is not part of a deployment");
     }
 
@@ -582,7 +646,12 @@ mod tests {
         // written last precisely so this case is distinguishable.
         let dir = std::env::temp_dir().join(format!("orbo-dep-partial-{}", std::process::id()));
         std::fs::create_dir_all(dir.join("server")).unwrap();
-        std::fs::write(dir.join("docker-compose.yml"), "services: {}\n").unwrap();
+        std::fs::create_dir_all(dir.join("deploy/compose")).unwrap();
+        std::fs::write(
+            dir.join("deploy/compose/docker-compose.yml"),
+            "services: {}\n",
+        )
+        .unwrap();
         assert!(
             needs_fetch(&dir, "v0.0.7"),
             "a directory with no stamp is not a deployment"
@@ -610,18 +679,23 @@ mod tests {
 
     #[test]
     fn what_is_required_is_what_the_stack_actually_runs() {
-        // The check in stack.rs looks for exactly these, so the two cannot drift apart.
-        for entry in ["docker-compose.yml", "server", "app", "worker"] {
+        // stack.rs discovers its base file at deploy/compose/docker-compose.yml, so the first
+        // component that has to land is `deploy`; the three host processes are copied whole.
+        for entry in ["deploy", "server", "app", "worker"] {
             assert!(
                 REQUIRED.contains(&entry),
                 "{entry} is not required but is checked for"
             );
         }
         assert!(
-            !REQUIRED.contains(&"charts"),
-            "a deployment is not a place to develop"
+            !REQUIRED.contains(&"docker-compose.yml"),
+            "the compose file moved under deploy/; requiring the old root path strands it"
         );
         assert!(!REQUIRED.contains(&"docs"));
+        assert!(
+            !REQUIRED.contains(&"desktop"),
+            "the app is not a deployment"
+        );
     }
 
     #[test]

@@ -533,7 +533,7 @@ fn compose_files(root: &Path, environment: &str) -> Result<Vec<String>, Problem>
     if let Some(existing) = first(&[
         "deploy/compose/compose.override.yml",
         "deploy/compose/compose.override.yaml",
-        "deploy/compose/deploy/compose/docker-compose.override.yml",
+        "deploy/compose/docker-compose.override.yml",
         "deploy/compose/docker-compose.override.yaml",
     ]) {
         files.push(existing);
@@ -6910,7 +6910,7 @@ fn main() {
         std::fs::create_dir_all(&root).unwrap();
         for file in [
             "deploy/compose/docker-compose.yml",
-            "deploy/compose/deploy/compose/docker-compose.override.yml",
+            "deploy/compose/docker-compose.override.yml",
         ] {
             std::fs::create_dir_all(root.join(file).parent().unwrap()).unwrap();
             std::fs::write(root.join(file), "services: {}\n").unwrap();
@@ -6919,7 +6919,7 @@ fn main() {
             compose_files(&root, "").unwrap(),
             [
                 "deploy/compose/docker-compose.yml",
-                "deploy/compose/deploy/compose/docker-compose.override.yml",
+                "deploy/compose/docker-compose.override.yml",
             ]
         );
         std::fs::write(root.join("deploy/compose/compose.yaml"), "services: {}\n").unwrap();
