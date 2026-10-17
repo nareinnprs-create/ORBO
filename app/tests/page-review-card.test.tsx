@@ -1,4 +1,4 @@
-// Ported from _sources/OpenDots/tests/page-review-card.test.tsx (vitest) to
+// Ported from upstream tests/page-review-card.test.tsx (vitest) to
 // bun:test. ORBO has no PageReviewCard yet (review-before-save is planned per
 // docs/planning/18-phase5-review-inventory.md), so this ports the
 // receipt-refresh contract with a minimal card harness instead of

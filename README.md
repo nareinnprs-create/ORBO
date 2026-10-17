@@ -71,6 +71,8 @@ A Bot is any endpoint speaking [AG-UI](https://github.com/ag-ui-protocol/ag-ui),
 > script fills for you, and what each start-up refusal means. Every claim in it is checked against
 > this repository.
 
+One-line install: `bash scripts/install.sh`, documented in [docs/self-host.md](docs/self-host.md).
+
 1. Create `.env`:
 
    ```sh

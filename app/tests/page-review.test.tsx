@@ -1,4 +1,4 @@
-// Ported from _sources/OpenDots/tests/page-review.test.tsx (vitest) to
+// Ported from upstream tests/page-review.test.tsx (vitest) to
 // bun:test. ORBO has no page-review client module yet (review-before-save is
 // planned per docs/planning/18-phase5-review-inventory.md), so this ports the
 // review-decision contract with a minimal in-memory API double: malformed

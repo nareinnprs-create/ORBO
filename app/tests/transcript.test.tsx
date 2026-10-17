@@ -1,4 +1,4 @@
-// Ported from _sources/OpenDots/tests/transcript.test.tsx (vitest) to
+// Ported from upstream tests/transcript.test.tsx (vitest) to
 // bun:test. ORBO has no ChatTranscript component (chat history renders through
 // app threads instead), so this ports the transcript ordering/label contract
 // with a minimal transcript renderer: call receipts anchor between the message
@@ -15,7 +15,7 @@ type Message = {
   role: "user" | "assistant";
   content?: string;
   toolCalls?: { id: string; name: string; arguments: string }[];
-  metadata?: { opendotsSource?: string };
+  metadata?: { orboSource?: string };
 };
 
 type Call = {
@@ -29,15 +29,15 @@ type Call = {
   anchorMessageId: string;
 };
 
-const SCHEDULED_PREFIX = "opendots:scheduled_task:";
-const RECEIPT_PREFIX = "opendots:voice_receipt:";
+const SCHEDULED_PREFIX = "orbo:scheduled_task:";
+const RECEIPT_PREFIX = "orbo:voice_receipt:";
 
 export function isInternalVoiceReceipt(message: Message): boolean {
   // Only the internal *prompt* (a user message carrying sync instructions) is
   // hidden: the assistant's recorded summary stays visible.
   if (message.role !== "user") return false;
   return (
-    message.metadata?.opendotsSource === "voice_receipt" ||
+    message.metadata?.orboSource === "voice_receipt" ||
     message.id.startsWith(RECEIPT_PREFIX)
   );
 }
@@ -45,7 +45,7 @@ export function isInternalVoiceReceipt(message: Message): boolean {
 function isScheduled(message: Message): boolean {
   return (
     message.id.startsWith(SCHEDULED_PREFIX) ||
-    message.metadata?.opendotsSource === "scheduled_task"
+    message.metadata?.orboSource === "scheduled_task"
   );
 }
 
@@ -178,15 +178,15 @@ test("visually labels scheduled prompts while keeping ordinary user messages unc
   const out = html([
     { id: "manual", role: "user", content: "Manual request" },
     {
-      id: "opendots:scheduled_task:run-1",
+      id: "orbo:scheduled_task:run-1",
       role: "user",
       content: "Scheduled request body",
     },
     {
-      id: "opendots:scheduled_task:assistant",
+      id: "orbo:scheduled_task:assistant",
       role: "assistant",
       content: "Scheduled request body",
-      metadata: { opendotsSource: "scheduled_task" },
+      metadata: { orboSource: "scheduled_task" },
     },
   ]);
 
@@ -208,7 +208,7 @@ test("labels a scheduled prompt from metadata without requiring a prefixed ID", 
       id: "scheduled",
       role: "user",
       content: "Metadata-marked scheduled prompt",
-      metadata: { opendotsSource: "scheduled_task" },
+      metadata: { orboSource: "scheduled_task" },
     },
   ]);
   expect(out).toContain("scheduled-message-label");
@@ -218,7 +218,7 @@ test("labels a scheduled prompt from metadata without requiring a prefixed ID", 
 test("retains the scheduled label when history replay provides only the durable message ID", () => {
   const out = html([
     {
-      id: "opendots:scheduled_task:replayed",
+      id: "orbo:scheduled_task:replayed",
       role: "user",
       content: "Replayed scheduled prompt",
     },
@@ -236,10 +236,10 @@ test("hides only marked receipt prompts while retaining summaries and prior unma
       id: "internal",
       role: "user",
       content: "Internal sync instructions",
-      metadata: { opendotsSource: "voice_receipt" },
+      metadata: { orboSource: "voice_receipt" },
     },
     {
-      id: "opendots:voice_receipt:durable",
+      id: "orbo:voice_receipt:durable",
       role: "user",
       content: "Persisted internal instructions without metadata",
     },
@@ -247,13 +247,13 @@ test("hides only marked receipt prompts while retaining summaries and prior unma
       id: "summary",
       role: "assistant",
       content: "Confirmed call summary",
-      metadata: { opendotsSource: "voice_receipt" },
+      metadata: { orboSource: "voice_receipt" },
     },
     {
       id: "user",
       role: "user",
       content: "My next question",
-      metadata: { opendotsSource: "voice_compute" },
+      metadata: { orboSource: "voice_compute" },
     },
   ];
   const out = html(

@@ -42,6 +42,8 @@ export default defineConfig({
     "./src/db/schema/shared-use.ts",
     "./src/db/schema/threads.ts",
     "./src/db/schema/notifications.ts",
+    "./src/db/schema/spaces.ts",
+    "./src/db/schema/pages.ts",
   ],
   out: "./drizzle",
   dbCredentials: {

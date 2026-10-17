@@ -4,6 +4,7 @@
 > Other docs/planning files treated as read-only snapshots; parallel workers may refine them.
 > W0 owner decisions G1–G8 DECIDED per freehand directive (reversible, 33 + sections).
 > Truly still gated before work orders: accounts/domain/certs/legal sign-off, R1 assembly.
+> **Reconciliation 2026-10-16 (tree re-verify):** `spaces` + `agent_spaces` + `pages` tables + `0055_quick_lady_vermin.sql` landed; `server/tests` 319 `*.test.ts` files; `packages/ui/src` 36 `.tsx` files; scheme `orbo:` canonical with `orbomobile:` compat (`mobile/app.config.ts:8`, `mobile/src/links.ts:18`, `server/src/auth/index.ts:36-38`); contrast ratios recomputed in `packages/ui/src/tokens.ts` (token changes gated on D6); `mobile/` stays npm (`package-lock.json`, no `bun.lock`; expo-doctor BLOCKED recorded as decided-pending-revisit, NOT done). No checkboxes changed; no decisions changed.
 
 **Sources read once at draft time:** `PLAN.md` §6 (parity rows), §8.5 (Phase-5 scope),
 §9 (acceptance gates); `docs/planning/08-subsystem-unification.md` (§7 documents,

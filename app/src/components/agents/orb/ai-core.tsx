@@ -176,12 +176,6 @@ export const AI_STATE_MOTION: Record<AIState, AIStateMotion> = {
   },
 };
 
-/** Semantic accents. Deliberately not tokens — orbs render outside a theme. */
-export const AI_ACCENT_COLORS: Record<"success" | "danger", string> = {
-  danger: "oklch(63% 0.21 25)",
-  success: "oklch(72% 0.17 150)",
-};
-
 /** Motion preset for a state, falling back to `idle` for unknown values. */
 export const getAIStateMotion = (state: AIState | undefined): AIStateMotion =>
   AI_STATE_MOTION[state ?? "idle"] ?? AI_STATE_MOTION.idle;

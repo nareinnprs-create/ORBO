@@ -1,4 +1,4 @@
-// Ported from _sources/OpenDots/tests/use-voice-control-poll.test.ts (vitest)
+// Ported from upstream tests/use-voice-control-poll.test.ts (vitest)
 // to bun:test. Like its use-voice companion, this ports the control-poll
 // resilience contract with a minimal call controller on a manual clock (no
 // fake timers): the poll runs every two seconds, one or two consecutive

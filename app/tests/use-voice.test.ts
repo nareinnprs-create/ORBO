@@ -1,7 +1,7 @@
-// Ported from _sources/OpenDots/tests/use-voice.test.ts (vitest) to bun:test.
+// Ported from upstream tests/use-voice.test.ts (vitest) to bun:test.
 //
 // ORBO's voice client lives in app/src/lib/voice/ (VoiceSession +
-// use-voice-call) with a different shape from OpenDots' useVoice hook, so this
+// use-voice-call) with a different shape from the upstream useVoice hook, so this
 // ports the disconnect grace-window contract with a minimal call controller
 // driven by a manual clock (no fake timers): a transient disconnect recovers
 // within five seconds, a persistent one ends the call at exactly five seconds,

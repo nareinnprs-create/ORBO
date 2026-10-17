@@ -1,7 +1,7 @@
 // Ported from _sources/OpenDots/tests/voice.test.ts (vitest) to bun:test.
 //
 // ORBO's voice stack (server/src/voice/ provider + sessions + routes) has a
-// different shape from OpenDots' VoiceService (see
+// different shape from the upstream VoiceService (see
 // docs/planning/21-phase5-opendots-backend.md row 19), so this ports the call
 // lifecycle contract with a minimal in-memory service + injected realtime
 // transport: ownership checks before provider contact, SDP validation both

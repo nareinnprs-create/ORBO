@@ -183,6 +183,7 @@ import { createLearningSettingsStore } from "./learning/settings";
 import { createMemoryIngestion } from "./memory/ingestion";
 import { createMemoryStore } from "./memory/store";
 import { memoryTools } from "./memory/tools";
+import { createNotificationStore } from "./notifications/routes";
 import { createSignInNotifier, createSignInResumer } from "./passwords/resume";
 import { createSignInService } from "./passwords/service";
 import { createPasswordStore } from "./passwords/store";
@@ -3035,6 +3036,8 @@ const app = createApp(
       profiles: agentProfileStore,
       auditStore: bootAuditStore,
     },
+    // What happened, newest first: watch firings and task fan-out, read-only.
+    notifications: createNotificationStore(database),
   },
 );
 

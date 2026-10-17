@@ -39,7 +39,7 @@ const OFF: Permissions = {
 
 function deriveToken(master: string, dotId: string): string {
   return createHmac("sha256", master)
-    .update(`opendots-computer:${dotId}`)
+    .update(`orbo-computer:${dotId}`)
     .digest("hex");
 }
 
@@ -172,7 +172,7 @@ class ComputerService {
     private readonly master: string,
     private readonly knownDots: Set<string>,
     private readonly isPaused: () => boolean = () => false,
-    private readonly expectedContainerPrefix = "opendots-computer-",
+    private readonly expectedContainerPrefix = "orbo-computer-",
   ) {}
 
   private tokenFor(dotId: string): string {

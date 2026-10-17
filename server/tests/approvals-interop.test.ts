@@ -1,6 +1,6 @@
 import { expect, spyOn, test } from "bun:test";
 import {
-  type OpenDotsMcpApproval,
+  type OrboMcpApproval,
   type ActionProposal,
   MCP_APPROVAL_TTL_MS,
   actionProposalToCandidate,
@@ -36,8 +36,8 @@ import {
 /**
  * WS-06 slice 1: one approval request → approve-and-run card → receipt, with a
  * decline that persists until the person speaks again — proven here for the
- * OpenBot behavior plus one representative mapped case each for the OpenMuse
- * `ActionProposal` and OpenDots `mcp_approvals` shapes (08 §4).
+ * ORBO behavior plus one representative mapped case each for the legacy
+ * `ActionProposal` and `mcp_approvals` shapes (08 §4).
  *
  * In-memory fakes only: no live database (Docker is down) and no leaking
  * `mock.module` — spies are restored with `mockRestore`.
@@ -332,7 +332,7 @@ const museProposal = (over: Partial<ActionProposal> = {}): ActionProposal => ({
   ...over,
 });
 
-test("OpenMuse ActionProposal: status vocabulary collapses, hash re-check refuses change", () => {
+test("Legacy ActionProposal: status vocabulary collapses, hash re-check refuses change", () => {
   expect(mapActionProposalStatus("awaiting_review")).toEqual({
     status: "pending",
     decision: null,
@@ -368,7 +368,7 @@ test("OpenMuse ActionProposal: status vocabulary collapses, hash re-check refuse
   ).toBe(true);
 });
 
-test("OpenMuse representative: email.send proposal approves and runs exactly once", async () => {
+test("Legacy action proposal: email.send proposal approves and runs exactly once", async () => {
   const proposal = museProposal();
   proposal.hash = proposalDigest(proposal);
   const { store } = memoryStore({ preferences: { enabled: true } });
@@ -415,8 +415,8 @@ test("OpenMuse representative: email.send proposal approves and runs exactly onc
 });
 
 const dotsApproval = (
-  over: Partial<OpenDotsMcpApproval> = {},
-): OpenDotsMcpApproval => ({
+  over: Partial<OrboMcpApproval> = {},
+): OrboMcpApproval => ({
   id: "approval-1",
   threadId: "thread-1",
   dotId: "bot",
@@ -439,7 +439,7 @@ const askRule = (toolRef: string): ApprovalRule => ({
   createdAt: new Date(),
 });
 
-test("OpenDots mcp approval: per-call binding, TTL, and per-tool defaults", async () => {
+test("Legacy mcp approval: per-call binding, TTL, and per-tool defaults", async () => {
   const approval = dotsApproval();
   expect(isMcpApprovalExpired(approval)).toBe(false);
   expect(
@@ -465,7 +465,7 @@ test("OpenDots mcp approval: per-call binding, TTL, and per-tool defaults", asyn
   expect(outcome).toMatchObject({ behaviour: "ask", source: "personal_rule" });
 });
 
-test("OpenDots representative: approved call runs once; tampered arguments never run", async () => {
+test("Legacy mcp representative: approved call runs once; tampered arguments never run", async () => {
   const { store } = memoryStore({ preferences: { enabled: true } });
   const service = createApprovalService(store);
   const continuationFor = (toolCallId: string, runId: string) =>

@@ -3,6 +3,8 @@
 ORBO ships as one container. It carries the app, the API that serves it, and the browser the Bots
 drive, and it can carry its own PostgreSQL as well. It does what it does on a laptop.
 
+From a clone, `bash scripts/install.sh` is the one-line compose installer; the full guide is [self-host.md](self-host.md).
+
 ```sh
 # Every release publishes this image, so a deployment needs no clone and no build.
 # `latest` is the most recent; a version tag such as `:v0.0.9` pins one.

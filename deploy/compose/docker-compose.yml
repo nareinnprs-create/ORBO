@@ -95,12 +95,14 @@ services:
     environment:
       # The secret every caller must present. The container refuses to start without it.
       #
-      # The default matches the one scripts/start.sh applies when .env leaves this blank, which
-      # .env.example does. Without it the two paths disagree: the script exports a value and brings
-      # the stack up working, while a plain `docker compose up -d` -- which this project's own
-      # shutdown notes tell you to use -- hands the container an empty string instead. Reaches only
-      # a loopback-bound port; a deployment sets a real value in .env.
-      ORBO_COMPUTER_TOKEN: ${ORBO_COMPUTER_TOKEN:-orbo-dev-computer-token}
+      # Required, and with no default: the value this used to fall back to is printed in this
+      # repository, so every clone shared it and a plain `docker compose up -d` -- which this
+      # project's own shutdown notes tell you to use -- booted with a known secret on a
+      # loopback-bound port. scripts/start.sh and scripts/install.sh export ORBO_COMPUTER_TOKEN
+      # before they hand compose anything, generating one when .env leaves it blank, so the laptop
+      # path is unchanged; an invocation that reaches compose without it stops here and is told
+      # which variable to set rather than starting unauthenticated.
+      ORBO_COMPUTER_TOKEN: ${ORBO_COMPUTER_TOKEN:?ORBO_COMPUTER_TOKEN is required; scripts/start.sh sets a development value}
       # `headed` runs full Chromium behind the same streamed screen, so a person taking the wheel
       # gets a browser sites treat like their ordinary desktop browser. Headless remains the default.
       ORBO_COMPUTER_BROWSER_MODE: ${ORBO_COMPUTER_BROWSER_MODE:-headless}
@@ -158,7 +160,10 @@ services:
 
   spire-agent:
     image: ghcr.io/spiffe/spire-agent:1.15.1
-    command: ["-config", "/opt/spire/conf/agent.conf", "-joinToken", "${SPIRE_JOIN_TOKEN:-orbo-dev-token}"]
+    # No default: this repo used to publish the placeholder below, and no script generates a real
+    # join token, so the value is empty unless an operator sets one. An empty token simply fails
+    # attestation, and this stack runs without workload identity in that case.
+    command: ["-config", "/opt/spire/conf/agent.conf", "-joinToken", "${SPIRE_JOIN_TOKEN:-}"]
     # The agent must see the caller's process to map the Workload API peer to a Docker container. The
     # host PID namespace is required because the attestor reads the peer cgroup from that pid.
     pid: host
@@ -195,11 +200,14 @@ services:
       PORT: "4300"
       # Shared with the API server. The Bot-level verb set is the boundary; this token keeps other
       # services on the network from calling those verbs.
-      # Defaulted for the same reason as orbo-computer's above: so `docker compose up -d` by hand
-      # configures the same stack scripts/start.sh does, rather than a silently unauthenticated one.
-      SUPERVISOR_TOKEN: ${SUPERVISOR_TOKEN:-orbo-dev-supervisor-token}
+      #
+      # Required, with no default, for the same reason as orbo-computer's above: the value this
+      # used to fall back to is printed in this repository. scripts/start.sh and
+      # scripts/install.sh export SUPERVISOR_TOKEN before they hand compose anything, so the
+      # laptop path is unchanged.
+      SUPERVISOR_TOKEN: ${SUPERVISOR_TOKEN:?SUPERVISOR_TOKEN is required; scripts/start.sh sets a development value}
       # Handed to every computer this creates, so the server and the computers share one secret.
-      ORBO_COMPUTER_TOKEN: ${ORBO_COMPUTER_TOKEN:-orbo-dev-computer-token}
+      ORBO_COMPUTER_TOKEN: ${ORBO_COMPUTER_TOKEN:?ORBO_COMPUTER_TOKEN is required; scripts/start.sh sets a development value}
       # Forwarded into every per-Bot computer the supervisor creates.
       ORBO_COMPUTER_BROWSER_MODE: ${ORBO_COMPUTER_BROWSER_MODE:-headless}
       ORBO_COMPUTER_IMAGE: ${ORBO_COMPUTER_IMAGE:-orbo-computer:latest}
@@ -217,7 +225,7 @@ services:
       # and mounts the agent's socket into that Bot's computer so it can fetch its own SVID.
       SPIRE_SOCKET: /tmp/spire-server/private/api.sock
       SPIRE_TRUST_DOMAIN: orbo.local
-      SPIRE_AGENT_ID: spiffe://orbo.local/spire/agent/join_token/${SPIRE_JOIN_TOKEN:-orbo-dev-token}
+      SPIRE_AGENT_ID: spiffe://orbo.local/spire/agent/join_token/${SPIRE_JOIN_TOKEN:-}
       SPIRE_AGENT_SOCKET_VOLUME: ${COMPOSE_PROJECT_NAME:-orbo}_spire-agent-socket
     ports:
       # For the server on the host to ask for a Bot's computer.

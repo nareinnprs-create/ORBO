@@ -369,7 +369,11 @@ mod tests {
             .unwrap();
             std::fs::write(root.join("bun.lock"), "synthetic-lock").unwrap();
             std::fs::create_dir_all(root.join("deploy/compose")).unwrap();
-            std::fs::write(root.join("deploy/compose/docker-compose.yml"), "services: {}\n").unwrap();
+            std::fs::write(
+                root.join("deploy/compose/docker-compose.yml"),
+                "services: {}\n",
+            )
+            .unwrap();
             std::fs::write(root.join("container-images.json"), "{}").unwrap();
             deployment::record(&root, "v-test").unwrap();
             let source = root.join("runtime.rs");

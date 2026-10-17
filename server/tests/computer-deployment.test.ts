@@ -12,13 +12,13 @@ export function hardenSupervisorEnvironment(source: string): string {
     "const computerToken = env.COMPUTER_TOKEN?.trim() || undefined;";
   if (source.split(before).length !== 2)
     throw new Error(
-      "Pinned OpenBot environment contract changed; review before building.",
+      "Pinned upstream environment contract changed; review before building.",
     );
   return `import { createHmac } from "node:crypto";\n${source.replace(
     before,
     `const master = env.COMPUTER_TOKEN?.trim();
   if (!master || master.length < 24) throw new Error("COMPUTER_TOKEN must contain at least 24 characters.");
-  const computerToken = createHmac("sha256", master).update("opendots-computer:" + botId).digest("hex");`,
+  const computerToken = createHmac("sha256", master).update("orbo-computer:" + botId).digest("hex");`,
   )}`;
 }
 
@@ -50,7 +50,7 @@ test("gives each child its own credential without forwarding the master", () => 
   const first = environmentFor("dot-a", { COMPUTER_TOKEN: master });
   const second = environmentFor("dot-b", { COMPUTER_TOKEN: master });
   expect(first[1]).toBe(
-    `COMPUTER_TOKEN=${createHmac("sha256", master).update("opendots-computer:dot-a").digest("hex")}`,
+    `COMPUTER_TOKEN=${createHmac("sha256", master).update("orbo-computer:dot-a").digest("hex")}`,
   );
   expect(first[1]).not.toBe(second[1]);
   expect(first.join()).not.toContain(master);

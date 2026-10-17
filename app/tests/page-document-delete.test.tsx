@@ -1,4 +1,4 @@
-// Ported from _sources/OpenDots/tests/page-document-delete.test.tsx (vitest)
+// Ported from upstream tests/page-document-delete.test.tsx (vitest)
 // to bun:test. ORBO has no PageDocument editor yet (documents are planned per
 // docs/planning/23-phase6-documents-inventory.md), so this ports the deletion
 // handoff contract with a minimal document harness instead of

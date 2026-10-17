@@ -88,6 +88,10 @@ import {
 import type { MemoryIngestion } from "./memory/ingestion";
 import { createMemoryRoutes } from "./memory/routes";
 import type { MemoryStore } from "./memory/store";
+import {
+  createNotificationRoutes,
+  type NotificationStore,
+} from "./notifications/routes";
 import { parsePageLimit } from "./paging";
 import { createPasswordRoutes, createSignInRoutes } from "./passwords/routes";
 import type { SignInService } from "./passwords/service";
@@ -427,6 +431,8 @@ export function createApp(
     teamBots?: TeamBots;
     /** Pause, reset, Activity and attention for a person's own Bots. See agents/lifecycle.ts. */
     lifecycle?: BotLifecycleServices;
+    /** What happened, newest first: a person's own notification inbox. See notifications/routes.ts. */
+    notifications?: NotificationStore;
   },
 ) {
   const app = new Hono<{ Variables: AppVariables }>();
@@ -1562,6 +1568,12 @@ export function createApp(
       }),
     );
   }
+
+  if (coworker?.notifications)
+    app.route(
+      "/api/notifications",
+      createNotificationRoutes(coworker.notifications, requireUser),
+    );
 
   if (componentStore) {
     app.route(

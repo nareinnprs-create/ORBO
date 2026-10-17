@@ -19,7 +19,6 @@
 | Q-05 | `server/tests/composio-live.test.ts:52` | `describe.skipIf(!live)` — "Composio, for real" | One real vendor call; skipped without a key so CI and keyless contributors are unaffected | `ORBO_LIVE_COMPOSIO=1` + `COMPOSIO_API_KEY` set (see `bun run test:live-composio`, which exits 1 without a key rather than silently passing) | server / plugins |
 | Q-06 | `server/tests/delivery-store.integration.test.ts:62` (`canConnect` 17, probe 47–60) | `describe.skipIf(!livePostgres)` — "delivery store" | "Requires live Postgres via Docker/CI — skipped cleanly without one"; `TEST_DATABASE_URL` missing/unparseable/unreachable stays skipped | `TEST_DATABASE_URL` set to a scratch Postgres + TCP connect succeeds (Docker/CI) | server / delivery |
 | Q-07 | `server/tests/notifications.test.ts:352` (`canConnect` 307, probe 337–350) | `describe.skipIf(!livePostgres)` — "notification store (Postgres)" | Same pattern as Q-06: no test database configured → suite stays skipped | Same as Q-06 | server / notifications |
-| Q-08 | `server/tests/approvals-policy.test.ts:333` | `test.skip` — "an unreachable reviewer times out closed" | "Quarantined: `AbortSignal.timeout` never fires under Bun on Windows here, so this hangs" | Bun runtime fix for `AbortSignal.timeout` on Windows | server / approvals |
 | Q-09 | `agent-orbo-computer/tests/live-screen.test.ts:239` | `describe.skipIf(!asked)` — "a socket that closes while the browser is starting" | Real process + real Chromium; Playwright is only in this directory's `package.json`, never installed by root CI; asked for by name (`bun run test:live-screen`) | `ORBO_LIVE_SCREEN=1` + `agent-orbo-computer` deps installed + Chromium (`bunx playwright install chromium`) | agent-orbo-computer |
 | Q-10 | `agent-orbo-computer/tests/live-screen.test.ts:264` | `describe.skipIf(!asked)` — "a socket that another connection replaced" | Same as Q-09 | Same as Q-09 | agent-orbo-computer |
 | Q-11 | `agent-orbo-computer/tests/live-screen.test.ts:298` | `describe.skipIf(!asked)` — "a superseded socket closing later" | Same as Q-09 | Same as Q-09 | agent-orbo-computer |
@@ -52,7 +51,8 @@ Notes:
 
 ## 2. Summary counts
 
-Total quarantined test-units: **32 rows** (31 distinct skip gates + 1 guard-only companion Q-03).
+Total quarantined test-units: **31 rows** (30 distinct skip gates + 1 guard-only companion Q-03).
+Q-numbers are stable ids; gaps remain where a quarantine was removed (Q-08, 2026-10-17).
 
 By unblock condition:
 
@@ -64,11 +64,12 @@ By unblock condition:
 | Docker daemon (`DOCKER_SOCKET` + `ping`) | 1 | Q-04 |
 | External vendor key (`ORBO_LIVE_COMPOSIO=1` + `COMPOSIO_API_KEY`) | 1 | Q-05 |
 | Missing optional dep / merged module (Playwright not installed in root lane) | 1 | Q-28 |
-| Bun runtime fix (`AbortSignal.timeout` on Windows) | 1 | Q-08 |
 | Windows privilege / elevation (`SeSecurityPrivilege`, `cargo test -- --ignored`) | 1 | Q-32 |
 | POSIX-only / FS semantics (`os.name == "posix"`, `chmod(0)` honored) | 3 | Q-29–Q-31 |
 
-By mechanism: `describe.skipIf` 27 (incl. 8 in one live-screen file) · `test.skipIf` 1 · `test.skip` 1 · `pytest.skip` 1 · `pytest.mark.skipif` 2 · `#[ignore]` 1. Zero silent skips found: every gate names its cause inline or in the header comment.
+By mechanism: `describe.skipIf` 25 (incl. 8 in one live-screen file) · `test.skipIf` 1 · `pytest.skip` 1 · `pytest.mark.skipif` 2 · `#[ignore]` 1. Zero silent skips found: every gate names its cause inline or in the header comment.
+
+Removed: Q-08 (`server/tests/approvals-policy.test.ts` — "an unreachable reviewer times out closed"). The test now spies on `AbortSignal.timeout` and aborts with a `TimeoutError` deterministically instead of waiting on the platform timer that Bun-on-Windows never fires, so it no longer needs a runtime fix to run.
 
 ## 3. Quarantine hygiene rule
 

@@ -10,9 +10,9 @@ import {
 /**
  * WS-06 slice 1 — upstream approval shapes mapped onto the ORBO gate, not ported.
  *
- * Per 08 §4 the superset starts as a mapping: the OpenBot rule engine + inbox +
- * approve-and-run resume path in `service.ts` stays canonical, and the OpenMuse
- * `ActionProposal` and OpenDots `mcp_approvals`/`mcp_actions` shapes below convert
+ * Per 08 §4 the superset starts as a mapping: the ORBO rule engine + inbox +
+ * approve-and-run resume path in `service.ts` stays canonical, and the legacy
+ * `ActionProposal` and legacy `mcp_approvals`/`mcp_actions` shapes below convert
  * to `ApprovalCandidate`s that pass through that same gate. One representative
  * case each is proven in `server/tests/approvals-interop.test.ts`.
  *
@@ -22,18 +22,18 @@ import {
  * table (the request `result` + `finish` is the receipt), and the
  * `/api/actions/:id/decide` + connection-approval adapters.
  *
- * Single-execution equivalence, so no second mechanism exists: OpenDots
+ * Single-execution equivalence, so no second mechanism exists: the legacy
  * `claimAction` (INSERT OR IGNORE single-flight) is ORBO `consume`
- * (approved→consumed once) plus `saveResult` (first writer wins); OpenMuse
+ * (approved→consumed once) plus `saveResult` (first writer wins); the legacy
  * `executing`/`outcome_unknown` are ORBO's consume-once + unknown-outcome path
- * in `resume`; the OpenDots connection `fingerprint` invalidation is ORBO's
+ * in `resume`; the legacy connection `fingerprint` invalidation is ORBO's
  * `validate` re-check before `execute`.
  */
 
 /**
  * Which upstream family an approval belongs to, derived from the tool ref so no
- * schema change is needed for slice 1: `action/<kind>` (OpenMuse proposal),
- * `mcp/<tool>` (OpenDots per-call approval), anything else (OpenBot tool call).
+ * schema change is needed for slice 1: `action/<kind>` (legacy action proposal),
+ * `mcp/<tool>` (legacy per-call MCP approval), anything else (default tool call).
  */
 export type ApprovalKind = "tool" | "mcp" | "action";
 
@@ -43,7 +43,7 @@ export function approvalKindOf(toolRef: string): ApprovalKind {
   return "tool";
 }
 
-/* OpenMuse `ActionProposal` (packages/domain + apps/server/src/actions.ts). */
+/* Legacy `ActionProposal` (upstream domain + server actions). */
 
 export const PROPOSAL_STATUSES = [
   "awaiting_review",
@@ -79,7 +79,7 @@ export type ActionProposalMappedDecision = {
  * Collapse the three status vocabularies without losing `expired` or
  * `outcome_unknown`: `executing` is consume-once, `outcome_unknown` completes
  * with an error result (the resume path saves "outcome is unknown" exactly like
- * OpenMuse records it), and `expired`/`cancelled` deny so the person re-asks —
+ * the upstream recorder does), and `expired`/`cancelled` deny so the person re-asks —
  * an expired review is never executed.
  */
 const PROPOSAL_STATUS_MAP: Record<
@@ -177,7 +177,7 @@ export function actionProposalToCandidate(
 ): ApprovalCandidate {
   return {
     actorId: ownerUserId,
-    botId: options.botId ?? "openmuse",
+    botId: options.botId ?? "orbo",
     toolRef: `action/${proposal.kind}`,
     effect: "write",
     scope: proposal.connectionId ?? proposal.account ?? "google",
@@ -192,12 +192,12 @@ export function actionProposalToCandidate(
   };
 }
 
-/* OpenDots `mcp_approvals`/`mcp_actions` (server/connection-store.ts). */
+/* Legacy `mcp_approvals`/`mcp_actions` (upstream connection store). */
 
 /** How long a per-call approval stays usable from its own conversation. */
 export const MCP_APPROVAL_TTL_MS = 60 * 60 * 1000;
 
-export type OpenDotsMcpApproval = {
+export type OrboMcpApproval = {
   id: string;
   threadId: string;
   dotId: string;
@@ -209,7 +209,7 @@ export type OpenDotsMcpApproval = {
 };
 
 export function isMcpApprovalExpired(
-  approval: Pick<OpenDotsMcpApproval, "createdAt">,
+  approval: Pick<OrboMcpApproval, "createdAt">,
   now: number = Date.now(),
   ttlMs: number = MCP_APPROVAL_TTL_MS,
 ): boolean {
@@ -223,7 +223,7 @@ export function isMcpApprovalExpired(
  */
 export function mcpApprovalToCandidate(
   ownerUserId: string,
-  approval: OpenDotsMcpApproval,
+  approval: OrboMcpApproval,
   options: { continuation?: ApprovalContinuation } = {},
 ): ApprovalCandidate {
   return {

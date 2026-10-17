@@ -386,6 +386,13 @@
       "when": 1792115005865,
       "tag": "0054_fine_hitman",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1792193665594,
+      "tag": "0055_quick_lady_vermin",
+      "breakpoints": true
     }
   ]
 }

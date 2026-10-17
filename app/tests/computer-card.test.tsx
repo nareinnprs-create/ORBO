@@ -1,6 +1,6 @@
-// Ported from _sources/OpenDots/tests/computer-card.test.tsx (vitest) to
-// bun:test. The OpenDots ComputerToolCard has no ORBO counterpart (per
-// docs/planning/21-phase5-opendots-backend.md the card is UI-only), so this
+// Ported from upstream tests/computer-card.test.tsx (vitest) to
+// bun:test. The upstream ComputerToolCard has no ORBO counterpart (per
+// the Phase 5 backend mapping doc the card is UI-only), so this
 // ports the user-visible status contract with a minimal card that encodes the
 // same decision rules: nonzero exits are "Needs attention" (never "Finished"),
 // a run that ends with calls still in flight marks them "Interrupted", live

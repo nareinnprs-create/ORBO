@@ -5988,7 +5988,11 @@ mod tests {
         let fallback = temp_root("orbo-default-stop-root");
         std::fs::create_dir_all(&active).unwrap();
         std::fs::create_dir_all(active.join("deploy/compose")).unwrap();
-        std::fs::write(active.join("deploy/compose/docker-compose.yml"), "services: {}\n").unwrap();
+        std::fs::write(
+            active.join("deploy/compose/docker-compose.yml"),
+            "services: {}\n",
+        )
+        .unwrap();
         std::fs::create_dir_all(&fallback).unwrap();
         let shell = Shell::default();
         *shell.root.lock().unwrap() = Some(active.clone());
@@ -6016,7 +6020,11 @@ mod tests {
         let fallback = temp_root("orbo-default-quit-root");
         std::fs::create_dir_all(&active).unwrap();
         std::fs::create_dir_all(active.join("deploy/compose")).unwrap();
-        std::fs::write(active.join("deploy/compose/docker-compose.yml"), "services: {}\n").unwrap();
+        std::fs::write(
+            active.join("deploy/compose/docker-compose.yml"),
+            "services: {}\n",
+        )
+        .unwrap();
         std::fs::create_dir_all(&fallback).unwrap();
         let shell = Shell::default();
         *shell.root.lock().unwrap() = Some(active.clone());
@@ -6038,7 +6046,11 @@ mod tests {
         let fallback = temp_root("orbo-default-stop-failures");
         std::fs::create_dir_all(&active).unwrap();
         std::fs::create_dir_all(active.join("deploy/compose")).unwrap();
-        std::fs::write(active.join("deploy/compose/docker-compose.yml"), "services: {}\n").unwrap();
+        std::fs::write(
+            active.join("deploy/compose/docker-compose.yml"),
+            "services: {}\n",
+        )
+        .unwrap();
         std::fs::create_dir_all(&fallback).unwrap();
         let shell = Shell::default();
         *shell.root.lock().unwrap() = Some(active.clone());
@@ -6090,7 +6102,11 @@ mod tests {
         let fallback = temp_root("orbo-default-exit-failures");
         std::fs::create_dir_all(&active).unwrap();
         std::fs::create_dir_all(active.join("deploy/compose")).unwrap();
-        std::fs::write(active.join("deploy/compose/docker-compose.yml"), "services: {}\n").unwrap();
+        std::fs::write(
+            active.join("deploy/compose/docker-compose.yml"),
+            "services: {}\n",
+        )
+        .unwrap();
         std::fs::create_dir_all(&fallback).unwrap();
         let shell = Shell::default();
         *shell.root.lock().unwrap() = Some(active.clone());
@@ -6633,7 +6649,9 @@ fn main() {
                 "{diagnostic}"
             );
             assert!(retained, "unresolved cleanup must retain run ownership");
-            assert!(cleanup_commands.contains("compose -f deploy/compose/docker-compose.yml config"));
+            assert!(
+                cleanup_commands.contains("compose -f deploy/compose/docker-compose.yml config")
+            );
             assert!(
                 !cleanup_commands.contains("version --format"),
                 "cleanup must use retained runtime, not rediscover"
@@ -7679,8 +7697,9 @@ fn main() {
             "{commands}"
         );
         assert!(
-            !commands
-                .contains("compose up -d --no-build --pull never postgres supervisor orbo-computer orbo-bot"),
+            !commands.contains(
+                "compose up -d --no-build --pull never postgres supervisor orbo-computer orbo-bot"
+            ),
             "Anthropic Start must not target the OpenAI-only orbo-bot: {commands}"
         );
         assert_eq!(problem.said, "Part of ORBO stopped during startup.");
@@ -8180,7 +8199,11 @@ fn main() {
         std::fs::create_dir_all(root.join("app")).unwrap();
         std::fs::create_dir_all(root.join("worker")).unwrap();
         std::fs::create_dir_all(root.join("deploy/compose")).unwrap();
-        std::fs::write(root.join("deploy/compose/docker-compose.yml"), "services: {}\n").unwrap();
+        std::fs::write(
+            root.join("deploy/compose/docker-compose.yml"),
+            "services: {}\n",
+        )
+        .unwrap();
         std::fs::write(
             root.join("app/package.json"),
             r#"{"scripts":{"serve":"vite preview"}}"#,

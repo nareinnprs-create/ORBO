@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import {
   createCoordinationTools,
   handoffTool,
@@ -329,21 +329,39 @@ describe("auto-review", () => {
     ).toBe("ask");
   });
 
-  // Quarantined: AbortSignal.timeout never fires under Bun on Windows here, so this hangs.
-  test.skip("an unreachable reviewer times out closed", async () => {
-    const verdict = await reviewAction({
-      model: (_prompt, signal) =>
-        new Promise((_, reject) =>
-          signal?.addEventListener("abort", () => reject(signal.reason)),
+  test("an unreachable reviewer times out closed", async () => {
+    // Bun on Windows never fires AbortSignal.timeout, so stand a deterministic timeout in its
+    // place: same TimeoutError, raised as soon as the model holds the signal (reviewAction passes
+    // it straight through; the fail-closed verdict is what is under test, not the platform timer).
+    const timeout = spyOn(AbortSignal, "timeout").mockImplementation(() => {
+      const controller = new AbortController();
+      queueMicrotask(() =>
+        controller.abort(
+          new DOMException(
+            "The operation was aborted due to timeout",
+            "TimeoutError",
+          ),
         ),
-      candidate: candidate(),
-      request: "",
-      timeoutMs: 20,
+      );
+      return controller.signal;
     });
-    expect(verdict).toMatchObject({
-      verdict: "needs_approval",
-      failedClosed: true,
-    });
+    try {
+      const verdict = await reviewAction({
+        model: (_prompt, signal) =>
+          new Promise((_, reject) =>
+            signal?.addEventListener("abort", () => reject(signal.reason)),
+          ),
+        candidate: candidate(),
+        request: "",
+        timeoutMs: 20,
+      });
+      expect(verdict).toMatchObject({
+        verdict: "needs_approval",
+        failedClosed: true,
+      });
+    } finally {
+      timeout.mockRestore();
+    }
   });
 
   test("memory writes, settings changes and reads are not reviewed", async () => {
