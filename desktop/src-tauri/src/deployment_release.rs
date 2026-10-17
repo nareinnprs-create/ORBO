@@ -13,8 +13,17 @@ const LATEST_RELEASE: &str = "https://api.github.com/repos/nareinnprs-create/ORB
 /// Uses blocking HTTP, so callers in an async runtime must use a blocking task.
 pub fn resolve_version(root: &Path) -> Result<String, String> {
     resolve_version_with(root, || {
-        let body = deployment::get(LATEST_RELEASE)
-            .map_err(|error| format!("could not find the latest ORBO release: {error}"))?;
+        let body = deployment::get(LATEST_RELEASE).map_err(|error| {
+            if error.contains("404") {
+                format!(
+                    "could not find the latest ORBO release: {error}. \
+                     The repository is private; set ORBO_RELEASES_TOKEN to a fine-grained \
+                     personal access token with Contents: Read on nareinnprs-create/ORBO."
+                )
+            } else {
+                format!("could not find the latest ORBO release: {error}")
+            }
+        })?;
         release_tag(&body)
     })
 }

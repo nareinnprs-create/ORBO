@@ -154,7 +154,7 @@ A Windows installer ships with every release:
 - **Build it yourself:** `scripts\build-windows.ps1` produces the same MSI into `artifacts\` (~18 min first time; needs Rust via [rustup](https://rustup.rs))
 - **Full guide:** [docs/windows.md](docs/windows.md) — prerequisites, PowerShell scripts, Docker recovery
 
-The desktop app talks to a running ORBO server; start the stack first with `scripts\install.ps1` (Windows) or `bash scripts/install.sh` (macOS/Linux).
+The desktop app talks to a running ORBO server; start the stack first with `scripts\install.ps1` (Windows) or `bash scripts/install.sh` (macOS/Linux). If this repository is private, set `ORBO_RELEASES_TOKEN` (fine-grained PAT, Contents: Read) so the app can fetch releases — see [docs/windows.md](docs/windows.md#private-repository-releases).
 
 ## Deploy it
 

@@ -304,12 +304,20 @@ fn fetch_images(root: &Path, version: &str) -> Result<(), String> {
 ///
 /// Shared with `install.rs`, which fetches the engine's installers through it and then checks their
 /// digests. One client, one user agent, one set of TLS defaults.
+///
+/// When `ORBO_RELEASES_TOKEN` is set, its value is sent as a bearer token — but only to URLs under
+/// `nareinnprs-create/ORBO`, so a private repository's credential never reaches third-party hosts
+/// (the engine installers in `install.rs`).
 pub fn get(url: &str) -> Result<Vec<u8>, String> {
-    let response = reqwest::blocking::Client::builder()
+    let mut request = reqwest::blocking::Client::builder()
         .user_agent("orbo-desktop")
         .build()
         .map_err(|error| format!("could not prepare the download: {error}"))?
-        .get(url)
+        .get(url);
+    if let Some(token) = releases_token(url) {
+        request = request.header("Authorization", format!("Bearer {token}"));
+    }
+    let response = request
         .send()
         .map_err(|error| format!("could not reach {url}: {error}"))?;
     if !response.status().is_success() {
@@ -319,6 +327,34 @@ pub fn get(url: &str) -> Result<Vec<u8>, String> {
         .bytes()
         .map(|body| body.to_vec())
         .map_err(|error| format!("the download did not finish: {error}"))
+}
+
+/// The release credential for this URL, when one is wanted.
+///
+/// Only URLs under this repository's own name carry the token; every other host gets an
+/// unauthenticated request.
+fn releases_token(url: &str) -> Option<String> {
+    releases_token_for(url, std::env::var("ORBO_RELEASES_TOKEN").ok().as_deref())
+}
+
+/// [`releases_token`] with the credential passed in, so the host filter is testable without
+/// touching the process environment.
+fn releases_token_for(url: &str, token: Option<&str>) -> Option<String> {
+    let Ok(parsed) = reqwest::Url::parse(url) else {
+        return None;
+    };
+    let host = parsed.host_str().unwrap_or_default();
+    let on_github = matches!(
+        host,
+        "github.com" | "api.github.com" | "codeload.github.com"
+    );
+    if !on_github || !parsed.path().contains("nareinnprs-create/ORBO") {
+        return None;
+    }
+    token
+        .map(str::trim)
+        .filter(|token| !token.is_empty())
+        .map(str::to_owned)
 }
 
 #[cfg(test)]
@@ -586,5 +622,35 @@ mod tests {
             "a deployment is not a place to develop"
         );
         assert!(!REQUIRED.contains(&"docs"));
+    }
+
+    #[test]
+    fn the_release_token_only_travels_to_this_repositorys_urls() {
+        let ours = images_url("v0.1.0");
+        assert_eq!(
+            releases_token_for(&ours, Some("ghp_test")).as_deref(),
+            Some("ghp_test"),
+            "a private repository's own assets carry the credential"
+        );
+        for foreign in [
+            "https://github.com/oven-sh/bun/releases/download/bun-v1/bun.zip",
+            "https://github.com/docker/compose/releases/download/v2/compose",
+            "https://example.com/nareinnprs-create/ORBO",
+            "https://github.com.attacker.example/nareinnprs-create/ORBO",
+        ] {
+            assert_eq!(
+                releases_token_for(foreign, Some("ghp_test")),
+                None,
+                "{foreign} must never receive the release credential"
+            );
+        }
+    }
+
+    #[test]
+    fn an_absent_or_blank_release_token_is_the_same_as_none() {
+        let ours = tarball_url("v0.1.0");
+        assert_eq!(releases_token_for(&ours, None), None);
+        assert_eq!(releases_token_for(&ours, Some("")), None);
+        assert_eq!(releases_token_for(&ours, Some("   ")), None);
     }
 }

@@ -159,6 +159,22 @@ The desktop app is the setup shell: it installs a container engine (digest-pinne
 Compose), raises the stack and keeps it running. Its full function, like the clone's, is the
 containers half of this page.
 
+## Private repository releases
+
+When the GitHub repository is private, the app's first-run deployment step (which queries
+`api.github.com/.../releases/latest` and downloads the tagged source and image manifest)
+gets 404 like any unauthenticated caller. Set a fine-grained personal access token —
+**Contents: Read** on this repository only — in the environment that launches the app:
+
+```powershell
+$env:ORBO_RELEASES_TOKEN = "github_pat_..."
+```
+
+The token is attached as a bearer token only to URLs on `github.com`/`api.github.com` under
+`nareinnprs-create/ORBO`; third-party downloads (Docker Compose, Bun installers) never receive
+it. Without the token, a private repository's release lookup fails with a message naming
+`ORBO_RELEASES_TOKEN`. A public repository needs no token.
+
 ## Known Windows gaps
 
 Factual, from the portability audit and the test strategy:
