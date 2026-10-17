@@ -417,9 +417,13 @@ jobs:
           python -m pytest agent-orbo-microsoft/tests -q
       - run: bun install --frozen-lockfile
       - run: bun test tests/compose.test.ts
+      # The same throwaway tokens the test above supplies: the compose file requires both before it
+      # interpolates, so a bare `config` here would fail for the reason the test itself covers.
       - run: docker compose -f deploy/compose/docker-compose.yml --env-file /dev/null --profile harness config --format json >/dev/null
         env:
           PICKED_HARNESS_IMAGE: orbo-langgraph-agui:test
+          ORBO_COMPUTER_TOKEN: ci-computer-token
+          SUPERVISOR_TOKEN: ci-supervisor-token
 
   build:
     name: build

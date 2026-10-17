@@ -1,5 +1,5 @@
-import { beforeAll, expect, test } from "bun:test";
-import { execFileSync } from "node:child_process";
+import { afterAll, beforeAll, expect, test } from "bun:test";
+import { execFileSync, spawnSync } from "node:child_process";
 import {
   mkdirSync,
   mkdtempSync,
@@ -142,7 +142,12 @@ function runLangGraphAguiModelProbe(
       ...process.env,
       BOT_MODEL: options.botModel ?? "gpt-test",
       OPENAI_API_KEY: options.openaiApiKey ?? "sk-test",
-      PYTHONPATH: `${dir}:${join(import.meta.dir, "..", "agent-orbo-langgraph-agui")}`,
+      // The platform's own path separator: Python splits PYTHONPATH on `;` on Windows, where a
+      // `:`-joined list is one unreadable path and the probe dies on a missing `src`.
+      PYTHONPATH: [
+        dir,
+        join(import.meta.dir, "..", "agent-orbo-langgraph-agui"),
+      ].join(process.platform === "win32" ? ";" : ":"),
     };
     delete env.CHATGPT_AUTH_FILE;
     if (options.botProvider !== undefined) {
@@ -171,6 +176,43 @@ function runLangGraphAguiModelProbe(
   }
 }
 
+// An empty file standing in for the "no `.env` at all" the old `/dev/null` argument meant. A real
+// file rather than `/dev/null` because Docker Desktop's `docker.exe` is an MSYS shim that rewrites
+// that path to `C:\dev\null` before compose ever sees it, and compose then refuses an env file that
+// does not exist. Content is what matters and empty is the same answer on every platform.
+const nullEnvDirectory = mkdtempSync(join(tmpdir(), "orbo-compose-env-"));
+const nullEnvFile = join(nullEnvDirectory, "empty.env");
+writeFileSync(nullEnvFile, "");
+afterAll(() => {
+  rmSync(nullEnvDirectory, { recursive: true, force: true });
+});
+
+/**
+ * The environment every `config` invocation runs under: isolated from the host's, and carrying the
+ * two tokens the compose file makes required.
+ *
+ * The tokens are required so a stock `docker compose up` cannot start a stack on well-known
+ * development secrets — every real caller (`scripts/start.sh`, `scripts/install.sh`) exports values
+ * before handing compose anything, and these tests do the same with throwaways, which is the only
+ * way `config` resolves the same file those runs see.
+ *
+ * The Windows line is for Docker Desktop's `docker.exe`, an MSYS shim that locates its own compose
+ * plugin through `ProgramFiles`; with a PATH-only environment it reports every flag as unknown.
+ * Linux and macOS runners need nothing, and a stray `ProgramFiles` there would mean nothing either.
+ */
+function composeEnv(overrides: Record<string, string> = {}): NodeJS.ProcessEnv {
+  return {
+    PATH: process.env.PATH ?? "",
+    PICKED_HARNESS_IMAGE: "orbo-langgraph-agui:test",
+    ORBO_COMPUTER_TOKEN: "orbo-test-computer-token",
+    SUPERVISOR_TOKEN: "orbo-test-supervisor-token",
+    ...(process.platform === "win32"
+      ? { ProgramFiles: process.env.ProgramFiles }
+      : {}),
+    ...overrides,
+  };
+}
+
 function runComposeConfig(env: Record<string, string>) {
   const output = execFileSync(
     "docker",
@@ -179,7 +221,7 @@ function runComposeConfig(env: Record<string, string>) {
       "-f",
       join("deploy", "compose", "docker-compose.yml"),
       "--env-file",
-      "/dev/null",
+      nullEnvFile,
       "--profile",
       "harness",
       "config",
@@ -188,11 +230,7 @@ function runComposeConfig(env: Record<string, string>) {
     ],
     {
       cwd: join(import.meta.dir, ".."),
-      env: {
-        PATH: process.env.PATH ?? "",
-        PICKED_HARNESS_IMAGE: "orbo-langgraph-agui:test",
-        ...env,
-      },
+      env: composeEnv(env),
       encoding: "utf8",
     },
   );
@@ -217,6 +255,45 @@ function runComposeConfig(env: Record<string, string>) {
 beforeAll(() => {
   runComposeConfig({});
 }, 60_000);
+
+/**
+ * The two tokens are required, and required on purpose — this is the security fix's own criterion.
+ *
+ * `composeEnv` gives every `config` call throwaway values, exactly as `scripts/start.sh` and
+ * `scripts/install.sh` do. What it must not do is make the requirement vanish: a bare `docker
+ * compose up` by an operator who has copied `.env.example` and filled nothing in has to fail at the
+ * prompt rather than start a stack whose browser and supervisor answer `orbo-dev-*-token`.
+ *
+ * Each token withheld with the other present, because interpolation stops at the first `:?` it
+ * cannot satisfy — withholding both proves only the first, and says nothing about the second.
+ */
+test("refuses to configure while either dev token is absent", () => {
+  for (const withheld of ["ORBO_COMPUTER_TOKEN", "SUPERVISOR_TOKEN"] as const) {
+    const env = composeEnv();
+    delete env[withheld];
+    const result = spawnSync(
+      "docker",
+      [
+        "compose",
+        "-f",
+        join("deploy", "compose", "docker-compose.yml"),
+        "--env-file",
+        nullEnvFile,
+        "--profile",
+        "harness",
+        "config",
+      ],
+      {
+        cwd: join(import.meta.dir, ".."),
+        env,
+        encoding: "utf8",
+      },
+    );
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(`${withheld} is required`);
+  }
+});
 
 test("provides PostgreSQL with pgvector for local development", () => {
   const compose = composeFile();
@@ -477,11 +554,13 @@ test("builds the deployment image with Playwright's Chromium payload only", () =
   }
 
   const compose = composeFile();
+  // `../..` because the compose file lives under deploy/compose/ and reaches the repository root
+  // from there; it said `.` when the file sat at the root, and the assertion was not moved with it.
   expect(compose).toContain(
     [
       "orbo-computer:",
       "    build:",
-      "      context: .",
+      "      context: ../..",
       "      dockerfile: agent-orbo-computer/Dockerfile",
     ].join("\n"),
   );

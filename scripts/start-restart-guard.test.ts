@@ -307,6 +307,11 @@ describe("start.sh one computer each", () => {
    *
    * THE SUPERVISOR IS WHAT GIVES EACH BOT ITS OWN COMPUTER, so its absence from the services handed
    * to `docker compose up` is the observable half; the shared computer stays.
+   *
+   * THE ASSERTIONS NAME THE WHOLE COMMAND LINE, `-f deploy/compose/docker-compose.yml` included.
+   * start.sh gained that flag when the compose file moved under deploy/, and a bare "compose up
+   * -d --build" stopped matching anything the faked docker logged — the runs themselves still
+   * exited 0, so the only thing that went red was every test asserting a service list.
    */
   test("false in .env starts no supervisor", async () => {
     const result = await runStartWithStaleServerProbe(401, {
@@ -318,7 +323,7 @@ describe("start.sh one computer each", () => {
       stderr: "",
     });
     expect(result.dockerLog).toContain(
-      "compose up -d --build postgres orbo-computer orbo-bot orbo-langgraph",
+      "compose -f deploy/compose/docker-compose.yml up -d --build postgres orbo-computer orbo-bot orbo-langgraph",
     );
     expect(result.dockerLog).not.toContain("supervisor");
   });
@@ -339,7 +344,7 @@ describe("start.sh one computer each", () => {
 
       expect(result.exitCode).toBe(0);
       expect(result.dockerLog).toContain(
-        "compose up -d --build postgres supervisor orbo-computer orbo-bot orbo-langgraph",
+        "compose -f deploy/compose/docker-compose.yml up -d --build postgres supervisor orbo-computer orbo-bot orbo-langgraph",
       );
     }
   });
@@ -363,10 +368,12 @@ describe("start.sh selected provider services", () => {
         stderr: "",
       });
       expect(result.dockerLog).toContain(
-        "compose up -d --build postgres supervisor orbo-computer orbo-langgraph",
+        "compose -f deploy/compose/docker-compose.yml up -d --build postgres supervisor orbo-computer orbo-langgraph",
       );
       expect(result.dockerLog).not.toContain("orbo-bot");
-      expect(result.dockerLog).toContain("compose run --rm --build migrate");
+      expect(result.dockerLog).toContain(
+        "compose -f deploy/compose/docker-compose.yml run --rm --build migrate",
+      );
       expect(result.curlLog).toContain("http://localhost:4100/health");
       expect(result.curlLog).toContain("http://localhost:4201/health");
       expect(result.curlLog).not.toContain("http://localhost:4200/health");
@@ -384,7 +391,7 @@ describe("start.sh selected provider services", () => {
     const result = await runStartWithStaleServerProbe(401);
     expect(result.exitCode).toBe(0);
     expect(result.dockerLog).toContain(
-      "compose up -d --build postgres supervisor orbo-computer orbo-bot orbo-langgraph",
+      "compose -f deploy/compose/docker-compose.yml up -d --build postgres supervisor orbo-computer orbo-bot orbo-langgraph",
     );
     expect(result.curlLog).toContain("http://localhost:4200/health");
     expect(result.stdout).toContain("orbo-bot ready");

@@ -32,19 +32,16 @@ class PageDocument {
     if (!confirmed || this.deleting) return;
     this.deleting = true;
     try {
-      const wasMounted = this.mounted;
       const result = await this.remove(this.page.id);
       if (!result.ok) return;
       this.deleted.push(this.page.id);
-      if (!wasMounted) {
+      this.refreshed.push(1);
+      if (!this.mounted) {
         // Stale completion: the user already left, so record the delete and
         // refresh but never navigate or touch editor state.
-        this.refreshed.push(1);
         return;
       }
-      this.refreshed.push(1);
-      if (this.mounted) this.homes.push(1);
-      else this.dirtied.push(1);
+      this.homes.push(1);
     } finally {
       this.deleting = false;
     }
