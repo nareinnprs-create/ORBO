@@ -6,15 +6,14 @@
 
 Each coworker gets a computer of its own: a real browser with its own logins, its own files, and only the tools you grant. Every action decided before it happens and recorded after.
 
-[**Quick start**](#quick-start) · [**Docs**](docs/README.md)
+[**Quick start**](#quick-start) · [**Desktop app**](#desktop-app) · [**Docs**](docs/README.md)
 
 [![CI](https://github.com/nareinnprs-create/ORBO/actions/workflows/ci.yml/badge.svg)](https://github.com/nareinnprs-create/ORBO/actions/workflows/ci.yml)
 [![security](https://github.com/nareinnprs-create/ORBO/actions/workflows/security_zizmor.yml/badge.svg)](https://github.com/nareinnprs-create/ORBO/actions/workflows/security_zizmor.yml)
+[![Release](https://img.shields.io/github/v/release/nareinnprs-create/ORBO)](https://github.com/nareinnprs-create/ORBO/releases/latest)
 ![Alpha](https://img.shields.io/badge/status-alpha-orange.svg)
 
 </div>
-
-https://github.com/user-attachments/assets/535ef7ee-1631-4a69-b839-564c56cf90b4
 
 <div align="center">
 
@@ -26,7 +25,7 @@ your own machine.
 
 </div>
 
-> **A template, not a product.** ORBO is meant to be cloned and made your own. There is no hosted version to sign up for, and nothing here is published as a package to depend on: every workspace in this repository is private. You take the repository, replace the example tenant package under `examples/` with your own coworkers, channels and skills, and run it. Everything below describes a starting point, not a finished thing somebody operates for you.
+> **A template, not a product.** ORBO is meant to be cloned and made your own. There is no hosted version to sign up for, and nothing here is published as a package to depend on. You take the repository, replace the example tenant package under `examples/` with your own coworkers, channels and skills, and run it. Everything below describes a starting point, not a finished thing somebody operates for you.
 
 > **Alpha, and under active development.** ORBO is early. Expect rough edges and bugs, and expect things to move. Issues and pull requests are welcome.
 
@@ -117,6 +116,8 @@ One-line install: `bash scripts/install.sh`, documented in [docs/self-host.md](d
    bash scripts/start.sh
    ```
 
+   On Windows, use the PowerShell equivalents instead: `.\scripts\install.ps1` (first run) or `.\scripts\start.ps1` — see [docs/windows.md](docs/windows.md).
+
 5. Open <http://localhost:3010>.
 
 `scripts/start.sh` starts Docker services, applies migrations, starts the API server on port 3001, starts the routine worker, starts the app on port 3010, and checks that the services answer their own health routes before printing next steps.
@@ -145,6 +146,16 @@ INTELLIGENCE_API_KEY=cpk-...   # the value of CPK_INTELLIGENCE_API_KEY
 To give the Bots a Learning container on that stack, see
 [Automatic Learning](docs/automatic-learning.md).
 
+## Desktop app
+
+A Windows installer ships with every release:
+
+- **Download:** [latest release](https://github.com/nareinnprs-create/ORBO/releases/latest) → `orbo-desktop-<version>-x64.msi` (per-machine, unsigned — SmartScreen may warn; More info → Run anyway)
+- **Build it yourself:** `scripts\build-windows.ps1` produces the same MSI into `artifacts\` (~18 min first time; needs Rust via [rustup](https://rustup.rs))
+- **Full guide:** [docs/windows.md](docs/windows.md) — prerequisites, PowerShell scripts, Docker recovery
+
+The desktop app talks to a running ORBO server; start the stack first with `scripts\install.ps1` (Windows) or `bash scripts/install.sh` (macOS/Linux).
+
 ## Deploy it
 
 One image carries the app, the API, the browser the Bots drive, and optionally PostgreSQL. Same
@@ -163,7 +174,7 @@ docker run -p 3001:3001 --env-file .env \
 ```
 
 Everything is on 3001 here, the app included, rather than the 3010 the clone uses. `latest` is the
-most recent release and a version tag such as `:v0.0.9` pins one.
+most recent release and a version tag such as `:v0.1.0` pins one.
 
 Leave `EMBEDDED_POSTGRES` off and set `DATABASE_URL` to point at a database you already run.
 [docs/deployment.md](docs/deployment.md) has the minimum sizes, the platform notes, and how it behaves behind more than one replica.
@@ -423,7 +434,7 @@ bun run --filter server db:generate
 bun run --filter server db:migrate
 ```
 
-Use `bash scripts/start.sh` for the whole stack and `bash scripts/stop.sh` to take it down. Use `bun run dev` only when you want the app and server without the Docker Bots and computers.
+Use `bash scripts/start.sh` for the whole stack and `bash scripts/stop.sh` to take it down (Windows: `scripts\start.ps1` / `scripts\stop.ps1`). Use `bun run dev` only when you want the app and server without the Docker Bots and computers.
 
 ## Documentation
 
