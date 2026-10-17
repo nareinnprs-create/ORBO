@@ -114,16 +114,35 @@ async function source() {
     })
   ).source;
 }
+/*
+ * Assertions on promises that touch the database, written as explicit `try`/`catch` rather than
+ * Bun's `.rejects(...)` matchers, as attachment-routes does: on Windows those matchers leave the
+ * promise unconsumed, the pooled connection it holds is never released, and later tests queue
+ * behind a pool with one connection left.
+ */
+async function expectRejects(
+  promise: Promise<unknown>,
+  matcher: (error: unknown) => void,
+): Promise<void> {
+  try {
+    await promise;
+  } catch (error) {
+    matcher(error);
+    return;
+  }
+  throw new Error("expected the promise to reject");
+}
 test("facts are owner scoped on list, edit and delete", async () => {
   const fact = await store.create(owner, { content: "Private preference" });
   expect((await store.list(other)).some((row) => row.id === fact.id)).toBe(
     false,
   );
-  await expect(
+  await expectRejects(
     store.update(other, fact.id, { content: "stolen" }),
-  ).rejects.toBeInstanceOf(MemoryNotFoundError);
-  await expect(store.remove(other, fact.id)).rejects.toBeInstanceOf(
-    MemoryNotFoundError,
+    (error) => expect(error).toBeInstanceOf(MemoryNotFoundError),
+  );
+  await expectRejects(store.remove(other, fact.id), (error) =>
+    expect(error).toBeInstanceOf(MemoryNotFoundError),
   );
 });
 test("manual edit and disable change the next selected context", async () => {
@@ -205,22 +224,24 @@ test("a person's edit survives later connector changes", async () => {
   ).toBe("My corrected roadmap");
 });
 test("write tools and another person's Bot cannot become ambient sources", async () => {
-  await expect(
+  await expectRejects(
     ingestion.createSource(owner, {
       agentId: bot,
       toolRef: `${server}/write_document`,
       title: "unsafe",
       args: {},
     }),
-  ).rejects.toBeInstanceOf(MemoryRefusedError);
-  await expect(
+    (error) => expect(error).toBeInstanceOf(MemoryRefusedError),
+  );
+  await expectRejects(
     ingestion.createSource(owner, {
       agentId: otherBot,
       toolRef: ref,
       title: "stolen",
       args: {},
     }),
-  ).rejects.toBeInstanceOf(MemoryRefusedError);
+    (error) => expect(error).toBeInstanceOf(MemoryRefusedError),
+  );
 });
 test("revoked grants immediately remove retrieval and expose source error", async () => {
   const value = await source();
@@ -238,8 +259,8 @@ test("revoked grants immediately remove retrieval and expose source error", asyn
 test("vendor failure hides stale source facts and records a visible error", async () => {
   const value = await source();
   vendorError = true;
-  await expect(ingestion.sync(owner, value.id)).rejects.toBeInstanceOf(
-    MemoryRefusedError,
+  await expectRejects(ingestion.sync(owner, value.id), (error) =>
+    expect(error).toBeInstanceOf(MemoryRefusedError),
   );
   expect(
     (await ingestion.recall(owner, bot)).some(

@@ -88,7 +88,7 @@ for (const framework of ["langgraph", "bot"]) {
     const port = reservation.port;
     await reservation.stop(true);
     const child = Bun.spawn(
-      [Bun.argv[0], "--no-env-file", `agent-${framework}/src/index.ts`],
+      [Bun.argv[0], "--no-env-file", `agent-orbo-${framework}/src/index.ts`],
       {
         cwd: `${import.meta.dir}/../..`,
         env: {

@@ -450,11 +450,16 @@ describe("tenant YAML validation", () => {
     // The instruction is the whole feature, so pin the two ends of the loop it prescribes.
     expect(creator?.instructions).toContain("Interview first");
     expect(creator?.instructions).toContain("save_skill");
+    /*
+     * DIYA is on every channel by design (docs/planning/20-phase5-diya-seeding.md §4.2): the
+     * primary assistant orchestrates each one alongside the named specialist. The package
+     * channels.yaml says `[general-assistant, diya]`, so the loaded package must match it.
+     */
     expect(tenantPackage.channels).toContainEqual({
       id: "general-assistant",
       name: "General Assistant",
       description: "Ask for help with everyday work.",
-      permittedAgents: ["general-assistant"],
+      permittedAgents: ["general-assistant", "diya"],
       allowedGroups: ["all"],
     });
   });
@@ -611,9 +616,16 @@ describe("tenant package agent profile synchronization", () => {
     createdAgentIds.push("policy");
 
     const agent = packageAgent();
-    await expect(
-      synchronizeTenantPackage(database, loadedPackage(agent)),
-    ).rejects.toThrow(/reserved for a deployment route/i);
+    let refusal: unknown;
+    try {
+      await synchronizeTenantPackage(database, loadedPackage(agent));
+    } catch (error) {
+      refusal = error;
+    }
+    expect(refusal).toBeInstanceOf(Error);
+    expect((refusal as Error).message).toMatch(
+      /reserved for a deployment route/i,
+    );
 
     // The refusal is the whole answer: nothing of the package is half-applied behind it.
     const [applied] = await database
@@ -720,9 +732,14 @@ describe("tenant package agent profile synchronization", () => {
       visibility: "private",
     });
 
-    await expect(
-      synchronizeTenantPackage(database, tenantPackage),
-    ).rejects.toThrow("user-created agent");
+    let refusal: unknown;
+    try {
+      await synchronizeTenantPackage(database, tenantPackage);
+    } catch (error) {
+      refusal = error;
+    }
+    expect(refusal).toBeInstanceOf(Error);
+    expect((refusal as Error).message).toContain("user-created agent");
 
     const [canonical] = await database
       .select()
@@ -773,9 +790,14 @@ describe("tenant package agent profile synchronization", () => {
       visibility: "private",
     });
 
-    await expect(
-      synchronizeTenantPackage(database, tenantPackage),
-    ).rejects.toThrow("user-owned profile");
+    let refusal: unknown;
+    try {
+      await synchronizeTenantPackage(database, tenantPackage);
+    } catch (error) {
+      refusal = error;
+    }
+    expect(refusal).toBeInstanceOf(Error);
+    expect((refusal as Error).message).toContain("user-owned profile");
 
     const [canonical] = await database
       .select()
@@ -863,7 +885,14 @@ describe("tenant package agent profile synchronization", () => {
     });
 
     const beforePackageB = await snapshot();
-    await expect(synchronizeTenantPackage(database, packageB)).rejects.toThrow(
+    let packageBRefusal: unknown;
+    try {
+      await synchronizeTenantPackage(database, packageB);
+    } catch (error) {
+      packageBRefusal = error;
+    }
+    expect(packageBRefusal).toBeInstanceOf(Error);
+    expect((packageBRefusal as Error).message).toContain(
       `Tenant package channel "${channelId}" collides with a channel this package does not own`,
     );
     expect(await snapshot()).toEqual(beforePackageB);
@@ -885,7 +914,14 @@ describe("tenant package agent profile synchronization", () => {
     });
 
     const beforeUserChannel = await snapshot();
-    await expect(synchronizeTenantPackage(database, packageB)).rejects.toThrow(
+    let userChannelRefusal: unknown;
+    try {
+      await synchronizeTenantPackage(database, packageB);
+    } catch (error) {
+      userChannelRefusal = error;
+    }
+    expect(userChannelRefusal).toBeInstanceOf(Error);
+    expect((userChannelRefusal as Error).message).toContain(
       `Tenant package channel "${channelId}" collides with a channel this package does not own`,
     );
     expect(await snapshot()).toEqual(beforeUserChannel);
@@ -1595,7 +1631,9 @@ test("blank package endpoint disables only its owned agent and restores it when 
   try {
     process.env.ORBO_MANAGED_AGENT_AG_UI_URL = "http://127.0.0.1:4201/ag-ui";
     process.env.PICKED_HARNESS_URL = "http://127.0.0.1:4206/ag-ui";
-    const source = new URL("../../examples/orbo", import.meta.url).pathname;
+    const source = fileURLToPath(
+      new URL("../../examples/orbo", import.meta.url),
+    );
     const configured = await loadTenantPackage(source);
     const rename = (id: string) => `${id}-${suffix}`;
     const isolate = (loaded: LoadedTenantPackage): LoadedTenantPackage => ({

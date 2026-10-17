@@ -363,14 +363,20 @@ export function createMemoryStore(database: Database) {
           .for("update");
         if (!source) throw new MemoryNotFoundError();
         // Tombstones survive sync: a fact the person deleted stays forgotten even when the vendor
-        // re-issues it under a new external id. Both digests are checked because imported rows
-        // carry the connector's raw digest while newer tombstones carry the folded one.
+        // re-issues it under a new external id. Suppression is scoped to this source and to
+        // manually deleted facts: a tombstone one connector left must not silently blank another
+        // source's imports of the same text. Both digests are checked because imported rows carry
+        // the connector's raw digest while manual tombstones carry the folded one.
         const tombstoned = await transaction
           .select({ digest: personalMemories.importDigest })
           .from(personalMemories)
           .where(
             and(
               eq(personalMemories.ownerUserId, ownerUserId),
+              or(
+                isNull(personalMemories.sourceId),
+                eq(personalMemories.sourceId, sourceId),
+              ),
               isNotNull(personalMemories.deletedAt),
               isNotNull(personalMemories.importDigest),
             ),

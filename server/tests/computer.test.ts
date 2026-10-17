@@ -353,10 +353,10 @@ test("cancels in-flight actions on revocation", async () => {
     "agent",
     controller.signal,
   );
-  setTimeout(() => {
-    store.patch("dot-a", { shell: false });
-    controller.abort();
-  }, 5);
+  // The action is in flight the moment this call returns. A timed abort raced its 1ms work timer
+  // and lost on Linux, where fine timer resolution always let the work finish first.
+  store.patch("dot-a", { shell: false });
+  controller.abort();
   await expect(run).rejects.toThrow("cancelled or timed out");
   expect(
     store.audit("dot-a").every((entry) => entry.outcome === "failed"),
