@@ -52,3 +52,8 @@ venv/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+
+# Windows build output from scripts\build-windows.ps1. The MSI is a build product: it stays on
+# disk for whoever built it and is never committed - a 6 MB binary in the repository is dead
+# weight for every clone and goes stale on the next build anyway.
+artifacts/

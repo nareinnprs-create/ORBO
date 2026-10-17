@@ -327,8 +327,8 @@ export function createProfiles(root: string, onClosed: BrowserClosed) {
     }
   };
 
-  // Checked, not joined. `join(root, botId)` normalizes `..` away, so a Bot id of `../workspace`
-  // used to resolve outside the root and `reset` would delete whatever was there.
+  // Checked before it is joined. `join(root, botId)` normalizes `..` away, so a Bot id of
+  // `../workspace` used to resolve outside the root and `reset` would delete whatever was there.
   const directoryFor = (botId: string): string =>
     profileDirectoryFor(root, botId);
 

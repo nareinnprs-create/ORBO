@@ -17,6 +17,7 @@
  * imports Playwright at module scope, so anything in it needs Chrome merely to be imported by a test,
  * and a decision this size should be testable without a browser.
  */
+import { join } from "node:path";
 
 /** Long enough for a uuid-shaped agent id, short enough to stay a sane directory name. */
 const MAX_BOT_ID = 64;
@@ -46,5 +47,5 @@ export class UnusableBotIdError extends Error {
  */
 export function profileDirectoryFor(root: string, botId: string): string {
   if (!isPlainBotId(botId)) throw new UnusableBotIdError(botId);
-  return `${root}/${botId}`;
+  return join(root, botId);
 }

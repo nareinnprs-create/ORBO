@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import { join, sep } from "node:path";
 import { isPlainBotId, profileDirectoryFor } from "../src/bot-id";
+
+/** The root is absolute, and its separator is the host's, because the answer is a host path. */
+const ROOT = join(sep, "profiles");
 
 /**
  * The Bot id arrives as a request header and becomes a filesystem path, so it is the same kind of
@@ -40,7 +44,7 @@ describe("isPlainBotId", () => {
 
 describe("profileDirectoryFor", () => {
   test("puts an ordinary Bot in its own directory under the root", () => {
-    expect(profileDirectoryFor("/profiles", "sales")).toBe("/profiles/sales");
+    expect(profileDirectoryFor(ROOT, "sales")).toBe(join(ROOT, "sales"));
   });
 
   // The regression. Each of these resolved outside the profiles root, and `reset` runs
@@ -51,14 +55,14 @@ describe("profileDirectoryFor", () => {
     ["../../above", "two levels up"],
     ["sales/../../etc", "/etc"],
   ])("refuses %s, which used to resolve to %s", (id) => {
-    expect(() => profileDirectoryFor("/profiles", id)).toThrow();
+    expect(() => profileDirectoryFor(ROOT, id)).toThrow();
   });
 
   // Belt and braces: whatever the allow-list lets through must still land inside the root.
   test("everything it accepts stays inside the root", () => {
     for (const id of ["sales", "support-1", "risk_analyst", "a"]) {
-      const directory = profileDirectoryFor("/profiles", id);
-      expect(directory.startsWith("/profiles/")).toBe(true);
+      const directory = profileDirectoryFor(ROOT, id);
+      expect(directory.startsWith(ROOT + sep)).toBe(true);
     }
   });
 });
