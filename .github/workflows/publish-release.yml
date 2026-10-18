@@ -219,9 +219,11 @@ jobs:
       # and 518.1 MiB on amd64.
       - id: short
         name: Derive the short image name
+        env:
+          IMAGE: ${{ matrix.image }}
         run: |
           set -euo pipefail
-          image="${{ matrix.image }}"
+          image="$IMAGE"
           short="$image"
           if [[ "$short" == orbo-* ]]; then
             directory="agent-orbo-${short#orbo-}"
@@ -307,9 +309,11 @@ jobs:
           path: digests
       - id: short
         name: Derive the short image name
+        env:
+          IMAGE: ${{ matrix.image }}
         run: |
           set -euo pipefail
-          image="${{ matrix.image }}"
+          image="$IMAGE"
           short="$image"
           if [[ "$short" == orbo-* ]]; then
             repository="$short"

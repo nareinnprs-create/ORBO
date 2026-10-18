@@ -27,7 +27,7 @@ const repositoryRoot = resolve(import.meta.dir, "..", "..");
 
 const chart = parse(
   await Bun.file(
-    resolve(repositoryRoot, "charts/orbo-diya/values.yaml"),
+    resolve(repositoryRoot, "deploy/charts/orbo-diya/values.yaml"),
   ).text(),
 ) as {
   config?: { handoff?: { maxDepth?: number; maxPerRun?: number } };
