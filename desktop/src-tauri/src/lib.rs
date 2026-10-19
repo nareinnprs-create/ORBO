@@ -5,6 +5,7 @@ pub mod deployment;
 pub mod deployment_release;
 pub mod engine;
 pub mod env;
+pub mod guard;
 pub mod harness;
 pub mod host_access;
 pub mod install;

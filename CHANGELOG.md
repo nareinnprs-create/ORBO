@@ -8,6 +8,17 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+### Opening the app from the installer no longer blocks its own package links
+
+Opening the desktop app from the installer's finish dialog handed it Windows 11's redirection guard,
+and the app passed that guard to every process it started. A guarded copy refuses to walk the
+package links Bun plants in `node_modules`, because each link is stamped untrusted when a
+non-elevated creator makes it, so Install stopped with "The path cannot be traversed because it
+contains an untrusted mount point" (os error 448) naming a package that was there, and Bun quietly
+looked those packages up in a different folder instead. The guard cannot be switched off once a
+process carries it, so the app now spots the guarded launch at startup and has the desktop shell
+start an unguarded copy in its place, retiring the guarded one before any window appears.
+
 ## 0.1.1
 
 ### The desktop app's Install step checks again before reporting a package missing

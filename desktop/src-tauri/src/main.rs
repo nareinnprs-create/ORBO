@@ -12,7 +12,7 @@ mod desktop_telemetry;
 mod test_support;
 
 use orbo_desktop_lib::{
-    acquire, deployment, deployment_release, engine, env as orbo_env, harness, host_access,
+    acquire, deployment, deployment_release, engine, env as orbo_env, guard, harness, host_access,
     install, preparation, problem::Problem, provider, pull_metrics, quiet, stack, supervise,
     telemetry, tray, windows as win,
 };
@@ -3739,11 +3739,19 @@ fn quit_menu_accelerator() -> Option<&'static str> {
 }
 
 fn main() {
+    // Before anything else touches the filesystem: a launch inherited from the installer carries
+    // Windows 11's redirection guard, which breaks `node_modules` for the whole process tree.
+    guard::settle_before_launch();
     tauri::Builder::default()
         // A second launch is somebody looking for the window they already have, not a request for a
         // second stack. Without this both copies bind the same ports and the loser reports a
         // failure that belongs to the winner.
-        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            // A relaunched copy arriving while the original still exits is the guard handshake,
+            // not somebody asking for the window.
+            if guard::relaunch_from_args(&argv).is_some() {
+                return;
+            }
             restore_after_second_instance(app);
         }))
         .plugin(tauri_plugin_shell::init())
