@@ -36,7 +36,11 @@ cd desktop
 APPLE_SIGNING_IDENTITY=- bun run tauri build --config src-tauri/tauri.build-version.conf.json --bundles dmg
 ```
 
-Desktop CI builds per-OS bundles from the same tree: `dmg` on macOS,
+That builds the runner's own architecture (arm64). Add `--target x86_64-apple-darwin` for the
+Intel build. Desktop CI builds both, one dmg per Mac architecture, and the release publishes
+each.
+
+Desktop CI builds per-OS bundles from the same tree: `dmg` for arm64 and Intel Macs,
 `msi` on Windows, `appimage` + `deb` on Linux. The protected Windows
 signing job instead builds `--bundles nsis` with the signing overlay.
 
