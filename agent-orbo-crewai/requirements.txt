@@ -1,2 +1,3 @@
 ag-ui-crewai
+litellm==1.105.1
 uvicorn[standard]

@@ -1,6 +1,6 @@
-agent-framework-ag-ui
-agent-framework-anthropic
-agent-framework-openai
-fastapi
+agent-framework-ag-ui==1.6.0
+agent-framework-anthropic==1.0.0b261015
+agent-framework-openai==1.17.0
+fastapi==0.141.1
 python-multipart
 uvicorn[standard]

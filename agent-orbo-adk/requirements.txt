@@ -1,6 +1,6 @@
 ag-ui-adk
 google-adk
-litellm
+litellm==1.105.1
 fastapi
 python-multipart
 uvicorn[standard]

@@ -1,6 +1,7 @@
 llama-index-core
 llama-index-protocols-ag-ui
 llama-index-llms-litellm
+litellm==1.105.0
 fastapi
 python-multipart
 uvicorn[standard]

@@ -1,5 +1,8 @@
 ag-ui-langroid
-langroid[litellm]
-fastapi
+langroid[litellm]==0.69.10
+fastapi==0.144.0
 python-multipart
 uvicorn[standard]
+litellm==1.106.0
+mcp==2.3.0
+openai==2.54.0

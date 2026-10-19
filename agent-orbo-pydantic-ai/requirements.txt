@@ -1,4 +1,7 @@
-pydantic-ai-slim[openai,anthropic,google,ag-ui]
-fastapi
+pydantic-ai-slim[openai,anthropic,google,ag-ui]==2.57.0
+fastapi==0.144.0
+openai==3.35.1
+anthropic==1.15.0
+google-genai==2.31.0
 python-multipart
 uvicorn[standard]

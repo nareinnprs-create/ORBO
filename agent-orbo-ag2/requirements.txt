@@ -1,4 +1,6 @@
-ag2[ag-ui,anthropic,openai]
-fastapi
+ag2[ag-ui,anthropic,openai]==1.1.2
+fastapi==0.144.0
 python-multipart
 uvicorn[standard]
+openai==3.35.1
+anthropic==1.15.0

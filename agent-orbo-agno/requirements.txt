@@ -1,5 +1,5 @@
 agno[agui]
-litellm
+litellm==1.103.5
 fastapi
 python-multipart
 uvicorn[standard]

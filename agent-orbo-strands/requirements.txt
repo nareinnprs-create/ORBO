@@ -1,6 +1,6 @@
-ag-ui-strands
-strands-agents
-litellm
+ag-ui-strands==1.0.2
+strands-agents==1.61.1
+litellm==1.103.5
 fastapi
 python-multipart
 uvicorn[standard]
