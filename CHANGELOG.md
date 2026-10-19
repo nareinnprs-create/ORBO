@@ -8,6 +8,8 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+## 0.1.1
+
 ### The desktop app's Install step checks again before reporting a package missing
 
 An Install that failed with "The installed package … is missing from ." could name a file that was
