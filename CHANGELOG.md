@@ -8,6 +8,8 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+## 0.1.2
+
 ### Opening the app from the installer no longer blocks its own package links
 
 Opening the desktop app from the installer's finish dialog handed it Windows 11's redirection guard,
