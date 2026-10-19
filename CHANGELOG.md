@@ -8,6 +8,8 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+## 0.1.4
+
 ### Releases now include an installer for Intel Macs
 
 Every release so far shipped one Mac installer, built for Apple Silicon, and an Intel Mac had
