@@ -176,7 +176,71 @@ pub type Secrets = std::collections::BTreeMap<String, String>;
 fn compose_command(engine: &Address, root: &Path, secrets: &Secrets) -> Command {
     let mut command = engine.command();
     command.current_dir(root).args(["compose"]).envs(secrets);
+    // Compose discovers its files in the working directory, and a deployment keeps them in
+    // `deploy/compose`, so discovery alone finds nothing until a `.env` names them — and that
+    // `.env` is written only after installation. Name the files here, the way `scripts/start.sh`
+    // does, and leave a deployment that already names its own in `.env` to do so.
+    for (name, value) in compose_file_environment(root, secrets) {
+        command.env(name, value);
+    }
     command
+}
+
+/// The environment that names this deployment's Compose files, empty when nothing should be added.
+///
+/// A `COMPOSE_FILE` somebody set in the secrets, or in the deployment's own `.env`, wins: the
+/// shell's default exists for the installation that has neither.
+fn compose_file_environment(root: &Path, secrets: &Secrets) -> Vec<(String, String)> {
+    if secrets.contains_key("COMPOSE_FILE") || env_file_compose_file(root).is_some() {
+        return Vec::new();
+    }
+    let files = static_compose_files(root);
+    if files.is_empty() {
+        return Vec::new();
+    }
+    let separator = if cfg!(windows) { ';' } else { ':' }.to_string();
+    vec![
+        ("COMPOSE_FILE".into(), files.join(&separator)),
+        ("COMPOSE_PATH_SEPARATOR".into(), separator),
+    ]
+}
+
+/// A `COMPOSE_FILE` the deployment's own `.env` already declares, if any.
+fn env_file_compose_file(root: &Path) -> Option<String> {
+    let existing = std::fs::read_to_string(root.join(".env")).ok()?;
+    existing.lines().find_map(|line| {
+        let (name, value) = line.split_once('=')?;
+        let value = value.trim();
+        (!value.is_empty() && name.trim() == "COMPOSE_FILE").then(|| value.to_string())
+    })
+}
+
+/// The Compose files this deployment carries, found where a deployment keeps them.
+fn static_compose_files(root: &Path) -> Vec<String> {
+    let first = |names: &[&str]| {
+        names
+            .iter()
+            .find(|name| root.join(name).exists())
+            .map(|name| (*name).to_owned())
+    };
+    let Some(base) = first(&[
+        "deploy/compose/compose.yaml",
+        "deploy/compose/compose.yml",
+        "deploy/compose/docker-compose.yml",
+        "deploy/compose/docker-compose.yaml",
+    ]) else {
+        return Vec::new();
+    };
+    let mut files = vec![base];
+    if let Some(existing) = first(&[
+        "deploy/compose/compose.override.yml",
+        "deploy/compose/compose.override.yaml",
+        "deploy/compose/docker-compose.override.yml",
+        "deploy/compose/docker-compose.override.yaml",
+    ]) {
+        files.push(existing);
+    }
+    files
 }
 
 /// Check the actual selected deployment before minting an encryption key. Compose resolves
@@ -516,27 +580,11 @@ fn compose_files(root: &Path, environment: &str) -> Result<Vec<String>, Problem>
 
     // Compose-go's default discovery order. A valid installed deployment contains its base
     // file in this directory, so there is no need to search outside the selected installation.
-    let first = |names: &[&str]| {
-        names
-            .iter()
-            .find(|name| root.join(name).exists())
-            .map(|name| (*name).to_owned())
-    };
-    let base = first(&[
-        "deploy/compose/compose.yaml",
-        "deploy/compose/compose.yml",
-        "deploy/compose/docker-compose.yml",
-        "deploy/compose/docker-compose.yaml",
-    ])
-    .ok_or_else(|| Problem::plain("The selected installation has no Compose file."))?;
-    let mut files = vec![base];
-    if let Some(existing) = first(&[
-        "deploy/compose/compose.override.yml",
-        "deploy/compose/compose.override.yaml",
-        "deploy/compose/docker-compose.override.yml",
-        "deploy/compose/docker-compose.override.yaml",
-    ]) {
-        files.push(existing);
+    let files = static_compose_files(root);
+    if files.is_empty() {
+        return Err(Problem::plain(
+            "The selected installation has no Compose file.",
+        ));
     }
     Ok(files)
 }
@@ -6952,6 +7000,58 @@ fn main() {
             ["first.yml", "custom.yml"]
         );
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn compose_command_names_the_deployments_files_until_something_else_does() {
+        let root = temp_root("compose-file-environment");
+        std::fs::create_dir_all(root.join("deploy/compose")).unwrap();
+        std::fs::write(
+            root.join("deploy/compose/docker-compose.yml"),
+            "services: {}\n",
+        )
+        .unwrap();
+        let separator = if cfg!(windows) { ';' } else { ':' };
+        let environment = compose_file_environment(&root, &Secrets::new());
+        let files = environment
+            .iter()
+            .find(|(name, _)| name == "COMPOSE_FILE")
+            .map(|(_, value)| value.as_str())
+            .expect("the deployment's file is named");
+        assert_eq!(files, "deploy/compose/docker-compose.yml");
+        assert!(environment.iter().any(
+            |(name, value)| name == "COMPOSE_PATH_SEPARATOR" && value == &separator.to_string()
+        ));
+        // An override the deployment also carries is named alongside the base file.
+        std::fs::write(
+            root.join("deploy/compose/docker-compose.override.yml"),
+            "services: {}\n",
+        )
+        .unwrap();
+        let environment = compose_file_environment(&root, &Secrets::new());
+        let files = environment
+            .iter()
+            .find(|(name, _)| name == "COMPOSE_FILE")
+            .map(|(_, value)| value.as_str())
+            .unwrap();
+        assert_eq!(
+            files,
+            format!("deploy/compose/docker-compose.yml{separator}deploy/compose/docker-compose.override.yml")
+        );
+        // A deployment whose own `.env` names its files keeps that authority.
+        std::fs::write(root.join(".env"), "COMPOSE_FILE=custom.yml\n").unwrap();
+        assert!(compose_file_environment(&root, &Secrets::new()).is_empty());
+        // As does a caller that already carries the setting.
+        std::fs::remove_file(root.join(".env")).unwrap();
+        let mut secrets = Secrets::new();
+        secrets.insert("COMPOSE_FILE".into(), "caller.yml".into());
+        assert!(compose_file_environment(&root, &secrets).is_empty());
+        // And nothing is invented for a directory that holds no deployment at all.
+        let empty = temp_root("compose-file-environment-empty");
+        std::fs::create_dir_all(&empty).unwrap();
+        assert!(compose_file_environment(&empty, &Secrets::new()).is_empty());
+        std::fs::remove_dir_all(root).unwrap();
+        std::fs::remove_dir_all(empty).unwrap();
     }
 
     #[test]

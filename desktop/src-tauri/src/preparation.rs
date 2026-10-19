@@ -384,6 +384,15 @@ pub fn image_settings(
 ) -> Result<stack::Secrets, Problem> {
     let mut settings: stack::Secrets = deployment::image_variables(root)?.into_iter().collect();
     settings.insert("IMAGE_PULL_POLICY".into(), "missing".into());
+    // The deployment's Compose file requires these two before it will render, and they are minted
+    // into the deployment's `.env` only when configuration completes — after this check. Values
+    // here exist so Compose can interpolate the file and name its images; they are written
+    // nowhere, and the real ones are minted later.
+    for key in ["ORBO_COMPUTER_TOKEN", "SUPERVISOR_TOKEN"] {
+        settings
+            .entry(key.into())
+            .or_insert_with(|| format!("orbo-image-check-{:016x}", rand::random::<u64>()));
+    }
     if let Some(crate::env::PickedHarness::Installed { image, port, .. }) = picked {
         settings.insert("PICKED_HARNESS_IMAGE".into(), image.clone());
         settings.insert("PICKED_HARNESS_PORT".into(), port.to_string());
@@ -661,5 +670,50 @@ fn main() {
             Some(f.root.clone()),
             "repair must not forget the last successful folder"
         );
+    }
+
+    #[test]
+    fn image_settings_carries_the_tokens_compose_requires_before_they_are_minted() {
+        let root = crate::test_support::temp_root("image-settings-tokens");
+        std::fs::create_dir_all(&root).unwrap();
+        let digest = "sha256:0000000000000000000000000000000000000000000000000000000000000000";
+        std::fs::write(
+            root.join("container-images.json"),
+            format!(
+                r#"{{
+                    "version": "v-test",
+                    "images": {{
+                        "server": {{"reference": "example/server@{digest}"}},
+                        "supervisor": {{"reference": "example/supervisor@{digest}"}},
+                        "orbo-computer": {{"reference": "example/computer@{digest}"}},
+                        "orbo-bot": {{"reference": "example/bot@{digest}"}},
+                        "orbo-langgraph": {{"reference": "example/langgraph@{digest}"}}
+                    }}
+                }}"#
+            ),
+        )
+        .unwrap();
+        let first = image_settings(&root, None).unwrap();
+        for key in ["ORBO_COMPUTER_TOKEN", "SUPERVISOR_TOKEN"] {
+            let value = first
+                .get(key)
+                .unwrap_or_else(|| panic!("{key} must be set for Compose to render the file"));
+            assert!(!value.is_empty(), "{key} must be a value, not blank");
+        }
+        assert_ne!(
+            first["ORBO_COMPUTER_TOKEN"], first["SUPERVISOR_TOKEN"],
+            "each requirement gets its own value"
+        );
+        let second = image_settings(&root, None).unwrap();
+        assert_ne!(
+            first["ORBO_COMPUTER_TOKEN"], second["ORBO_COMPUTER_TOKEN"],
+            "the values are throwaways, not something minted once here"
+        );
+        assert_eq!(
+            first.get("IMAGE_PULL_POLICY").map(String::as_str),
+            Some("missing")
+        );
+        assert_eq!(first["SERVER_IMAGE"], format!("example/server@{digest}"));
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

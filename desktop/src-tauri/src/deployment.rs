@@ -68,11 +68,14 @@ pub struct Images {
 /// The Compose variable each published image answers to.
 ///
 /// A published name on the left, a Compose variable on the right, because the two vocabularies are
-/// different and neither is going to change to suit the other.
+/// different and neither is going to change to suit the other. These are the names
+/// `deploy/compose/docker-compose.yml` reads: an image variable the file never looks at leaves the
+/// service on its local-build default, and an install that has never built anything is left
+/// reaching for a name no registry carries.
 pub const IMAGE_VARIABLES: [(&str, &str); 5] = [
     ("server", "SERVER_IMAGE"),
     ("supervisor", "SUPERVISOR_IMAGE"),
-    ("orbo-computer", "COMPUTER_IMAGE"),
+    ("orbo-computer", "ORBO_COMPUTER_IMAGE"),
     ("orbo-bot", "BOT_IMAGE"),
     ("orbo-langgraph", "LANGGRAPH_IMAGE"),
 ];

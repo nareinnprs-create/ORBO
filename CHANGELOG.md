@@ -8,6 +8,27 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+### The setup's Local software step finds the deployment's Compose files
+
+The step that checks which software to install asked Compose to read the deployment's files without
+saying where they are, and Compose looks in the folder it was started in: a deployment keeps its
+files in `deploy/compose`, and the `.env` that would name them is written only when configuration
+completes, which is after this check. Every new install therefore stopped at "Local software" with
+"no configuration file provided: not found". The app now names the files itself, the way
+`scripts/start.sh` always has, and leaves a deployment that already names its own in `.env` to do
+so. The same check also asked Compose to render a file that requires `ORBO_COMPUTER_TOKEN` and
+`SUPERVISOR_TOKEN` before either exists: they are minted into `.env` when configuration completes.
+The check now carries throwaway values so Compose can render the file and name the images; they are
+written nowhere, and the real tokens are still minted at configuration.
+
+### The computer image is pulled from the published digest, not a local name
+
+The release manifest pinned the computer image under `COMPUTER_IMAGE`, while the Compose file reads
+`ORBO_COMPUTER_IMAGE`, so the pin never reached the file and the service kept its local-build
+default `orbo-computer:latest`. On a machine that has built nothing, that is a name no registry
+carries, and the pull fails looking like a credentials problem. The manifest's variable now matches
+the name the file reads, so installs and starts both use the digest a release published.
+
 ## 0.1.2
 
 ### Opening the app from the installer no longer blocks its own package links
