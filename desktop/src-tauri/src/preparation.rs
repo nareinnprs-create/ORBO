@@ -1,6 +1,7 @@
 //! Local installation checkpoints. These contain no credentials and never grant runtime ownership.
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -12,6 +13,10 @@ pub const FILE: &str = ".orbo-prepared.json";
 const DEPENDENCIES: &str = ".orbo-dependencies.json";
 const LAUNCH: &str = ".orbo-launched.json";
 const PACKAGES: [&str; 4] = ["", "server", "app", "worker"];
+/// How long verification waits before reading the tree a second time. The first read is the one
+/// that races whatever is still touching a directory Bun has just finished writing; a second read
+/// a moment later is the cheapest way to tell that apart from a tree that is really incomplete.
+const VERIFY_PAUSE: Duration = Duration::from_secs(1);
 
 #[derive(Serialize, Deserialize)]
 struct Dependencies {
@@ -179,12 +184,28 @@ fn package_files(root: &Path) -> Result<Vec<PathBuf>, Problem> {
                 .flat_map(|entries| entries.keys())
             {
                 let relative = Path::new("node_modules").join(name).join("package.json");
-                let file = [directory.join(&relative), root.join(&relative)]
-                    .into_iter()
+                let mut candidates = vec![directory.join(&relative)];
+                let fallback = root.join(&relative);
+                // For the root package both are the same path — `join("")` only adds a trailing
+                // separator, and path equality compares components.
+                if fallback != candidates[0] {
+                    candidates.push(fallback);
+                }
+                let file = candidates
+                    .iter()
                     .find(|path| path.is_file())
                     .ok_or_else(|| {
+                        let checked = candidates
+                            .iter()
+                            .map(|path| match path.metadata() {
+                                Ok(_) => format!("{}: exists but is not a file", path.display()),
+                                Err(error) => format!("{}: {error}", path.display()),
+                            })
+                            .collect::<Vec<_>>()
+                            .join("; ");
                         required(format!(
-                            "The installed package {name} is missing from {package}."
+                            "The installed package {name} is missing from {package}. Checked \
+                             {checked}."
                         ))
                     })?;
                 files.insert(std::fs::canonicalize(file).map_err(|e| required(e.to_string()))?);
@@ -212,8 +233,37 @@ pub fn install_dependencies_if_needed(
     }
     let bun = acquire_runtime()?;
     stack::install_dependencies(root, &bun)?;
-    record_dependencies(root, &bun)?;
+    verify_dependencies(root, &bun)?;
     Ok(bun)
+}
+
+/// Record the installed packages, with the two things that turn a false miss into a success.
+///
+/// The failure this exists for reported its very first check as missing against packages that
+/// were on disk the whole time, seconds after Bun finished reconciling a stale tree — the window
+/// where Bun, the indexer, and the file system are all still touching what was just written. So
+/// verification reads a second time after a pause before believing a miss, and when the tree
+/// itself never arrived it lets Bun install once more instead of reporting a package as missing
+/// that a second install would place. Only a third miss, after both, is reported — with every
+/// path that was checked and what reading it actually said.
+fn verify_dependencies(root: &Path, bun: &Path) -> Result<(), Problem> {
+    if record_dependencies(root, bun).is_ok() {
+        return Ok(());
+    }
+    std::thread::sleep(VERIFY_PAUSE);
+    if record_dependencies(root, bun).is_ok() {
+        return Ok(());
+    }
+    let repair = stack::install_dependencies(root, bun);
+    let outcome = record_dependencies(root, bun);
+    match (repair, outcome) {
+        (Err(repair), Err(mut problem)) => {
+            let detail = problem.detail.unwrap_or_default();
+            problem.detail = Some(format!("{detail}\nA second install also failed: {repair}"));
+            Err(problem)
+        }
+        (_, outcome) => outcome,
+    }
 }
 
 pub fn dependencies_ready(root: &Path) -> Result<PathBuf, Problem> {
@@ -350,8 +400,67 @@ mod tests {
         bun: PathBuf,
     }
 
+    /// Bun exits non-zero without completing the tree: a failed install, reported as one.
+    const INSTALL_EXITS_INCOMPLETE: &str = r#"
+use std::io::Write;
+fn main() {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args == ["--version"] {
+        let version = std::env::current_exe().unwrap().parent().unwrap().join("runtime-version");
+        println!("{}", std::fs::read_to_string(version).unwrap_or_else(|_| "1.3.14".into()));
+        return;
+    }
+    assert_eq!(args, ["install", "--frozen-lockfile", "--ignore-scripts"]);
+    let previous = std::fs::read_to_string("installs").unwrap_or_default();
+    writeln!(std::fs::OpenOptions::new().create(true).append(true).open("installs").unwrap(), "install").unwrap();
+    std::fs::create_dir_all("node_modules/synthetic-package").unwrap();
+    if previous.is_empty() { std::process::exit(71); }
+    std::fs::write("node_modules/synthetic-package/package.json", "{}").unwrap();
+}
+"#;
+
+    /// The shape verification retries exist for: Bun exits successfully, but the package is not
+    /// readable until the next run — a tree that verification must repair, not report.
+    const CLEAN_EXIT_PACKAGE_ARRIVES_LATER: &str = r#"
+use std::io::Write;
+fn main() {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args == ["--version"] {
+        let version = std::env::current_exe().unwrap().parent().unwrap().join("runtime-version");
+        println!("{}", std::fs::read_to_string(version).unwrap_or_else(|_| "1.3.14".into()));
+        return;
+    }
+    assert_eq!(args, ["install", "--frozen-lockfile", "--ignore-scripts"]);
+    let previous = std::fs::read_to_string("installs").unwrap_or_default();
+    writeln!(std::fs::OpenOptions::new().create(true).append(true).open("installs").unwrap(), "install").unwrap();
+    std::fs::create_dir_all("node_modules/synthetic-package").unwrap();
+    if previous.is_empty() { return; }
+    std::fs::write("node_modules/synthetic-package/package.json", "{}").unwrap();
+}
+"#;
+
+    /// Bun exits successfully every time and never places the package at all.
+    const CLEAN_EXIT_PACKAGE_NEVER_ARRIVES: &str = r#"
+use std::io::Write;
+fn main() {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args == ["--version"] {
+        let version = std::env::current_exe().unwrap().parent().unwrap().join("runtime-version");
+        println!("{}", std::fs::read_to_string(version).unwrap_or_else(|_| "1.3.14".into()));
+        return;
+    }
+    assert_eq!(args, ["install", "--frozen-lockfile", "--ignore-scripts"]);
+    writeln!(std::fs::OpenOptions::new().create(true).append(true).open("installs").unwrap(), "install").unwrap();
+    std::fs::create_dir_all("node_modules/synthetic-package").unwrap();
+}
+"#;
+
     impl Fixture {
         fn new() -> Self {
+            Self::with_runtime(INSTALL_EXITS_INCOMPLETE)
+        }
+
+        fn with_runtime(script: &str) -> Self {
             let root = crate::test_support::temp_root("preparation");
             for package in PACKAGES {
                 std::fs::create_dir_all(root.join(package)).unwrap();
@@ -377,23 +486,7 @@ mod tests {
             std::fs::write(root.join("container-images.json"), "{}").unwrap();
             deployment::record(&root, "v-test").unwrap();
             let source = root.join("runtime.rs");
-            std::fs::write(&source, r#"
-use std::io::Write;
-fn main() {
-    let args: Vec<String> = std::env::args().skip(1).collect();
-    if args == ["--version"] {
-        let version = std::env::current_exe().unwrap().parent().unwrap().join("runtime-version");
-        println!("{}", std::fs::read_to_string(version).unwrap_or_else(|_| "1.3.14".into()));
-        return;
-    }
-    assert_eq!(args, ["install", "--frozen-lockfile", "--ignore-scripts"]);
-    let previous = std::fs::read_to_string("installs").unwrap_or_default();
-    writeln!(std::fs::OpenOptions::new().create(true).append(true).open("installs").unwrap(), "install").unwrap();
-    std::fs::create_dir_all("node_modules/synthetic-package").unwrap();
-    if previous.is_empty() { std::process::exit(71); }
-    std::fs::write("node_modules/synthetic-package/package.json", "{}").unwrap();
-}
-"#).unwrap();
+            std::fs::write(&source, script).unwrap();
             let bun = root.join(format!("runtime{}", std::env::consts::EXE_SUFFIX));
             crate::test_support::compile_fixture(&source, &bun);
             Self { root, bun }
@@ -452,6 +545,41 @@ fn main() {
             std::fs::read_to_string(f.root.join(".env")).unwrap(),
             "KEEP_THIS_PUBLIC_SETTING=yes\n"
         );
+    }
+
+    /// The regression the pause and repair exist for: Bun exits successfully without placing the
+    /// package, and the record is completed by the repair instead of reported as missing.
+    #[test]
+    fn a_clean_exit_missing_its_package_is_repaired_instead_of_reported() {
+        let f = Fixture::with_runtime(CLEAN_EXIT_PACKAGE_ARRIVES_LATER);
+        install_dependencies_if_needed(&f.root, || Ok(f.bun.clone())).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(f.root.join("installs")).unwrap(),
+            "install\ninstall\n"
+        );
+        assert!(f.root.join(DEPENDENCIES).is_file());
+    }
+
+    /// Three misses — after the pause and after one repair — are a real failure, and the message
+    /// says which paths were read and what reading them said.
+    #[test]
+    fn a_package_that_never_arrives_reports_every_path_that_was_checked() {
+        let f = Fixture::with_runtime(CLEAN_EXIT_PACKAGE_NEVER_ARRIVES);
+        let problem = install_dependencies_if_needed(&f.root, || Ok(f.bun.clone()))
+            .expect_err("a tree Bun never completes cannot pass verification");
+        let detail = problem.detail.unwrap_or_default();
+        assert!(
+            detail.contains("The installed package synthetic-package is missing"),
+            "{detail}"
+        );
+        assert!(detail.contains("node_modules"), "{detail}");
+        assert!(detail.contains("package.json"), "{detail}");
+        assert_eq!(
+            std::fs::read_to_string(f.root.join("installs")).unwrap(),
+            "install\ninstall\n",
+            "one repair, not an endless loop of installs"
+        );
+        assert!(!f.root.join(DEPENDENCIES).exists());
     }
 
     #[test]
