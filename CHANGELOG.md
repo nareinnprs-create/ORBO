@@ -14,7 +14,7 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 Every release so far shipped one Mac installer, built for Apple Silicon, and an Intel Mac had
 nothing to install. The same app is now also built for x86_64 and published beside it as
-`ORBO_<version>_x86_64.dmg`, so one release covers both kinds of Mac. Both builds are ad-hoc
+`ORBO_<version>_x64.dmg`, so one release covers both kinds of Mac. Both builds are ad-hoc
 signed, like the Apple Silicon one has been, and open with the same first-open exception.
 
 ## 0.1.3
