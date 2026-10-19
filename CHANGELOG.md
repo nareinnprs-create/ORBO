@@ -8,6 +8,8 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+## 0.1.3
+
 ### The setup's Local software step finds the deployment's Compose files
 
 The step that checks which software to install asked Compose to read the deployment's files without
