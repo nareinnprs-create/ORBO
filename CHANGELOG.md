@@ -8,63 +8,17 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
-**Before upgrading.** Two things change for an existing deployment:
-- Migration `0052_shared_brokered_accounts` copies every Composio connection into a new
-  `brokered_connections` table and leaves `composio_connections` in place, unwritten. Rolling back to
-  0.1.2 works, but accounts connected after the upgrade are invisible to it.
-- A handoff now records what started the run it came from. Older remote Bots' signed runs carry no
-  such record for up to ten minutes after the upgrade, and calls they make to a Shared app in that
-  window are refused.
+### The desktop app's Install step checks again before reporting a package missing
 
-### One Bots list, and one page per Bot
-
-Agents, Team Bots and Bots were three lists of the same Bots. `/bots` is now the only one — pinned,
-yours, shared with you, and the ones you hid — with **New Bot** at the top. A Bot's page holds
-everything about it: its routines, its skills and what it may reach, who it is shared with, and its
-name, role and connection. Where updates reach you and your answers to shared Bots moved to
-Settings. `/agents` and `/team-bots` still work and open the new places. A Team Bot an administrator
-assigns to a group is pinned at the top of its members' Bots list instead of sitting in their
-sidebar.
-
-The sidebar no longer lists each Bot that needs you. A badge on Bots counts the questions, approvals
-and stalled hand-offs waiting across all of them, and Bots lists those Bots first, under Needs you.
-Browser notifications when a Bot starts needing you are unchanged.
-
-The sidebar is now Bots and Skills. Each Bot's page holds what that Bot is waiting on you for, its
-suggested next steps, its responsibilities, where it reaches you, its memory sources and background
-research, and its approval rules. `/approvals`, `/memory`, `/reachability` and `/responsibilities`
-still work and open the new places. Messages from Bots, Slack and Teams that named those pages now
-point at the Bot's page.
-
-A group conversation is started like any other: put two or more Bots in the To: field of a new
-conversation, in the order they should answer. The separate group button and `/group/new` screen
-are gone; `/group/new` opens the new-conversation screen.
-
-Settings now also holds whether your Bots ask before acting, rules for every Bot, your memories, your
-devices and recent deliveries, and GitHub event sources. Team approval settings and shared account
-requests moved to Admin → Approvals.
-
-### An app's account can belong to the team
-
-An administrator can make a Composio app Shared: one account, connected once, that every Bot granted
-the app acts as. Who may use it through each Bot is approved per Bot — owner only, named people and
-groups, or everyone, and separately whether email, Slack or webhook input may — and checked on every
-call. Requests to widen it wait in the Approvals inbox. Writes through a Shared app ask the person
-first.
-
-### A new deployment starts with two coworkers, not twelve
-
-The example package loaded every coworker in `examples/fintech/agents/`, so a fresh deployment opened
-with General Assistant, Knowledge and ten more at once. The ten now live in `examples/fintech/catalog/`,
-which is not loaded, and a new deployment starts with General Assistant and Knowledge. Risk Analyst
-and the picked harness still register when their endpoints are configured. To keep any of the ten,
-copy its file from `catalog/` into `agents/`.
-
-A deployment that already registered them keeps them. A coworker dropped from the package is not
-retired on the next boot: its row stays, still listed and still refused by delete as protected,
-because only a remote coworker with a blank endpoint is retired automatically. To remove the ten
-from such a deployment, set `deleted_at` on their `agent_profiles` rows after upgrading (see
-[configuration.md](docs/configuration.md#agents)).
+An Install that failed with "The installed package … is missing from ." could name a file that was
+there: the packages were read once, the instant the install step finished, while Bun, the indexer
+and the file system were all still touching what had just been written, and that first read could
+miss a file that was there the whole time. The app now reads the packages again a second later
+before believing a miss, and when the tree itself never arrived it lets Bun install once more,
+instead of reporting a package as missing that a second install would place. Only a third failure,
+after both, stops the Install. The failure now also lists every path it checked and what reading
+it said (the file was not there, or the path exists but is not a file), where before it named only
+the package.
 
 ## 0.1.2
 
@@ -176,6 +130,69 @@ when hops allowed it, but every call was refused with "This run no longer has pe
 coordinate work in this conversation" and an `mcp.callback_refused` row nobody had caused. A run is
 now offered these tools only when a call from it would be allowed, so that turn is offered neither.
 A call that is refused anyway, from a schema offered earlier, is still refused and audited.
+
+## Included in the first ORBO release
+
+The notes below describe work that was on `main` when ORBO 0.1.0 was cut. It shipped in that
+release; the notes follow as written.
+
+**Before upgrading.** Two things change for an existing deployment:
+- Migration `0052_shared_brokered_accounts` copies every Composio connection into a new
+  `brokered_connections` table and leaves `composio_connections` in place, unwritten. Rolling back to
+  0.1.2 works, but accounts connected after the upgrade are invisible to it.
+- A handoff now records what started the run it came from. Older remote Bots' signed runs carry no
+  such record for up to ten minutes after the upgrade, and calls they make to a Shared app in that
+  window are refused.
+
+### One Bots list, and one page per Bot
+
+Agents, Team Bots and Bots were three lists of the same Bots. `/bots` is now the only one — pinned,
+yours, shared with you, and the ones you hid — with **New Bot** at the top. A Bot's page holds
+everything about it: its routines, its skills and what it may reach, who it is shared with, and its
+name, role and connection. Where updates reach you and your answers to shared Bots moved to
+Settings. `/agents` and `/team-bots` still work and open the new places. A Team Bot an administrator
+assigns to a group is pinned at the top of its members' Bots list instead of sitting in their
+sidebar.
+
+The sidebar no longer lists each Bot that needs you. A badge on Bots counts the questions, approvals
+and stalled hand-offs waiting across all of them, and Bots lists those Bots first, under Needs you.
+Browser notifications when a Bot starts needing you are unchanged.
+
+The sidebar is now Bots and Skills. Each Bot's page holds what that Bot is waiting on you for, its
+suggested next steps, its responsibilities, where it reaches you, its memory sources and background
+research, and its approval rules. `/approvals`, `/memory`, `/reachability` and `/responsibilities`
+still work and open the new places. Messages from Bots, Slack and Teams that named those pages now
+point at the Bot's page.
+
+A group conversation is started like any other: put two or more Bots in the To: field of a new
+conversation, in the order they should answer. The separate group button and `/group/new` screen
+are gone; `/group/new` opens the new-conversation screen.
+
+Settings now also holds whether your Bots ask before acting, rules for every Bot, your memories, your
+devices and recent deliveries, and GitHub event sources. Team approval settings and shared account
+requests moved to Admin → Approvals.
+
+### An app's account can belong to the team
+
+An administrator can make a Composio app Shared: one account, connected once, that every Bot granted
+the app acts as. Who may use it through each Bot is approved per Bot — owner only, named people and
+groups, or everyone, and separately whether email, Slack or webhook input may — and checked on every
+call. Requests to widen it wait in the Approvals inbox. Writes through a Shared app ask the person
+first.
+
+### A new deployment starts with two coworkers, not twelve
+
+The example package loaded every coworker in `examples/fintech/agents/`, so a fresh deployment opened
+with General Assistant, Knowledge and ten more at once. The ten now live in `examples/fintech/catalog/`,
+which is not loaded, and a new deployment starts with General Assistant and Knowledge. Risk Analyst
+and the picked harness still register when their endpoints are configured. To keep any of the ten,
+copy its file from `catalog/` into `agents/`.
+
+A deployment that already registered them keeps them. A coworker dropped from the package is not
+retired on the next boot: its row stays, still listed and still refused by delete as protected,
+because only a remote coworker with a blank endpoint is retired automatically. To remove the ten
+from such a deployment, set `deleted_at` on their `agent_profiles` rows after upgrading (see
+[configuration.md](docs/configuration.md#agents)).
 
 ## 0.1.0
 
