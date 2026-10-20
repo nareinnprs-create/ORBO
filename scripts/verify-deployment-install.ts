@@ -73,15 +73,16 @@ const source = sourceArg ? resolve(sourceArg) : REPO_ROOT;
  * beside a kept directory) must not share it. The pid keeps a rerun in the same millisecond apart
  * too, and the name says what the directory is when somebody finds it in tmp later.
  *
- * `realpathSync` on the temp root is load-bearing on Windows: a runner's `%TEMP%` can be an 8.3
- * short name (`C:\Users\RUNNER~1\...`), and bun then derives workspace paths by expanding that
- * short name partway (`workspace:..\..\..\..\..\runneradmin\...`). The frozen install reads the
- * mismatch as "lockfile had changes", and the unfrozen one ENOENTs on the symlink. Resolving the
- * short name before anything is built under it gives bun the long path every step expects, the
- * same one macOS and Linux pass with and this machine's Windows passes with.
+ * `realpathSync.native` on the temp root is load-bearing on Windows: a runner's `%TEMP%` can be an
+ * 8.3 short name (`C:\Users\RUNNER~1\...`), the plain `realpathSync` is a JavaScript path walk that
+ * leaves short names alone, and bun then has the project root short while it canonicalizes the
+ * workspace directories long. It derives workspace ids from the mismatch
+ * (`workspace:..\..\..\..\..\runneradmin\...`), the frozen install reads that as "lockfile had
+ * changes", and the unfrozen one ENOENTs on the symlink. `.native` asks the OS (GetFinalPathName)
+ * for the long path, the same one macOS and Linux pass with and this machine's Windows passes with.
  */
 const deployment = join(
-  realpathSync(tmpdir()),
+  realpathSync.native(tmpdir()),
   `orbo-deployment-install-${process.pid}-${Date.now()}`,
 );
 
