@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 
@@ -83,6 +83,42 @@ function removeDeployment(): void {
 }
 
 /*
+ * The lines the frozen install wanted to change, found by installing again without the freeze and
+ * diffing the rewritten lockfile against the copy made before the first attempt. "Lockfile had
+ * changes" without naming the package is a puzzle nobody can solve from a CI log; this names it.
+ * Any failure here (a bun that refuses to run, a lockfile bun chose not to rewrite) is swallowed:
+ * this is a diagnostic in front of the real error, never the thing that decides the exit code.
+ */
+function reportLockfileDrift(root: string, before: string): void {
+  try {
+    const rerun = spawnSync("bun", ["install"], {
+      cwd: root,
+      stdio: "ignore",
+      shell: false,
+    });
+    if (rerun.status !== 0) return;
+    const after = readFileSync(join(root, "bun.lock"), "utf8");
+    if (after === before) return;
+    const was = new Set(before.split("\n"));
+    const now = new Set(after.split("\n"));
+    const added = [...now].filter((line) => !was.has(line));
+    const removed = [...was].filter((line) => !now.has(line));
+    const sample = (lines: string[], sign: string) =>
+      lines
+        .slice(0, 20)
+        .map((line) => `    ${sign} ${line}`)
+        .join("\n");
+    console.error(
+      `\nAn unfrozen install rewrote bun.lock. Lines bun wanted out of the frozen one:\n` +
+        `${sample(removed, "-")}\n${sample(added, "+")}\n` +
+        (added.length + removed.length > 40 ? `    ... (truncated)\n` : ""),
+    );
+  } catch {
+    // The diff is a courtesy; the frozen install's own error above is the verdict.
+  }
+}
+
+/*
  * Copy the deployment the way `unpack` lays one out from the tarball: everything under each named
  * top-level entry, nothing else. `cpSync` rather than a shell copy because this has to run on
  * Windows as well as Linux and macOS, and a shell copy is two scripts pretending to be one.
@@ -128,7 +164,13 @@ try {
  * The same command a fresh install runs, with nothing but the deployment around it. Resolved via
  * PATH (shell: false) so the platform's own bun is the one that runs, and stdio inherited so a
  * failure shows the installer's own output rather than a summary of it.
+ *
+ * The lockfile is read into memory first: when the frozen install refuses because the lockfile
+ * "had changes", the failure block re-runs the install unfrozen and reports exactly which lines
+ * bun wanted to change, so a CI log says which package drifted rather than only that one did.
  */
+const lockBefore = readFileSync(join(deployment, "bun.lock"), "utf8");
+
 const install = spawnSync("bun", ["install", "--frozen-lockfile"], {
   cwd: deployment,
   stdio: "inherit",
@@ -146,6 +188,7 @@ if (install.error) {
 }
 
 if (install.status !== 0) {
+  reportLockfileDrift(deployment, lockBefore);
   const how =
     install.status === null
       ? `was killed by ${install.signal ?? "a signal"}`
