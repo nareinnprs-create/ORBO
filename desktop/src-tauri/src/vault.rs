@@ -13,7 +13,7 @@ writes over stdin, since PowerShell reading the console to the end has no buffer
 */
 
 use std::collections::BTreeMap;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use crate::problem::Problem;
@@ -710,6 +710,7 @@ fn recall_from_store(root: &Path, name: &str) -> Result<Option<String>, Problem>
 
 #[cfg(not(target_os = "windows"))]
 fn recall_secret_file(path: &Path) -> Result<Option<String>, Problem> {
+    use std::io::Read;
     match std::fs::symlink_metadata(path) {
         Ok(metadata) if metadata.file_type().is_symlink() || !metadata.file_type().is_file() => {
             return Err(Problem::with(

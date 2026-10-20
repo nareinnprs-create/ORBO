@@ -156,6 +156,9 @@ A Windows installer ships with every release:
 
 The desktop app talks to a running ORBO server; start the stack first with `scripts\install.ps1` (Windows) or `bash scripts/install.sh` (macOS/Linux). If this repository is private, set `ORBO_RELEASES_TOKEN` (fine-grained PAT, Contents: Read) so the app can fetch releases — see [docs/windows.md](docs/windows.md#private-repository-releases).
 
+- **macOS:** the dmg is ad-hoc signed; on first open, right-click the app and choose Open (or System Settings > Privacy & Security > Open Anyway).
+- **Linux:** prefer the .deb package; the AppImage additionally requires libfuse2 on distributions that do not ship it by default.
+
 ## Deploy it
 
 One image carries the app, the API, the browser the Bots drive, and optionally PostgreSQL. Same

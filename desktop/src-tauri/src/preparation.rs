@@ -1,5 +1,5 @@
 //! Local installation checkpoints. These contain no credentials and never grant runtime ownership.
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -107,6 +107,16 @@ pub fn required(detail: impl Into<String>) -> Problem {
 }
 
 fn hash_files(root: &Path, files: impl IntoIterator<Item = PathBuf>) -> Result<String, Problem> {
+    hash_files_with(root, files, |_, bytes| bytes.to_vec())
+}
+
+/// `content` decides which bytes of each file actually reach the digest, so a record can cover
+/// a file's raw bytes or only the part of it that the record's purpose cares about.
+fn hash_files_with(
+    root: &Path,
+    files: impl IntoIterator<Item = PathBuf>,
+    content: impl Fn(&Path, &[u8]) -> Vec<u8>,
+) -> Result<String, Problem> {
     let mut hash = Sha256::new();
     hash.update(b"orbo-preparation-v1\0");
     hash.update(
@@ -119,18 +129,57 @@ fn hash_files(root: &Path, files: impl IntoIterator<Item = PathBuf>) -> Result<S
         hash.update(file.to_string_lossy().as_bytes());
         let bytes = std::fs::read(root.join(&file))
             .map_err(|e| required(format!("{}: {e}", file.display())))?;
+        let bytes = content(&file, &bytes);
         hash.update((bytes.len() as u64).to_le_bytes());
         hash.update(bytes);
     }
     Ok(format!("{:x}", hash.finalize()))
 }
 
+/// What `bun install` actually consumes: the lockfile in full, and from each package.json only
+/// the keys an install reads. Hashing the whole file used to mean that a git pull which merely
+/// bumped the release version invalidated a perfectly good dependency tree, forcing a reinstall
+/// that re-records an install nothing about it had changed.
 fn dependency_fingerprint(root: &Path) -> Result<String, Problem> {
-    hash_files(
+    hash_files_with(
         root,
         std::iter::once(PathBuf::from("bun.lock"))
             .chain(PACKAGES.map(|path| Path::new(path).join("package.json"))),
+        |file, bytes| match file.file_name().and_then(|name| name.to_str()) {
+            Some("package.json") => install_view(bytes),
+            _ => bytes.to_vec(),
+        },
     )
+}
+
+/// The install-relevant view of one package.json, serialized stably: only the keys that can
+/// change what an install produces are kept, and absent keys are simply left out. A manifest
+/// that does not parse falls back to its raw bytes, so a corrupt file is never treated as
+/// matching what was recorded.
+fn install_view(bytes: &[u8]) -> Vec<u8> {
+    const KEYS: [&str; 10] = [
+        "name",
+        "packageManager",
+        "workspaces",
+        "dependencies",
+        "devDependencies",
+        "optionalDependencies",
+        "peerDependencies",
+        "overrides",
+        "resolutions",
+        "patchedDependencies",
+    ];
+    let Ok(manifest) = serde_json::from_slice::<serde_json::Value>(bytes) else {
+        return bytes.to_vec();
+    };
+    let Some(object) = manifest.as_object() else {
+        return bytes.to_vec();
+    };
+    let view = KEYS
+        .iter()
+        .filter_map(|key| object.get(*key).map(|value| (*key, value)))
+        .collect::<BTreeMap<_, _>>();
+    serde_json::to_vec(&view).unwrap_or_else(|_| bytes.to_vec())
 }
 
 fn fingerprint(root: &Path) -> Result<String, Problem> {
@@ -714,6 +763,101 @@ fn main() {
             Some("missing")
         );
         assert_eq!(first["SERVER_IMAGE"], format!("example/server@{digest}"));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// A minimal installation root for fingerprint-only tests: the same package layout the
+    /// Fixture builds, without compiling a stand-in runtime.
+    fn fingerprint_root(label: &str) -> PathBuf {
+        let root = crate::test_support::temp_root(label);
+        for package in PACKAGES {
+            std::fs::create_dir_all(root.join(package)).unwrap();
+            std::fs::write(
+                root.join(package).join("package.json"),
+                r#"{"scripts":{"serve":"bun serve.ts"}}"#,
+            )
+            .unwrap();
+        }
+        let root = std::fs::canonicalize(root).unwrap();
+        std::fs::write(
+            root.join("package.json"),
+            r#"{"name":"orbo","version":"0.1.0","dependencies":{"synthetic-package":"1"}}"#,
+        )
+        .unwrap();
+        std::fs::write(root.join("bun.lock"), "synthetic-lock").unwrap();
+        root
+    }
+
+    /// The regression this fingerprint exists for: a git pull that bumps the release version
+    /// must not invalidate a perfectly good dependency install.
+    #[test]
+    fn a_version_bump_alone_does_not_change_the_dependency_fingerprint() {
+        let root = fingerprint_root("fingerprint-version");
+        let before = dependency_fingerprint(&root).unwrap();
+        std::fs::write(
+            root.join("package.json"),
+            r#"{"name":"orbo","version":"0.2.0","dependencies":{"synthetic-package":"1"}}"#,
+        )
+        .unwrap();
+        assert_eq!(dependency_fingerprint(&root).unwrap(), before);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_changed_description_alone_does_not_change_the_dependency_fingerprint() {
+        let root = fingerprint_root("fingerprint-description");
+        let before = dependency_fingerprint(&root).unwrap();
+        std::fs::write(
+            root.join("package.json"),
+            r#"{"name":"orbo","version":"0.1.0","description":"ORBO desktop","dependencies":{"synthetic-package":"1"}}"#,
+        )
+        .unwrap();
+        assert_eq!(dependency_fingerprint(&root).unwrap(), before);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_changed_workspace_list_changes_the_dependency_fingerprint() {
+        let root = fingerprint_root("fingerprint-workspaces");
+        std::fs::write(
+            root.join("package.json"),
+            r#"{"name":"orbo","version":"0.1.0","workspaces":["server","app"],"dependencies":{"synthetic-package":"1"}}"#,
+        )
+        .unwrap();
+        let before = dependency_fingerprint(&root).unwrap();
+        std::fs::write(
+            root.join("package.json"),
+            r#"{"name":"orbo","version":"0.1.0","workspaces":["server","app","worker"],"dependencies":{"synthetic-package":"1"}}"#,
+        )
+        .unwrap();
+        assert_ne!(dependency_fingerprint(&root).unwrap(), before);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_changed_dependency_version_changes_the_dependency_fingerprint() {
+        let root = fingerprint_root("fingerprint-dependency");
+        let before = dependency_fingerprint(&root).unwrap();
+        std::fs::write(
+            root.join("package.json"),
+            r#"{"name":"orbo","version":"0.1.0","dependencies":{"synthetic-package":"2"}}"#,
+        )
+        .unwrap();
+        assert_ne!(dependency_fingerprint(&root).unwrap(), before);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// Garbage must never be treated as matching a recorded install: an unparseable
+    /// package.json falls back to its raw bytes, and that fallback is at least deterministic.
+    #[test]
+    fn an_unparseable_package_json_falls_back_to_deterministic_raw_bytes() {
+        let root = fingerprint_root("fingerprint-corrupt");
+        let parsed = dependency_fingerprint(&root).unwrap();
+        std::fs::write(root.join("package.json"), "not json {").unwrap();
+        let first = dependency_fingerprint(&root).unwrap();
+        let second = dependency_fingerprint(&root).unwrap();
+        assert_eq!(first, second);
+        assert_ne!(first, parsed);
         std::fs::remove_dir_all(root).unwrap();
     }
 }
