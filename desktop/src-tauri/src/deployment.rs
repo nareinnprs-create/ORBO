@@ -701,6 +701,66 @@ mod tests {
         );
     }
 
+    /// One array constant from `scripts/verify-deployment-install.ts`, as the quoted strings in it.
+    ///
+    /// A substring parse on purpose, not a parser: the script writes its two lists as plain quoted
+    /// arrays precisely so this stays a find-the-bracket-and-take-the-quotes operation. The
+    /// format is fixed by this test existing, so a comment added inside one of those arrays breaks
+    /// the parse loudly rather than silently shifting entries, and the fix is moving the comment
+    /// out, which is the right size of fix.
+    fn script_array(script: &str, name: &str) -> Vec<String> {
+        let marker = format!("const {name}");
+        let at = script
+            .find(&marker)
+            .unwrap_or_else(|| panic!("the script declares no {name}"));
+        let rest = &script[at + marker.len()..];
+        let open = rest
+            .find('[')
+            .unwrap_or_else(|| panic!("{name} is not an array"));
+        let close = rest
+            .find(']')
+            .unwrap_or_else(|| panic!("{name} is not closed"));
+        // Split on the quote character: spans at even indices sit outside quotes, the ones this
+        // takes sit inside them.
+        rest[open + 1..close]
+            .split('"')
+            .skip(1)
+            .step_by(2)
+            .map(str::to_string)
+            .collect()
+    }
+
+    /// The deployment-install check copies exactly what a deployment carries, or refuses.
+    ///
+    /// `scripts/verify-deployment-install.ts` rebuilds a deployment root in a temporary directory
+    /// and runs `bun install` in it, which is the only check that exercises what a fresh install
+    /// does. But it can only check what it copies, and the copy list has to exist in two places on
+    /// purpose: here, where `fetch` filters the tarball, and there, where the temporary root is
+    /// built. A list edited in one place and not the other turns the check into a quiet pass over
+    /// the wrong tree, so this reads the script and refuses the difference.
+    #[test]
+    fn the_deployment_install_check_copies_exactly_what_a_deployment_carries() {
+        let script = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../scripts/verify-deployment-install.ts"),
+        )
+        .expect("verify-deployment-install.ts is not where this test expects it");
+
+        let dirs = script_array(&script, "DEPLOYMENT_DIRS");
+        let files = script_array(&script, "DEPLOYMENT_FILES");
+
+        assert_eq!(
+            dirs.iter().map(String::as_str).collect::<Vec<_>>(),
+            REQUIRED.to_vec(),
+            "the script's DEPLOYMENT_DIRS has drifted from REQUIRED"
+        );
+        assert_eq!(
+            files.iter().map(String::as_str).collect::<Vec<_>>(),
+            ALSO_COPIED.to_vec(),
+            "the script's DEPLOYMENT_FILES has drifted from ALSO_COPIED"
+        );
+    }
+
     #[test]
     fn the_release_token_only_travels_to_this_repositorys_urls() {
         let ours = images_url("v0.1.0");

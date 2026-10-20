@@ -11,6 +11,7 @@ pub fn acquire(credential: &Path) -> io::Result<File> {
     let mut name = credential.as_os_str().to_os_string();
     name.push(".lock");
     let directory = PathBuf::from(name);
+    #[cfg_attr(not(unix), allow(unused_mut))]
     let mut builder = std::fs::DirBuilder::new();
     #[cfg(unix)]
     {

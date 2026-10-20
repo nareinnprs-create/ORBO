@@ -1854,7 +1854,7 @@ where
     Err(Problem::with(recording.said, detail))
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 fn retire_host_processes<C>(shell: &Shell, root: &Path, cleanup: C) -> Result<usize, Problem>
 where
     C: FnOnce(&Path) -> Result<usize, Problem>,
@@ -4506,7 +4506,7 @@ mod tests {
     fn deployment_ready_preserves_the_installed_release() {
         let root = temp_root("deployment-ready-pinned");
         write_installed_deployment(&root);
-        deployment::record(&root, "v0.0.7").unwrap();
+        deployment::record(&root, "v0.1.5").unwrap();
         let app = tauri::test::mock_builder()
             .manage(Shell::default())
             .build(tauri::test::mock_context(tauri::test::noop_assets()))
@@ -4514,7 +4514,7 @@ mod tests {
 
         tauri::async_runtime::block_on(deployment_ready(app.handle(), &root)).unwrap();
 
-        assert_eq!(deployment::installed(&root).unwrap().version, "v0.0.7");
+        assert_eq!(deployment::installed(&root).unwrap().version, "v0.1.5");
         assert_eq!(
             std::fs::read_to_string(root.join("deploy/compose/docker-compose.yml")).unwrap(),
             "services: {}\n"

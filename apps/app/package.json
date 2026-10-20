@@ -12,7 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@orbo/ui": "workspace:*",
+    "@orbo/ui": "file:../../packages/ui",
     "@tanstack/react-query": "5.102.2",
     "expo": "~55.0.0",
     "expo-constants": "~55.0.7",

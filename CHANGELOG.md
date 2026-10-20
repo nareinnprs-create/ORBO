@@ -8,6 +8,45 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+### A fresh install completes again
+
+A fetched deployment's root `package.json` names the mobile app and its UI package as workspaces,
+but a deployment never contains them: the installer lays down only the directories and files a
+deployment carries, and `apps/app` and `packages/ui` are not among them. So `bun install` looked
+for two directories that were not there and failed, on Windows, macOS and Linux, on every fresh
+install. The mobile app and its UI package are no longer workspaces of the root: the mobile app now
+depends on the UI package by path and keeps a lockfile of its own, so a development clone still
+installs both, a deployment installs only what it runs, and an install downloads fewer packages
+than before.
+
+### An installation from before v0.1.5 repairs itself on its next Install
+
+An installation whose deployment was fetched from an earlier release carries that release's
+self-inconsistent `package.json`, and the app pinned the release it installed, so nothing could
+repair the tree: every restart and every repair kept the same pin. An installation pinned below
+v0.1.5 now resolves to the current release once, on its next Install: the deployment is fetched
+afresh and re-verified, `.env` and every record are kept, and the fetch records the new pin, so
+the same move is never offered twice. Offline, a pin that cannot be moved is kept as it is, and
+the app starts from the deployment it already has.
+
+### A version bump no longer invalidates installed dependencies
+
+Verifying installed dependencies hashed every byte of each `package.json` beside the lockfile, so a
+release whose only change was its version number made the recorded fingerprint stale, and Install
+refused to use what was there with "The installed dependencies are incomplete or the lockfile
+changed." The verification now reads only what an install consumes: the lockfile in full, and from
+each `package.json` only the keys that can change what an install produces. A change to the release
+version, or to anything else an install ignores, leaves installed dependencies alone.
+
+### CI installs inside a rebuilt deployment root, on all three platforms
+
+Every install check in this repository ran inside the full git checkout, where anything a
+deployment forgot to carry is still on disk, which is how the workspace bug above reached every
+release. A new CI job rebuilds a deployment root the way the installer lays one out and runs
+`bun install` inside it, on Linux, macOS and Windows, so a file a deployment needs but does not
+carry fails the check instead of a person's first run. A Rust test keeps the job's file lists equal
+to the installer's own, so the two cannot drift apart quietly.
+
 ## 0.1.4
 
 ### Releases now include an installer for Intel Macs

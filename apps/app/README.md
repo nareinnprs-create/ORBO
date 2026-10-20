@@ -64,8 +64,9 @@ What's pending (TODO — do not invent; wire up once the org account exists):
 
 ## Follow-ups
 
-- **Install**: run `bun install` from the repo root once `apps/app` is
-  added to root `workspaces` (deliberately NOT done in this scaffold).
+- **Install**: run `npm install` inside `apps/app` (its own `package-lock.json`;
+  npm rather than bun because bun cannot install `file:` dependencies on
+  Windows — oven-sh/bun#28653).
 - **Wiring**: root providers (QueryClient, theme, session bootstrap),
   deep-link + push-notification wiring (see EAS section above),
   `react-native-web` + Tauri web-export setup.
