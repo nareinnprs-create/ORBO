@@ -93,12 +93,25 @@ function reportLockfileDrift(root: string, before: string): void {
   try {
     const rerun = spawnSync("bun", ["install"], {
       cwd: root,
-      stdio: "ignore",
+      encoding: "utf8",
       shell: false,
     });
-    if (rerun.status !== 0) return;
     const after = readFileSync(join(root, "bun.lock"), "utf8");
-    if (after === before) return;
+    if (rerun.status !== 0) {
+      console.error(
+        `\nThe unfrozen install that would show the drift itself failed ` +
+          `(exit ${rerun.status}). stderr tail:\n` +
+          `${(rerun.stderr ?? "").split("\n").slice(-15).join("\n")}\n`,
+      );
+      return;
+    }
+    if (after === before) {
+      console.error(
+        `\nThe unfrozen install rewrote bun.lock with identical bytes: bun reported ` +
+          `"changes" that are not in the file.\n`,
+      );
+      return;
+    }
     const was = new Set(before.split("\n"));
     const now = new Set(after.split("\n"));
     const added = [...now].filter((line) => !was.has(line));
@@ -113,8 +126,8 @@ function reportLockfileDrift(root: string, before: string): void {
         `${sample(removed, "-")}\n${sample(added, "+")}\n` +
         (added.length + removed.length > 40 ? `    ... (truncated)\n` : ""),
     );
-  } catch {
-    // The diff is a courtesy; the frozen install's own error above is the verdict.
+  } catch (error) {
+    console.error(`\nCould not produce the lockfile drift report: ${error}\n`);
   }
 }
 
