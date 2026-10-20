@@ -8,6 +8,8 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+## 0.1.5
+
 ### A fresh install completes again
 
 A fetched deployment's root `package.json` names the mobile app and its UI package as workspaces,
