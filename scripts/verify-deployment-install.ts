@@ -40,7 +40,8 @@ import { basename, join, resolve } from "node:path";
  */
 
 /** deployment.rs's REQUIRED: the directories a deployment is checked for. */
-const DEPLOYMENT_DIRS = ["deploy", "server", "app", "worker"];
+// biome-ignore format: one line on purpose — the Rust drift test quote-splits this line.
+const DEPLOYMENT_DIRS = ["deploy", "server", "app", "worker", "agent-orbo-computer"];
 
 /** deployment.rs's ALSO_COPIED: the rest of what a deployment needs to install and run. */
 const DEPLOYMENT_FILES = [
@@ -189,9 +190,10 @@ try {
 }
 
 /*
- * The same command a fresh install runs, with nothing but the deployment around it. Resolved via
- * PATH (shell: false) so the platform's own bun is the one that runs, and stdio inherited so a
- * failure shows the installer's own output rather than a summary of it.
+ * The same command a fresh install runs, with nothing but the deployment around it: the exact
+ * flags the product itself runs (stack.rs), resolved via PATH (shell: false) so the platform's own
+ * bun is the one that runs, and stdio inherited so a failure shows the installer's own output
+ * rather than a summary of it.
  *
  * The lockfile is read into memory first: when the frozen install refuses because the lockfile
  * "had changes", the failure block re-runs the install unfrozen and reports exactly which lines
@@ -199,11 +201,15 @@ try {
  */
 const lockBefore = readFileSync(join(deployment, "bun.lock"), "utf8");
 
-const install = spawnSync("bun", ["install", "--frozen-lockfile"], {
-  cwd: deployment,
-  stdio: "inherit",
-  shell: false,
-});
+const install = spawnSync(
+  "bun",
+  ["install", "--frozen-lockfile", "--ignore-scripts"],
+  {
+    cwd: deployment,
+    stdio: "inherit",
+    shell: false,
+  },
+);
 
 if (install.error) {
   // The binary could not be run at all (not on PATH, not executable), which is an environment
@@ -222,7 +228,7 @@ if (install.status !== 0) {
       ? `was killed by ${install.signal ?? "a signal"}`
       : `exited with code ${install.status}`;
   console.error(
-    `\nbun install --frozen-lockfile ${how} in the deployment root at ${deployment}.\n\n` +
+    `\nbun install --frozen-lockfile --ignore-scripts ${how} in the deployment root at ${deployment}.\n\n` +
       `A deployment laid down by deployment::fetch cannot install. A deployment holds only these\n` +
       `entries:\n\n  ${DEPLOYMENT_ENTRIES.join("\n  ")}\n\n` +
       `so package.json, bun.lock and everything they reference have to resolve inside that list.\n` +
@@ -235,13 +241,75 @@ if (install.status !== 0) {
   process.exit(1);
 }
 
+/*
+ * The runtime entry points, each bundled from the copied deployment root below.
+ *
+ * Why bundle and not only install: `bun install` proves the packages a deployment names exist
+ * inside the copied list, but it never reads a line of the code that runs. A runtime entry point
+ * does, and its relative imports reach wherever they reach — `policy-network.ts` importing
+ * `../../../agent-orbo-computer/src/egress` is a file the unpack drops, invisible to install and
+ * fatal at first import. Bundling one entry point walks its entire import graph against disk
+ * exactly as the copied tree stands, so a local import that leaves the list fails here, in CI,
+ * instead of on a user's machine when the process first loads that module.
+ */
+const BUNDLE_ENTRIES = [
+  "server/src/production-entry.ts",
+  "worker/src/index.ts",
+  "app/serve.ts",
+  "scripts/generate-app-config.ts",
+];
+
+/*
+ * Each entry is bundled into its own file in one shared output directory: their basenames
+ * (`production-entry.js`, `index.js`, `serve.js`, `generate-app-config.js`) do not collide.
+ * Resolved via PATH (shell: false) and stdio inherited so a missing module is printed by bun
+ * itself, against the deployment root it could not resolve out of.
+ */
+for (const entry of BUNDLE_ENTRIES) {
+  const built = spawnSync(
+    "bun",
+    [
+      "build",
+      entry,
+      "--target",
+      "bun",
+      "--outdir",
+      join(deployment, "bundle-check"),
+    ],
+    { cwd: deployment, stdio: "inherit", shell: false },
+  );
+
+  if (built.error || built.status !== 0) {
+    const how = built.error
+      ? `could not run: ${built.error.message}`
+      : built.status === null
+        ? `was killed by ${built.signal ?? "a signal"}`
+        : `exited with code ${built.status}`;
+    console.error(
+      `\nbun build ${entry} ${how} in the deployment root at ${deployment}.\n\n` +
+        `A deployment laid down by deployment::fetch cannot install and then run. Every runtime\n` +
+        `entry point has to resolve its whole import graph inside a deployment, which holds only\n` +
+        `these entries:\n\n  ${DEPLOYMENT_ENTRIES.join("\n  ")}\n\n` +
+        `so every relative import an entry point makes has to land inside that list. The usual\n` +
+        `cause is a source file importing a sibling a deployment never carries.\n\n` +
+        (keep
+          ? `The directory was kept for debugging.\n`
+          : `Re-run with --keep to leave the directory behind for debugging.\n`),
+    );
+    if (!keep) removeDeployment();
+    process.exit(1);
+  }
+}
+
 if (keep) {
   console.log(
-    `A deployment root installs. The directory was kept at ${deployment} (--keep).`,
+    `A deployment root installs and its runtime entry points bundle. The directory was kept at ` +
+      `${deployment} (--keep).`,
   );
 } else {
   removeDeployment();
   console.log(
-    "A deployment root installs: the rebuilt deployment ran bun install clean.",
+    "A deployment root installs and its runtime entry points bundle: the rebuilt deployment ran " +
+      "bun install and bun build clean.",
   );
 }

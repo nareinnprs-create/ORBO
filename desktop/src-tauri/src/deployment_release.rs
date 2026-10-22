@@ -10,14 +10,15 @@ const LATEST_RELEASE: &str = "https://api.github.com/repos/nareinnprs-create/ORB
 
 /// The first release whose fetched deployment is internally consistent.
 ///
-/// Releases published before it declare workspaces in the root `package.json` and `bun.lock` —
+/// Releases published before v0.1.5 declare workspaces in the root `package.json` and `bun.lock` —
 /// `apps/app`, `packages/ui` — that a fetched deployment never contains, so `bun install` in that
 /// tree fails every time and an install pinned to one of those releases can never repair itself.
-/// v0.1.5 is where the workspace fix lands, which makes it the oldest pin worth keeping: at or
-/// above it the tree installs its own workspaces and the pin is retained exactly as before, and
-/// below it the pin is offered the latest release once, because the fetch that follows rewrites
-/// the stamp and the same offer is never made twice.
-const FIRST_COMPLETE_DEPLOYMENT: &str = "v0.1.5";
+/// v0.1.5 is where that fix lands, but only from v0.1.6 on does the fetched deployment also carry
+/// `agent-orbo-computer` — the directory the server's network policy imports — so v0.1.6 is the
+/// oldest pin worth keeping: at or above it the tree installs its own workspaces and boots and
+/// the pin is retained exactly as before, and below it the pin is offered the latest release
+/// once, because the fetch that follows rewrites the stamp and the same offer is never made twice.
+const FIRST_COMPLETE_DEPLOYMENT: &str = "v0.1.6";
 
 /// Only a fresh deployment, or a pin older than `FIRST_COMPLETE_DEPLOYMENT`, consults GitHub.
 /// The fetcher records the exact tag after the source and image manifest have both downloaded
@@ -60,10 +61,10 @@ fn resolve_version_with(
     if retained {
         return Ok(installed.version);
     }
-    // Older than the first self-consistent release, so the tree on disk cannot install its own
-    // workspaces and only the latest release says what to replace it with. Offline that lookup
-    // fails and the pin is kept rather than refusing to start a machine that still has a
-    // deployment it can run.
+    // Older than the first self-consistent release, so the tree on disk either cannot install its
+    // own workspaces or lacks the directory the server imports, and only the latest release says
+    // what to replace it with. Offline that lookup fails and the pin is kept rather than refusing
+    // to start a machine that still has a deployment it can run.
     latest().or(Ok(installed.version))
 }
 
@@ -133,9 +134,9 @@ mod tests {
     #[test]
     fn a_missing_manifest_repairs_the_pinned_version() {
         let root = scratch("release-repair");
-        deployment::record(&root, "v0.1.5").unwrap();
+        deployment::record(&root, "v0.1.6").unwrap();
         let version = resolve_version_with(&root, || panic!("keep the installed pin")).unwrap();
-        assert_eq!(version, "v0.1.5");
+        assert_eq!(version, "v0.1.6");
         assert!(deployment::needs_fetch(&root, &version));
         std::fs::remove_dir_all(root).unwrap();
     }
@@ -184,10 +185,10 @@ mod tests {
     #[test]
     fn the_first_complete_pin_is_retained_without_a_lookup() {
         let root = scratch("release-first-complete");
-        deployment::record(&root, "v0.1.5").unwrap();
+        deployment::record(&root, "v0.1.6").unwrap();
         std::fs::write(deployment::images_path(&root), "{}").unwrap();
         let version = resolve_version_with(&root, || panic!("must work offline")).unwrap();
-        assert_eq!(version, "v0.1.5");
+        assert_eq!(version, "v0.1.6");
         assert!(!deployment::needs_fetch(&root, &version));
         std::fs::remove_dir_all(root).unwrap();
     }

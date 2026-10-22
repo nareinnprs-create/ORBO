@@ -8,6 +8,33 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+### A fetched deployment boots its server again
+
+The server's network rules live in one place — `server/src/computer/policy-network.ts` imports them
+from `agent-orbo-computer` rather than carrying a copy — but the list of what a deployment carries
+never included that directory, and the server image never copied it either. Every deployment fetched
+from an earlier release therefore started a server that failed on its first import, and a Start that
+timed out waiting for an answer that could never come. The directory is now part of what a
+deployment carries and of what the server image contains, so a fresh fetch runs.
+
+### An installation below v0.1.6 repairs itself once
+
+A deployment fetched before v0.1.6 boots its containers but cannot boot the server, and the app
+had pinned v0.1.5 as good, so nothing would ever replace it. v0.1.6 is now the oldest pin worth
+keeping: an installation pinned below it resolves to the current release once, on its next Install —
+the deployment is fetched afresh and re-verified, `.env` and every record are kept, and the fetch
+records the new pin, so the same move is never offered twice. Offline, a pin that cannot be moved
+is kept as it is, and the app starts from the deployment it already has.
+
+### A changed lockfile no longer blocks the start
+
+A `git pull` that touched the lockfile or an install-relevant manifest key made the recorded
+dependency fingerprint stale, and every start and sign-in bounced to the Install screen with "The
+installed dependencies are incomplete or the lockfile changed." — even though the installed tree
+was intact. The start now re-verifies that tree with the same frozen install the installer runs,
+refreshes the record, and continues; only a real absence — a missing package file, a missing Bun, an
+unreadable record — still goes to Install, which is where repairs belong.
+
 ## 0.1.5
 
 ### A fresh install completes again
