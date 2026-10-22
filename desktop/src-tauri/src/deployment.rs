@@ -184,7 +184,11 @@ pub fn needs_fetch(root: &Path, wanted: &str) -> bool {
 /// desktop runtime looks for at `deploy/compose/docker-compose.yml`, the s6 scripts and their
 /// environment templates. The Helm chart rides along under it; a small manifest is cheaper than a
 /// second, depth-aware copy rule.
-pub const REQUIRED: [&str; 4] = ["deploy", "server", "app", "worker"];
+///
+/// `agent-orbo-computer` rides along for one import: `server/src/computer/policy-network.ts` reads
+/// the egress rules from it rather than from a copy of them, so a deployment without the directory
+/// has a server that cannot boot.
+pub const REQUIRED: [&str; 5] = ["deploy", "server", "app", "worker", "agent-orbo-computer"];
 
 /// The rest of what a deployment needs, which is not what it is checked for.
 pub const ALSO_COPIED: [&str; 7] = [

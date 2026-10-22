@@ -315,10 +315,13 @@ fn verify_dependencies(root: &Path, bun: &Path) -> Result<(), Problem> {
     }
 }
 
-pub fn dependencies_ready(root: &Path) -> Result<PathBuf, Problem> {
+fn read_dependencies(root: &Path) -> Result<Dependencies, Problem> {
     let bytes = std::fs::read(root.join(DEPENDENCIES)).map_err(|e| required(e.to_string()))?;
-    let record: Dependencies =
-        serde_json::from_slice(&bytes).map_err(|e| required(e.to_string()))?;
+    serde_json::from_slice(&bytes).map_err(|e| required(e.to_string()))
+}
+
+pub fn dependencies_ready(root: &Path) -> Result<PathBuf, Problem> {
+    let record = read_dependencies(root)?;
     if record.fingerprint != dependency_fingerprint(root)?
         || record.package_files.iter().any(|file| !file.is_file())
     {
@@ -330,6 +333,46 @@ pub fn dependencies_ready(root: &Path) -> Result<PathBuf, Problem> {
     crate::install::verify_bun(&record.bun)
         .map_err(|problem| required(problem.detail.unwrap_or(problem.said)))?;
     Ok(record.bun)
+}
+
+/// The recorded dependency fingerprint goes stale the moment a git pull changes the lockfile or
+/// an install-relevant manifest key, while the installed tree itself is untouched: every
+/// recorded package file is still a file and the recorded Bun is still on disk. Bouncing to the
+/// Install screen to run the same frozen install that could have run here would acquire
+/// nothing — Bun only re-verifies the tree against the new lockfile and the record is
+/// refreshed — so when a stale fingerprint is the only problem, the repair runs silently and
+/// the start continues. A missing recorded Bun, a missing recorded package file, or an
+/// unreadable record are absences this path cannot conjure: those return the original problem,
+/// and the Install screen's repair remains the answer.
+fn dependencies_ready_or_repair(root: &Path) -> Result<PathBuf, Problem> {
+    let problem = match dependencies_ready(root) {
+        Ok(bun) => return Ok(bun),
+        Err(problem) => problem,
+    };
+    let Ok(saved) = read_dependencies(root) else {
+        return Err(problem);
+    };
+    if saved.fingerprint == dependency_fingerprint(root)?
+        || saved.package_files.iter().any(|file| !file.is_file())
+        || !saved.bun.is_file()
+    {
+        return Err(problem);
+    }
+    // Read before the repair runs: rewriting the dependencies file without rewriting the
+    // prepared record that covers its bytes is the one way this repair could trade a stale
+    // fingerprint for "The deployment folder or Bot selection changed after installation."
+    let Some(prepared) = std::fs::read(root.join(FILE))
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<Prepared>(&bytes).ok())
+    else {
+        return Err(problem);
+    };
+    if stack::install_dependencies(root, &saved.bun).is_err() {
+        return Err(problem);
+    }
+    record_dependencies(root, &saved.bun)?;
+    record(root, prepared.harness.as_ref(), prepared.images.clone())?;
+    dependencies_ready(root)
 }
 
 pub fn image_present(address: &Address, image: &str) -> Result<bool, Problem> {
@@ -421,7 +464,7 @@ fn require_with(
     if let Some(problem) = stack::deployment_problem(root) {
         return Err(required(problem));
     }
-    let bun = dependencies_ready(root)?;
+    let bun = dependencies_ready_or_repair(root)?;
     verify(&record.images)?;
     Ok(bun)
 }
@@ -510,6 +553,24 @@ fn main() {
     assert_eq!(args, ["install", "--frozen-lockfile", "--ignore-scripts"]);
     writeln!(std::fs::OpenOptions::new().create(true).append(true).open("installs").unwrap(), "install").unwrap();
     std::fs::create_dir_all("node_modules/synthetic-package").unwrap();
+}
+"#;
+
+    /// Bun exits successfully every time and places the package: the tree a stale-fingerprint
+    /// repair re-verifies without acquiring anything.
+    const INSTALL_SUCCEEDS: &str = r#"
+use std::io::Write;
+fn main() {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args == ["--version"] {
+        let version = std::env::current_exe().unwrap().parent().unwrap().join("runtime-version");
+        println!("{}", std::fs::read_to_string(version).unwrap_or_else(|_| "1.3.14".into()));
+        return;
+    }
+    assert_eq!(args, ["install", "--frozen-lockfile", "--ignore-scripts"]);
+    writeln!(std::fs::OpenOptions::new().create(true).append(true).open("installs").unwrap(), "install").unwrap();
+    std::fs::create_dir_all("node_modules/synthetic-package").unwrap();
+    std::fs::write("node_modules/synthetic-package/package.json", "{}").unwrap();
 }
 "#;
 
@@ -691,6 +752,54 @@ fn main() {
         f.prepared(chosen.as_ref());
         std::fs::write(f.root.join("bun.lock"), "changed-lock").unwrap();
         assert!(require_with(&f.root, Some(&chosen), |_| Ok(())).is_err());
+    }
+
+    /// The stale-fingerprint start: the tree and the recorded Bun are intact, so the start
+    /// repairs the record with the same frozen install instead of bouncing to Install, and the
+    /// prepared record's fingerprint follows the dependencies file it covers.
+    #[test]
+    fn a_stale_fingerprint_with_an_intact_tree_repairs_in_place_and_the_start_continues() {
+        let f = Fixture::with_runtime(INSTALL_SUCCEEDS);
+        f.prepared(None);
+        std::fs::write(f.root.join("bun.lock"), "changed-lock").unwrap();
+        require_with(&f.root, None, |images| {
+            assert_eq!(images, ["synthetic-image"]);
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(f.root.join("installs")).unwrap(),
+            "install\n",
+            "the repair ran the frozen install exactly once"
+        );
+        require_with(&f.root, None, |_| Ok(())).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(f.root.join("installs")).unwrap(),
+            "install\n",
+            "the re-recorded fingerprint holds; the next start repairs nothing"
+        );
+    }
+
+    /// A missing recorded package file is a real absence, not a stale fingerprint: the bounce to
+    /// Install keeps its exact message and no install is ever attempted.
+    #[test]
+    fn a_missing_package_file_keeps_the_install_screen_and_installs_nothing() {
+        let f = Fixture::with_runtime(INSTALL_SUCCEEDS);
+        f.prepared(None);
+        std::fs::write(f.root.join("bun.lock"), "changed-lock").unwrap();
+        std::fs::remove_file(f.root.join("node_modules/synthetic-package/package.json")).unwrap();
+        let problem = require_with(&f.root, None, |_| {
+            panic!("the dependency problem stops first")
+        })
+        .expect_err("a missing package must not start");
+        assert_eq!(
+            problem.detail.as_deref(),
+            Some("The installed dependencies are incomplete or the lockfile changed.")
+        );
+        assert!(
+            !f.root.join("installs").exists(),
+            "the repair must not attempt an install without the whole tree on disk"
+        );
     }
 
     #[test]

@@ -59,6 +59,7 @@ COPY --from=deps /app/server/node_modules server/node_modules
 COPY server server
 COPY shared shared
 COPY examples examples
+COPY agent-orbo-computer agent-orbo-computer
 
 # The built app, served by the process below. `APP_DIST_DIR` is what turns that on, so an image
 # without this layer is still a working API.
