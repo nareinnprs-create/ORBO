@@ -8,6 +8,8 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+## 0.1.6
+
 ### A fetched deployment boots its server again
 
 The server's network rules live in one place — `server/src/computer/policy-network.ts` imports them
