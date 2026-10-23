@@ -56,7 +56,6 @@ import {
 } from "./draft";
 import { screenPickedFiles } from "./picked-files";
 import { type RejectedFile, RejectedFiles } from "./rejected-files";
-import { PLACEHOLDER_COMMANDS } from "./sources";
 import { type AgentOption, buildTriggers } from "./triggers";
 import { useDictation } from "./use-dictation";
 
@@ -130,8 +129,11 @@ export type ComposerProps = {
   editorClassName?: string;
   compact?: boolean;
   voiceCall?: { active: boolean; supported: boolean; onStart(): void };
-  /** Agents that `@` can address. Empty means the mention menu reports an empty channel. */
+  /**
+   * Agents that `@` can address. Empty means the mention menu reports an empty channel.
+   */
   agents?: readonly AgentOption[];
+  /** Commands that `/` can complete. Empty means the menu reports nothing to complete. */
   commands?: readonly CommandOption[];
   /**
    * Receives the whole draft rather than a string, so a mention or a command reaches the caller as
@@ -319,7 +321,10 @@ export function Composer({
   compact = false,
   voiceCall,
   agents = [],
-  commands = PLACEHOLDER_COMMANDS,
+  // Empty, and no placeholder stands in for a channel that serves none: `/` offers only real,
+  // surface-supplied commands. The seeded-suggested-prompts slot (see `applyCommandChips`'s
+  // `prompt` kind) is kept for whenever a channel actually carries them.
+  commands = [],
   onSubmit,
   onQueue,
   onStop,

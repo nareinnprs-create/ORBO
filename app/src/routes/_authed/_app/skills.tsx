@@ -83,16 +83,22 @@ function SkillsPage() {
 
   /*
    * The server has ALREADY excluded skills this person may not see — `listSkills` scopes the query
-   * to `owner_user_id is null or owner_user_id = me`, so somebody else's private skill is never read
-   * into the process. These two lines only sort what arrived into the two things the page draws.
+   * to `owner_user_id is null or owner_user_id = me`, and for an administrator lifts that scope to
+   * every skill in the deployment. These three lines only sort what arrived into the three things
+   * the page draws.
    *
-   * ONE CASE FALLS THROUGH ON PURPOSE, FOR NOW: an administrator receives everybody's skills, and
-   * another person's lands in neither list. Not a leak, but an administrator cannot see here what
-   * they are entitled to. Worth an owner column or a third section before this page is called done.
+   * THE LEFTOVERS ARE DRAWN, NOT DROPPED, so an administrator can see here everything they are
+   * entitled to: another person's skill lands in `others` and appears in the "Others' skills"
+   * section below. The server refuses edit and delete to anybody but the owner and an
+   * administrator (`skillRefusal` on the routes), and the section is only ever non-empty for one,
+   * so the rows carry the same menus "Your skills" does.
    */
   const skills = data?.skills ?? [];
   const mine = skills.filter((skill) => skill.ownerUserId === me?.id);
   const deployment = skills.filter((skill) => skill.ownerUserId === null);
+  const others = skills.filter(
+    (skill) => skill.ownerUserId !== null && skill.ownerUserId !== me?.id,
+  );
 
   return (
     <DetailPanel
@@ -262,6 +268,89 @@ function SkillsPage() {
                     </ItemContent>
                   </Item>
                   {index !== deployment.length - 1 && <Separator />}
+                </StaggerItem>
+              ))}
+            </PageRows>
+          </PageSection>
+        ) : null}
+
+        {/*
+         * OTHER PEOPLE'S SKILLS, DRAWN RATHER THAN DROPPED. The server answers an administrator with
+         * every skill in the deployment; without this section, the skills that belonged to neither
+         * the reader nor the workspace were in the response and on no screen — impossible to see,
+         * edit, or delete what one is entitled to govern.
+         *
+         * The owner is named as the response carries them, which is the id alone: the skills payload
+         * has no person field, so a real name is a server-side addition (an owner name on the skills
+         * read) away. An id standing in is still the honest difference between one coworker's skill
+         * and another's.
+         *
+         * WHAT THE MENU OFFERS IS WHAT THE SERVER PERMITS. An administrator may edit and delete
+         * anything (`skillRefusal` types out the case); the refusals the workspace section deliberately
+         * withholds its menu for apply here to nobody.
+         *
+         * Hidden when there are none — which is the case for every non-administrator, and for an
+         * administrator working alone — rather than shown empty.
+         */}
+        {others.length > 0 ? (
+          <PageSection
+            description="Other people wrote these, one owner at a time. As an administrator you can edit or remove them."
+            title="Others' skills"
+          >
+            <PageRows>
+              {others.map((skill, index) => (
+                <StaggerItem index={index} key={skill.id}>
+                  <Item size="sm">
+                    <ItemContent>
+                      <ItemTitle>{skill.title}</ItemTitle>
+                      <ItemDescription>
+                        <code className="font-mono text-foreground/80 text-xs">
+                          /{skill.slug}
+                        </code>
+                        {skill.summary ? ` · ${skill.summary}` : null}
+                      </ItemDescription>
+                      <p className="text-muted-foreground text-xs">
+                        Owner {skill.ownerUserId}
+                      </p>
+                    </ItemContent>
+                    <ItemActions>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          render={
+                            <Button variant="ghost" size="icon-sm">
+                              <IconDots />
+                            </Button>
+                          }
+                        ></DropdownMenuTrigger>
+                        <DropdownMenuContent>
+                          <DropdownMenuGroup>
+                            <DropdownMenuItem
+                              onClick={() =>
+                                navigate({ search: { edit: skill.slug } })
+                              }
+                            >
+                              Edit
+                            </DropdownMenuItem>
+                            {/*
+                             * Deleting is immediate and there is no undo. Behind a menu with the slug
+                             * named in the label, for the same reason "Your skills" does it: a menu
+                             * opened over the wrong row is the ordinary way this goes wrong.
+                             */}
+                            <DropdownMenuItem
+                              variant="destructive"
+                              onClick={() => {
+                                setError(null);
+                                removeSkill.mutate(skill.slug);
+                              }}
+                            >
+                              Delete /{skill.slug}
+                            </DropdownMenuItem>
+                          </DropdownMenuGroup>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </ItemActions>
+                  </Item>
+                  {index !== others.length - 1 && <Separator />}
                 </StaggerItem>
               ))}
             </PageRows>

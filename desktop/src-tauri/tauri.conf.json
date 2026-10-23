@@ -20,7 +20,9 @@
         "resizable": true
       }
     ],
-    "security": { "csp": null }
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' ws: wss:"
+    }
   },
   "bundle": {
     "active": true,
@@ -51,7 +53,5 @@
     "shortDescription": "Run ORBO on your own machine",
     "longDescription": "ORBO Desktop installs the container engine, raises the stack, and keeps it running."
   },
-  "plugins": {
-    "$comment": "TODO (PLAN.md 10.B.14; docs/planning/31-phase8-wrapper-plan.md G3/G4; 05 R7): deep-link (orbo scheme) and updater blocks removed - the keys are inert in Tauri v2 without their crates and there are no handlers/endpoints yet. Re-add alongside tauri-plugin-deep-link + route map once the orbo scheme is owner-confirmed, and tauri-plugin-updater + Builder::plugin init once the release endpoint domain and signing exist; do not invent a URL."
-  }
+  "plugins": {}
 }

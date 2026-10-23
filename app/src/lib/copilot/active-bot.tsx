@@ -78,16 +78,51 @@ export function useActiveBotId(): string {
  * The active Bot when a surface has declared one, and undefined while the placeholder holds.
  *
  * The placeholder exists so a handler always has something to route with, but it is not a Bot: no
- * package registers an agent by that name, and the server answers 404 for it. A grant query handed
- * the placeholder therefore polls a guaranteed miss on its own interval — every few seconds, on
- * every screen without a conversation — and the constant failing request is noise that would bury a
- * real 404 the day one matters. A query given undefined instead simply does not run.
+ * package registers an agent by that name, and the server answers 404 for it. The short-circuit on
+ * that is now enforced at both points where a poll can be scheduled, rather than left as a
+ * convention every caller has to restate:
+ *
+ * - {@link isPlaceholderBot} is the gate every Bot-scoped poll factory passes in its `enabled`, so
+ *   an id that is the placeholder can never schedule its first request, however a caller hands it
+ *   in.
+ * - {@link botPollInterval} is the cadence every Bot-scoped poll runs on: honest while the Bot
+ *   answers, and backed off to a long interval once the query is failing with nothing ever received
+ *   — the same guaranteed miss, from a Bot that was deleted or a read that keeps refusing — so no
+ *   failing Bot-scoped read keeps costing a request every few seconds for the life of the surface.
  *
  * The name is already reserved in practice: an agents.yaml entry called "default" would be
  * indistinguishable from the placeholder in every handler that reads the holder.
  */
 export function declaredBotId(botId: string): string | undefined {
   return botId === DEFAULT_BOT_ID ? undefined : botId;
+}
+
+/** Whether a Bot-scoped read would be asking the holder's placeholder, which the server 404s. */
+export function isPlaceholderBot(botId: string): boolean {
+  return botId === DEFAULT_BOT_ID;
+}
+
+/** How long a Bot-scoped poll that has never once answered waits between tries. */
+const UNANSWERED_BOT_POLL_MS = 5 * 60_000;
+
+/**
+ * The cadence for a Bot-scoped poll: `baseMs` while the Bot has ever answered, one try every
+ * {@link UNANSWERED_BOT_POLL_MS} while it is failing with nothing on file.
+ *
+ * Data is the proof of life, not the last attempt: a query that answered once keeps its usual
+ * interval through a failed refetch, because TanStack keeps its last good `data` across those and a
+ * snapshot arriving late is worse than a snapshot arriving stale. Only never-answered queries —
+ * `data` still undefined under an error — are throttled, which is exactly the set whose every
+ * future poll is a predicted miss: a granted read that permanently 404s (a deleted Bot the channel
+ * still names) or the placeholder handed to a factory that forgot to gate on
+ * {@link isPlaceholderBot}. `false` from the caller's own polling conditions still wins; this
+ * answers only what the cadence would be.
+ */
+export function botPollInterval(
+  baseMs: number,
+): (query: { state: { data?: unknown; error: unknown } }) => number | false {
+  return ({ state: { data, error } }) =>
+    data === undefined && error !== null ? UNANSWERED_BOT_POLL_MS : baseMs;
 }
 
 /** As useActiveBotId, for callers that should do nothing while the placeholder holds. */
