@@ -25,9 +25,17 @@ export function asProblem(thrown: unknown): Problem {
 
 function SetupHelp() {
   // Whitelabel builds can choose their own support page. Never prefill it with error data.
-  const url =
-    import.meta.env.VITE_ORBO_SUPPORT_URL?.trim() ||
-    "https://github.com/nareinnprs-create/ORBO/issues/new/choose";
+  const url = import.meta.env.VITE_ORBO_SUPPORT_URL?.trim();
+  // No public default: a build without a support URL configured renders a plain sentence instead
+  // of pointing people at a third-party issue tracker that may not exist behind a company firewall.
+  if (!url) {
+    return (
+      <p className="setup-help">
+        Contact your ORBO administrator for help — no external link is included
+        in this build.
+      </p>
+    );
+  }
   return (
     <ExternalLink className="setup-help" href={url}>
       Get setup help

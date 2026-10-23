@@ -1,8 +1,8 @@
 # Desktop telemetry
 
-Telemetry is enabled by default. Welcome discloses it without an opt-in gate. Launch ORBO with either `COPILOTKIT_TELEMETRY_DISABLED=true` or `DO_NOT_TRACK=1` to disable both the desktop emitter and the runtime. Both variables accept `true` or `1`. Quit and relaunch after changing the environment. Opting out removes pending desktop events and prevents recording or replay.
+Telemetry is disabled by default. It can be enabled explicitly with `ORBO_TELEMETRY_ENABLED=true` (or by naming `ORBO_TELEMETRY_URL`; naming a target is itself opt-in). `DO_NOT_TRACK=1` or `ORBO_TELEMETRY_DISABLED=true` always wins and disables both the desktop emitter and the runtime. All variables accept `true` or `1`. Quit and relaunch after changing the environment. Opting out removes pending desktop events and prevents recording or replay. The legacy names `COPILOTKIT_TELEMETRY_DISABLED` and `COPILOTKIT_TELEMETRY_URL` are honored in debug builds only and log a deprecation warning when read; release builds ignore them.
 
-The native emitter starts before credentials are available. It persists a random installation UUID and a bounded queue in the app's local data directory. It does not derive identity from the machine. The runtime receives the same UUID through `CPK_TELEMETRY_ID` and uses sampling rate 1; opt-out still takes precedence.
+The native emitter starts before credentials are available. It persists a random installation UUID and a bounded queue in the app's local data directory. It does not derive identity from the machine. The runtime receives the same UUID through `CPK_TELEMETRY_ID` (residue owned by the third-party runtime; removed with the runtime in the copilot-independence work) and uses the operator-configured sampling rate; opt-out still takes precedence.
 
 ## Event allowlist
 
@@ -40,7 +40,7 @@ bun desktop/scripts/validate-telemetry.ts desktop/src-tauri/target/release/examp
 
 The driver uses temporary data and a loopback receiver. It exercises separate-process persistence/replay, quit, activation deduplication, opt-out, and the installed runtime's identity/metadata handoff. It does not require AI credentials or send validation events to production. Windows and Linux execution remain covered by the platform CI runs; a Mac run is not proof of their native UI behavior.
 
-Local HTTP validation is reusable through `desktop/scripts/validate-telemetry.ts` with the separately built `telemetry_probe` example. It checks offline queue replay with stable installation/event IDs, recovered abandonment, quit flushing, activation once across process restarts, native/runtime metadata, and both `true`/`1` values of `COPILOTKIT_TELEMETRY_DISABLED` and `DO_NOT_TRACK`. Opt-out must remove queued state and identity and produce zero HTTP sends.
+Local HTTP validation is reusable through `desktop/scripts/validate-telemetry.ts` with the separately built `telemetry_probe` example. It checks offline queue replay with stable installation/event IDs, recovered abandonment, quit flushing, activation once across process restarts, native/runtime metadata, default-off with no state, explicit opt-in, and both `true`/`1` values of `ORBO_TELEMETRY_DISABLED` and `DO_NOT_TRACK`. Opt-out must remove queued state and identity and produce zero HTTP sends.
 
 The September 12 local run used installed runtime 1.70.1 and its public ESM Hono factory, following the production `eventsource` preload. Its existing Bun dependency layout needed an explicit `NODE_PATH` pointing at the existing hoist directory so a cached `gaxios` module could resolve `extend`. No dependency was installed or modified. Reproduce that adapter from the repository root:
 

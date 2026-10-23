@@ -162,6 +162,27 @@ export function mapEntraProfile(profile: Record<string, unknown>) {
   return { email };
 }
 
+/**
+ * How long a signed-in session lasts, in better-auth's own units.
+ *
+ * better-auth takes `session.expiresIn` and `session.updateAge` in SECONDS — verified against the
+ * installed version's declarations (`@better-auth/core` init-options: `expiresIn` default
+ * 60 * 60 * 24 * 7, `updateAge` default 60 * 60 * 24, where 0 renews the session on every use) and
+ * its `create-context.mjs`, which reads both directly. The deployment writes days; the translation
+ * happens here and only here, so the two unit systems never share a line elsewhere.
+ *
+ * `updateAgeSeconds` absent keeps the library's own 1-day cadence rather than naming a default here
+ * that could drift from the library's.
+ */
+export function sessionOptions(config: DeploymentConfig) {
+  return {
+    expiresIn: config.session.expiresInDays * 24 * 60 * 60,
+    ...(config.session.updateAgeSeconds !== undefined
+      ? { updateAge: config.session.updateAgeSeconds }
+      : {}),
+  };
+}
+
 export function createAuth(
   config: DeploymentConfig,
   database: Database,
@@ -262,6 +283,7 @@ export function createAuth(
   ];
 
   return betterAuth({
+    session: sessionOptions(config),
     user: {
       additionalFields: {
         preferences: {

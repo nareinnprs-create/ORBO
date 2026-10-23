@@ -9,7 +9,7 @@ import { Composer } from "@/components/channels/composer";
 import { DesktopIllustration } from "@/components/computer/desktop-illustration";
 import { ComputerPlaceholder } from "@/components/computer/placeholder";
 import { Button } from "@/components/ui/button";
-import { type AgentProfile, agentListQueryOptions } from "@/lib/agents/queries";
+import { agentListQueryOptions } from "@/lib/agents/queries";
 import { currentUserQueryOptions, needsOnboarding } from "@/lib/auth/queries";
 import { appConfig } from "@/lib/generated/application-config";
 import { completeOnboardingMutationOptions } from "@/lib/onboarding/mutations";
@@ -78,40 +78,17 @@ function ComputerUseStep() {
   );
 }
 
-/** What a roster card needs — placeholders carry these three fields and nothing more. */
-type RosterCard = Pick<AgentProfile, "id" | "name" | "avatarSeed">;
-
-/**
- * Stand-ins for a deployment that has fewer than three public agents to show. Invented names on
- * purpose: they illustrate what a roster looks like without claiming any of these exist here.
- */
-const AGENTS_PLACEHOLDER: RosterCard[] = [
-  {
-    id: "placeholder-research",
-    name: "Research Analyst",
-    avatarSeed: "research-analyst",
-  },
-  { id: "placeholder-data", name: "Data Analyst", avatarSeed: "data-analyst" },
-  {
-    id: "placeholder-support",
-    name: "Support Agent",
-    avatarSeed: "support-agent",
-  },
-];
-
 function RosterStep() {
-  const { data: agents } = useQuery(agentListQueryOptions());
+  const {
+    data: agents,
+    isPending: rosterPending,
+    isError: rosterFailed,
+  } = useQuery(agentListQueryOptions());
   const explore =
     agents?.filter((a) => !a.mine && a.visibility === "public") ?? [];
-  // Always three cards: real public agents first, placeholders topping up a sparse deployment.
-  // slice past the end is just [], so a roster of three or more takes no placeholders at all.
-  const roster: Array<RosterCard & { example?: boolean }> = [
-    ...explore.slice(0, 3),
-    ...AGENTS_PLACEHOLDER.slice(explore.length).map((placeholder) => ({
-      ...placeholder,
-      example: true,
-    })),
-  ];
+  // The deployment's own roster only. Nothing is invented to top a sparse one up: a name later
+  // found nowhere in the Bot catalog costs more trust than a short list does.
+  const roster = explore.slice(0, 3);
 
   return (
     <div className="w-full flex flex-col items-center justify-center">
@@ -123,22 +100,46 @@ function RosterStep() {
         {roster.map((a) => {
           return (
             <div
+              className="bg-card p-4 rounded-lg flex flex-row gap-4 items-center"
               key={a.id}
-              // Dimmed and labelled, so an invented name never reads as a Bot this deployment has.
-              className={`bg-card p-4 rounded-lg flex flex-row gap-4 items-center ${a.example ? "opacity-70" : ""}`}
             >
               <Avatar name={a.avatarSeed} size={40} />
               <div className="flex min-w-0 flex-col">
                 <h3 className="line-clamp-1 text-base font-medium tracking-tight">
                   {a.name}
                 </h3>
-                {a.example ? (
-                  <span className="text-xs text-muted-foreground">Example</span>
-                ) : null}
               </div>
             </div>
           );
         })}
+        {/*
+         * Guidance, not a placeholder, when the deployment publishes few public agents — the three
+         * cards' worth this grid would otherwise draw. Only drawn on a roster that actually
+         * answered: while it loads there is nothing to count, and on a failed query saying "you
+         * publish 0" would be a lie the failed read, not the deployment, produced.
+         */}
+        {!rosterPending && !rosterFailed && roster.length < 3 ? (
+          <div className="bg-card p-4 rounded-lg flex items-center md:col-span-1">
+            <p className="text-sm text-muted-foreground">
+              Your {appConfig.brand.productName} deployment currently publishes{" "}
+              {roster.length} agent{roster.length === 1 ? "" : "s"} — ask your
+              administrator to publish more from the Bot catalog.
+            </p>
+          </div>
+        ) : null}
+        {/*
+         * Said plainly when the roster never came back, for the same reason every screen here
+         * separates "you have none" from "the read failed": a person who is told the deployment
+         * publishes nothing publishes nothing they know is not true.
+         */}
+        {rosterFailed ? (
+          <div className="bg-card p-4 rounded-lg flex items-center md:col-span-1">
+            <p className="text-sm text-destructive">
+              Your agents couldn't be loaded, so there's nothing to publish here
+              yet.
+            </p>
+          </div>
+        ) : null}
         <div className="bg-card p-4 rounded-lg flex flex-row gap-4 items-center">
           <div className="rounded-full size-[40px] border border-foreground/30 border-dashed" />
           <h3 className="line-clamp-1 text-base font-medium tracking-tight text-foreground/70">

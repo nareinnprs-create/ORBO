@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createApp } from "../src/app";
 import { loadConfig } from "../src/config";
+import type { Database } from "../src/db/client";
 import { testEnvironment } from "./support/environment";
 
 const app = createApp(
@@ -10,11 +11,78 @@ const app = createApp(
 );
 
 describe("health endpoint", () => {
-  test("reports the server as healthy", async () => {
-    const response = await app.request("http://orbo.local/health");
+  test("reports a reachable database as healthy with the measure of the ping", async () => {
+    // createApp takes positional stores; healthDatabase is the last parameter (36th). Build the
+    // argument list by index so a future appended store cannot silently shift it.
+    const args: unknown[] = Array.from({ length: 36 });
+    args[0] = loadConfig(testEnvironment());
+    args[35] = { execute: async () => [] } as unknown as Database;
+    const healthy = createApp(...(args as never[]));
+
+    const response = await healthy.request("http://orbo.local/health");
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ status: "ok" });
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(body.status).toBe("ok");
+    expect(body.db).toBe("ok");
+    expect(typeof body.latencyMs).toBe("number");
+  });
+
+  test("answers degraded, without leaking the address, when the database cannot be reached", async () => {
+    const degraded = createApp(
+      loadConfig({
+        ...testEnvironment({
+          DATABASE_URL: "postgres://orbos-password@127.0.0.1:1/orbo",
+        }),
+      }),
+    );
+
+    const response = await degraded.request("http://orbo.local/health");
+
+    expect(response.status).toBe(503);
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(body.status).toBe("ok");
+    expect(String(body.db)).toMatch(/^degraded: /);
+    expect(String(body.db)).not.toContain("orbos-password");
+    expect(String(body.db)).not.toContain("postgres://");
+    expect(typeof body.latencyMs).toBe("number");
+  });
+
+  test("answers degraded, naming the failure, and keeps the deployment answering", async () => {
+    const args: unknown[] = Array.from({ length: 36 });
+    args[0] = loadConfig(testEnvironment());
+    args[35] = {
+      execute: async () => {
+        throw new Error("The connection was refused.");
+      },
+    } as unknown as Database;
+    const degraded = createApp(...(args as never[]));
+
+    const response = await degraded.request("http://orbo.local/health");
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      status: "ok",
+      db: "degraded: The connection was refused.",
+    });
+  });
+
+  test("one cached answer short of a hammering, re-using it inside the TTL", async () => {
+    const args: unknown[] = Array.from({ length: 36 });
+    args[0] = loadConfig(testEnvironment());
+    let pings = 0;
+    args[35] = {
+      execute: async () => {
+        pings += 1;
+        return [];
+      },
+    } as unknown as Database;
+    const healthy = createApp(...(args as never[]));
+
+    await healthy.request("http://orbo.local/health");
+    await healthy.request("http://orbo.local/health");
+
+    expect(pings).toBe(1);
   });
 });
 

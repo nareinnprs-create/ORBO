@@ -20,7 +20,7 @@
 
 use std::path::{Path, PathBuf};
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::problem::Problem;
 
@@ -41,8 +41,7 @@ pub enum SetupStep {
 ///
 /// A single "setup failed" is the outcome this exists to prevent: these have different fixes and
 /// only one of them is ours to perform.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Blocker {
     /// WSL is not installed at all.
     WslAbsent,
@@ -108,13 +107,41 @@ impl Blocker {
         }
     }
 
-    /// Whether the shell can clear this itself. Two of the four are ours; two are not.
-    /// Whether ORBO could fix this itself, one day.
+    /// The serialization label for this variant. Private: the closed set stays in sync with the
+    /// enum itself.
+    fn kind(self) -> &'static str {
+        match self {
+            Blocker::WslAbsent => "wsl-absent",
+            Blocker::WslOne => "wsl-one",
+            Blocker::WslNoKernel => "wsl-no-kernel",
+            Blocker::VirtualMachinePlatformDisabled => "virtual-machine-platform-disabled",
+            Blocker::VirtualizationDisabled => "virtualization-disabled",
+            Blocker::NotAdministrator => "not-administrator",
+        }
+    }
+
+    /// From a label back to the variant, for deserialization.
+    fn from_kind(kind: &str) -> Option<Self> {
+        Some(match kind {
+            "wsl-absent" => Blocker::WslAbsent,
+            "wsl-one" => Blocker::WslOne,
+            "wsl-no-kernel" => Blocker::WslNoKernel,
+            "virtual-machine-platform-disabled" => Blocker::VirtualMachinePlatformDisabled,
+            "virtualization-disabled" => Blocker::VirtualizationDisabled,
+            "not-administrator" => Blocker::NotAdministrator,
+            _ => return None,
+        })
+    }
+
+    /// Whether the shell can clear this itself. Four of the six are ours; two are not —
+    /// firmware virtualization only the person can switch on, and elevation someone else must
+    /// grant. The two halves are genuinely different: WSL is installable and a firmware setting
+    /// is not.
     ///
-    /// Nothing acts on this yet. `wsl --install` needs elevation and a restart, and the resumable
-    /// state machine that would carry somebody across that reboot is designed and not built, so
-    /// every blocker screen currently tells a person what to run. Kept because the two halves are
-    /// genuinely different: WSL is installable and a firmware setting is not.
+    /// The flag rides the serialization below, so the blocker screen can say the fixing is
+    /// ORBO's — it happens after a restart, with nothing for the person to run — instead of
+    /// asking them to run the elevated commands themselves. Those commands stay reachable in a
+    /// disclosure for IT, and nothing in this module installs them yet.
     pub fn ours_to_fix(self) -> bool {
         matches!(
             self,
@@ -123,6 +150,60 @@ impl Blocker {
                 | Blocker::WslNoKernel
                 | Blocker::VirtualMachinePlatformDisabled
         )
+    }
+}
+
+/// The blocker crosses the invoke boundary as `{"kind": "<label>", "ours_to_fix": <bool>}`:
+/// the classification is computed here, once, and the blocker screen reads the typed flag off
+/// what it receives rather than maintaining a second copy of `ours_to_fix` in TypeScript.
+/// A bare `"<label>"` string is still accepted when deserializing, the way a bare string keeps
+/// working in the UI's problem type — the flag is recomputed from the label in that case.
+impl Serialize for Blocker {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut state = serializer.serialize_struct("Blocker", 2)?;
+        state.serialize_field("kind", self.kind())?;
+        state.serialize_field("ours_to_fix", &self.ours_to_fix())?;
+        state.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for Blocker {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        use serde::de;
+
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Wire {
+            /// The current shape: the labels plus the flag computed on the sending side.
+            Typed {
+                kind: String,
+                ours_to_fix: Option<bool>,
+            },
+            /// The previous shape, which was only the label.
+            Label(String),
+        }
+
+        let (kind, stated) = match Wire::deserialize(deserializer)? {
+            Wire::Typed { kind, ours_to_fix } => (kind, ours_to_fix),
+            Wire::Label(label) => (label, None),
+        };
+        let blocker = Blocker::from_kind(&kind)
+            .ok_or_else(|| de::Error::custom(format!("unknown blocker kind: {kind}")))?;
+        if let Some(stated) = stated {
+            if stated != blocker.ours_to_fix() {
+                return Err(de::Error::custom(format!(
+                    "ours_to_fix({stated}) does not match blocker {kind}"
+                )));
+            }
+        }
+        Ok(blocker)
     }
 }
 
@@ -984,7 +1065,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             serde_json::to_value(result).unwrap(),
-            serde_json::json!("virtual-machine-platform-disabled")
+            serde_json::json!({ "kind": "virtual-machine-platform-disabled", "ours_to_fix": true })
         );
         assert!(!calls.iter().any(|(program, _)| program == "wsl.exe"));
     }
@@ -1014,18 +1095,56 @@ mod tests {
 
     #[test]
     fn vmp_blocker_round_trips_and_names_the_precise_feature_command() {
+        // The legacy bare-label wire shape still lands on its blocker.
         let blocker: Blocker =
             serde_json::from_str("\"virtual-machine-platform-disabled\"").unwrap();
         assert_eq!(blocker, Blocker::VirtualMachinePlatformDisabled);
         assert_eq!(
-            serde_json::to_string(&blocker).unwrap(),
-            "\"virtual-machine-platform-disabled\""
+            serde_json::from_str::<Blocker>(
+                r#"{"kind":"virtual-machine-platform-disabled","ours_to_fix":true}"#
+            )
+            .unwrap(),
+            Blocker::VirtualMachinePlatformDisabled
+        );
+        // A stated flag the Rust classification disagrees with is refused, not trusted.
+        serde_json::from_str::<Blocker>(
+            r#"{"kind":"virtual-machine-platform-disabled","ours_to_fix":false}"#,
+        )
+        .unwrap_err();
+        // What ORBO now serializes when it hands the blocker to the screen.
+        assert_eq!(
+            serde_json::to_value(blocker).unwrap(),
+            serde_json::json!({ "kind": "virtual-machine-platform-disabled", "ours_to_fix": true })
         );
         assert_eq!(blocker.instruction(), "Virtual Machine Platform is switched off. \
             Open Windows Terminal or PowerShell as an administrator, run \
             `dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart`, \
             restart Windows, and start ORBO again.");
         assert!(blocker.ours_to_fix());
+    }
+
+    #[test]
+    fn every_blocker_label_round_trips_with_its_classification_the_rust_side_computed() {
+        for (blocker, ours) in [
+            (Blocker::WslAbsent, true),
+            (Blocker::WslOne, true),
+            (Blocker::WslNoKernel, true),
+            (Blocker::VirtualMachinePlatformDisabled, true),
+            (Blocker::VirtualizationDisabled, false),
+            (Blocker::NotAdministrator, false),
+        ] {
+            let typed = serde_json::to_value(blocker).unwrap();
+            assert_eq!(
+                typed["ours_to_fix"],
+                serde_json::Value::from(ours),
+                "{blocker:?} desynchronized its flag"
+            );
+            assert_eq!(serde_json::from_value::<Blocker>(typed).unwrap(), blocker,);
+        }
+        assert!(
+            serde_json::from_value::<Blocker>(serde_json::json!({ "kind": "wsl-too-many" }))
+                .is_err()
+        );
     }
 
     #[test]

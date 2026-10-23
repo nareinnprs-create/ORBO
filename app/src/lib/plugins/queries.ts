@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { client } from "@/lib/client";
+import { botPollInterval, isPlaceholderBot } from "@/lib/copilot/active-bot";
 
 /**
  * Re-exported, not re-declared.
@@ -391,12 +392,18 @@ export function composioAppsQueryOptions(query: string) {
 
 /**
  * Polled grant snapshot for what the active Bot should be offered; call-time checks still enforce.
+ *
+ * Gated twice: on a Bot being named at all, and — via `isPlaceholderBot` — on the name being the
+ * placeholder, which no package registers and the server answers 404 for. A caller that hands the
+ * placeholder in (see `channel-chat.tsx`, which passes a real id, and `bot-tools.tsx`, which passes
+ * `declared ?? ""`) can no longer set up a request that would be a guaranteed miss, and the poll
+ * itself backs off once a read is failing with nothing ever received — see `botPollInterval`.
  */
 export function agentPluginsQueryOptions(agentId: string) {
   return queryOptions({
     queryKey: pluginKeys.forAgent(agentId),
-    enabled: agentId.length > 0,
-    refetchInterval: 15_000,
+    enabled: agentId.length > 0 && !isPlaceholderBot(agentId),
+    refetchInterval: botPollInterval(15_000),
     queryFn: async (): Promise<GrantedPlugins> => {
       const response = await client(
         `/api/plugins/for/${encodeURIComponent(agentId)}`,

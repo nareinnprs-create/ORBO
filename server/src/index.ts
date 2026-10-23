@@ -333,6 +333,9 @@ clearLearningRevisionFallback();
 // Read with the rest of the configuration, where an empty variable is an absent one. See
 // `serverPort` in config.ts for what `process.env.PORT ?? …` did with `PORT=` instead.
 const port = config.port;
+// What the socket actually binds to, no longer left to Bun's `0.0.0.0` default while the log below
+// claimed `127.0.0.1`. See `serverHost` in config.ts.
+const serverHost = config.serverHost;
 const database = createDatabase(config.databaseUrl);
 // Every dispatch point asks this database whether its person paused the Bot. See agents/lifecycle.ts.
 configureBotLifecycle({ database });
@@ -3086,6 +3089,7 @@ const asChannelSocket = (ws: { data: SocketData }) =>
 
 serve<SocketData>({
   port,
+  hostname: serverHost,
   async fetch(request, server) {
     const url = new URL(request.url);
     if (url.pathname === "/api/audio/transcriptions") {
@@ -3295,4 +3299,13 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
   });
 }
 
-console.info(`ORBO server listening on http://127.0.0.1:${port}`);
+// The address the socket is bound to, not a claimed one: for all interfaces that is said, because
+// `http://0.0.0.0:3001` is not an address a browser opens.
+const boundDisplayHost = serverHost.includes(":")
+  ? `[${serverHost}]`
+  : serverHost;
+const bindsEveryInterface = serverHost === "0.0.0.0" || serverHost === "::";
+console.info(
+  `ORBO server listening on http://${boundDisplayHost}:${port}` +
+    (bindsEveryInterface ? " (all interfaces)" : ""),
+);

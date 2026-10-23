@@ -1004,6 +1004,9 @@ test.each(["unavailable", "unreadable", "readable"])(
   },
 );
 
+// Both variants here are a full conversation render under a real typing sequence, which under
+// full-suite contention has tripped Bun's default 5s timeout; the budget is named rather than
+// inherited.
 test.each([false, true])(
   "recovery restores durable order after a UI send (known prefix: %s)",
   async (prefixPresent) => {
@@ -1044,6 +1047,7 @@ test.each([false, true])(
       runRequests[1]?.input.messages.map((message) => message.id),
     );
   },
+  15_000,
 );
 
 test.each(["mount", "refresh"])(

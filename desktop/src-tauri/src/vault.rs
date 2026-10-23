@@ -41,6 +41,9 @@ pub fn is_secret(key: &str) -> bool {
             | "ORBO_MANAGED_AGENT_TOKEN"
             | "ORBO_AGENT_TOOL_TOKEN"
             | "ORBO_COMPUTER_TOKEN"
+            // Minted beside the rest, so the compose file interpolates it from this run's
+            // environment (`command.envs`) and the `.env` this file purges never holds it.
+            | "POSTGRES_PASSWORD"
             | "SUPERVISOR_TOKEN"
             | "WORKER_SHARED_SECRET"
             | "KEY_ENCRYPTION_KEY"
@@ -1462,6 +1465,7 @@ mod tests {
             "SUPERVISOR_TOKEN",
             "WORKER_SHARED_SECRET",
             "KEY_ENCRYPTION_KEY",
+            "POSTGRES_PASSWORD",
         ] {
             assert!(is_secret(key), "{key} would have been written to the file");
         }
@@ -1707,13 +1711,84 @@ SOMETHING_ELSE=kept\n",
     }
 
     /**
-    A long credential survives, because a short one is not the case that broke.
+                                    A long credential survives, because a short one is not the case that broke.
 
-    The `security` command truncated at 128 bytes and reported success, which turned every OpenAI
-    project key into a broken one on the next run. Checked well past the 164 a real key happens to
-    be today: that number is nobody's to promise, and a store proved to four times the longest key
-    anyone issues will not be the thing that fails when somebody issues a longer one.
-    */
+                                    The `security` command truncated at 128 bytes and reported success, which turned every OpenAI
+                                    project key into a broken one on the next run. Checked well past the 164 a real key happens to
+                                    be today: that number is nobody's to promise, and a store proved to four times the longest key
+                                    anyone issues will not be the thing that fails when somebody issues a longer one.
+                                    */
+    /**
+                                    The minted database password is a credential, not a setting.
+
+                                    It travels through `split` into the protected store and out again when a run asks for it, and
+                                    a run that stops carrying it — the empty value `remember_all` treats as an instruction to
+                                    forget — takes it out of the store rather than leaving the last copy behind.
+                                    */
+    #[test]
+    fn the_minted_postgres_password_round_trips_through_split_remember_and_forget() {
+        let all = BTreeMap::from([
+            (
+                "DATABASE_URL".to_string(),
+                "postgres://orbo:a-minted-password@127.0.0.1:5432/orbo".to_string(),
+            ),
+            (
+                "POSTGRES_PASSWORD".to_string(),
+                "a-minted-password".to_string(),
+            ),
+        ]);
+        let (settings, secrets) = split(all);
+        assert!(
+            !settings.contains_key("POSTGRES_PASSWORD"),
+            "the minted password would have been written to the file"
+        );
+        assert_eq!(
+            secrets.get("POSTGRES_PASSWORD").map(String::as_str),
+            Some("a-minted-password")
+        );
+
+        let root = temp_root("postgres-password-round-trip");
+        std::fs::create_dir_all(&root).unwrap();
+        let mut remembered = BTreeMap::new();
+        let mut forgotten = Vec::new();
+        remember_all_with(
+            &root,
+            &secrets,
+            &mut |root, key, value| {
+                remembered.insert((root.to_path_buf(), key.to_string()), value.to_string());
+                Ok(())
+            },
+            &mut |_, key| {
+                forgotten.push(key.to_string());
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            remembered
+                .remove(&(root.clone(), "POSTGRES_PASSWORD".to_string()))
+                .as_deref(),
+            Some("a-minted-password")
+        );
+        assert!(remembered.is_empty(), "{remembered:?}");
+        assert!(forgotten.is_empty(), "{forgotten:?}");
+
+        remember_all_with(
+            &root,
+            &[("POSTGRES_PASSWORD".to_string(), "  ".to_string())]
+                .into_iter()
+                .collect(),
+            &mut |_, key, _| panic!("an empty value forgets, it never stores: {key}"),
+            &mut |_, key| {
+                forgotten.push(key.to_string());
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert_eq!(forgotten, ["POSTGRES_PASSWORD"]);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
     #[test]
     fn a_long_credential_is_not_truncated() {
         let root = temp_root("vault-long-round-trip");

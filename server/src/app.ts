@@ -128,6 +128,9 @@ import { createRoutingRoutes } from "./routing/routes";
 import { createCoworkerRoutingService } from "./routing/service";
 import { createTeamBotRoutes } from "./team-bots/routes";
 import type { TeamBots } from "./team-bots/team-bots";
+import { createAccessLog } from "./telemetry/access-log";
+import { createHealthRoute } from "./telemetry/health";
+import { createMetricsRegistry, createMetricsRoute } from "./telemetry/metrics";
 import type { PackageStatusReader } from "./tenant-package";
 import {
   INSTRUCTIONS_LIMIT,
@@ -434,12 +437,42 @@ export function createApp(
     /** What happened, newest first: a person's own notification inbox. See notifications/routes.ts. */
     notifications?: NotificationStore;
   },
+  /**
+   * A client of the deployment's database, for the /health ping.
+   *
+   * Appended last, like everything above it: these are positional, so inserting one anywhere else
+   * silently shifts every existing call site's arguments by one.
+   *
+   * Absent leaves /health building its own pooled-to-one connection from the configured address,
+   * lazily on the first scrape. Not connection poaching on a swap-in: the health route asks an
+   * in-memory client only when the callers hold no reference.
+   */
+  healthDatabase?: Database,
 ) {
   const app = new Hono<{ Variables: AppVariables }>();
   mountDesktopConnectionFailure(app, desktopHostToken);
   mountProviderOAuthProxy(app, modelProviderProxy);
 
-  app.get("/health", (context) => context.json({ status: "ok" }));
+  /*
+   * The golden signals, before any route claims a path: every request that is answered after this
+   * point is counted, timed and logged as one line. Mounted where the mounts are, in the same style.
+   */
+  const metrics = createMetricsRegistry();
+  app.use("*", createAccessLog({ metrics }));
+
+  app.get(
+    "/health",
+    createHealthRoute({
+      database: healthDatabase,
+      databaseUrl: config.databaseUrl,
+    }),
+  );
+  /*
+   * The numbers behind the logs, scrapeable before the session guard: monitoring is not a person
+   * with a session. The route itself decides who may read — the deployment's own network, or a
+   * bearer secret — and copies of the exposition format live in telemetry/metrics.ts.
+   */
+  app.get("/metrics", createMetricsRoute(metrics));
   // Projected, never the raw runtime. config.runtime carries the Intelligence contract, including
   // INTELLIGENCE_API_KEY and the licence token, and this endpoint is reachable by anyone. Returning
   // the object wholesale would serve deployment secrets to the browser. Add fields here explicitly.

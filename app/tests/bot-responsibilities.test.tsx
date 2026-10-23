@@ -120,6 +120,8 @@ test("only this Bot's responsibilities are listed", async () => {
   expect(view.queryByText("Keep the wiki fresh")).toBeNull();
 });
 
+// Under full-suite contention this render-heavy dialog has tripped Bun's default 5s timeout;
+// alone it takes about three at the most, so the budget is named rather than inherited.
 test("a new responsibility needs no Bot picked, and offers only this Bot's conversations", async () => {
   serving();
   const view = draw();
@@ -151,4 +153,4 @@ test("a new responsibility needs no Bot picked, and offers only this Bot's conve
       }),
     ),
   );
-});
+}, 15_000);
