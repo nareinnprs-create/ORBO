@@ -10,6 +10,7 @@ serve AG-UI on a port, answer `/health`, and refuse anybody who does not carry t
 """
 
 import hmac
+import inspect
 import os
 import sys
 from collections.abc import Mapping
@@ -146,6 +147,16 @@ def _provider_messages(messages: list[Any]) -> list[dict[str, Any]]:
 
 _prepare_crewai_inputs = crewai_endpoint.crewai_prepare_inputs
 
+# The wrapper below always receives `context` and `forwarded_props` (the AG-UI run input carries
+# both), but the pinned ag-ui-crewai 0.1.2 only accepts state, messages and tools - the newer
+# fields arrived after it. Forward only what the installed adapter accepts, so the pin can move
+# without this seam breaking in either direction.
+_PREPARE_INPUT_FIELDS = {
+    name
+    for name in ("state", "messages", "tools", "context", "forwarded_props")
+    if name in inspect.signature(_prepare_crewai_inputs).parameters
+}
+
 
 def _orbo_prepare_crewai_inputs(
     *,
@@ -155,12 +166,15 @@ def _orbo_prepare_crewai_inputs(
     context: list[Any] | None = None,
     forwarded_props: Any = None,
 ):
+    offered = {
+        "state": state,
+        "messages": messages,
+        "tools": tools,
+        "context": context,
+        "forwarded_props": forwarded_props,
+    }
     inputs = _prepare_crewai_inputs(
-        state=state,
-        messages=messages,
-        tools=tools,
-        context=context,
-        forwarded_props=forwarded_props,
+        **{field: value for field, value in offered.items() if field in _PREPARE_INPUT_FIELDS}
     )
     if messages and getattr(messages[0], "role", None) == "system":
         prepared_messages = inputs.get("messages")
