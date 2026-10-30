@@ -1711,20 +1711,20 @@ SOMETHING_ELSE=kept\n",
     }
 
     /**
-                                    A long credential survives, because a short one is not the case that broke.
+                                        A long credential survives, because a short one is not the case that broke.
 
-                                    The `security` command truncated at 128 bytes and reported success, which turned every OpenAI
-                                    project key into a broken one on the next run. Checked well past the 164 a real key happens to
-                                    be today: that number is nobody's to promise, and a store proved to four times the longest key
-                                    anyone issues will not be the thing that fails when somebody issues a longer one.
-                                    */
+                                        The `security` command truncated at 128 bytes and reported success, which turned every OpenAI
+                                        project key into a broken one on the next run. Checked well past the 164 a real key happens to
+                                        be today: that number is nobody's to promise, and a store proved to four times the longest key
+                                        anyone issues will not be the thing that fails when somebody issues a longer one.
+                                        */
     /**
-                                    The minted database password is a credential, not a setting.
+                                        The minted database password is a credential, not a setting.
 
-                                    It travels through `split` into the protected store and out again when a run asks for it, and
-                                    a run that stops carrying it — the empty value `remember_all` treats as an instruction to
-                                    forget — takes it out of the store rather than leaving the last copy behind.
-                                    */
+                                        It travels through `split` into the protected store and out again when a run asks for it, and
+                                        a run that stops carrying it — the empty value `remember_all` treats as an instruction to
+                                        forget — takes it out of the store rather than leaving the last copy behind.
+                                        */
     #[test]
     fn the_minted_postgres_password_round_trips_through_split_remember_and_forget() {
         let all = BTreeMap::from([
