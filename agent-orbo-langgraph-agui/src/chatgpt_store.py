@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+# Requires the langchain-openai==1.6.0 pin in requirements.txt (private, unofficial module).
 from langchain_openai.chatgpt_oauth import (
     _ChatGPTToken,
     _FileChatGPTOAuthTokenProvider,

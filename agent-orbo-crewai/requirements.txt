@@ -1,3 +1,7 @@
-ag-ui-crewai
-litellm==1.105.1
+# Pinned to the resolution current floats produce (verified 2026-10-29); unpinned was the only
+# unpinned runtime dep left in the harness fleet. ag-ui-crewai 0.3.1 requires crewai >= 1.6.
+ag-ui-crewai==0.3.1
+crewai==1.6.1
+litellm==1.106.0
+mcp==2.3.0  # litellm 1.106.0 lazily imports its MCP handler; the mcp extra is not pulled in by the base pin.
 uvicorn[standard]

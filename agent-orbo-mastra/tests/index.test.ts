@@ -2,7 +2,11 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildORBOInstructions, orboBaseInstructions } from "./index";
+import "./boot-token";
+import {
+  buildORBOInstructions,
+  orboBaseInstructions,
+} from "../src/mastra/index";
 
 type ModelCase = {
   name: string;
@@ -15,6 +19,15 @@ type PortCase = {
   value?: string;
   expected?: number;
 };
+
+/**
+ * The harness file the probes import, as an absolute path.
+ *
+ * The spawned child resolves the path itself rather than taking it from its working directory, so
+ * the probes behave the same however the suite was started: from the repository root, where `bun
+ * test` discovers this file, or from this package, where `bun run test` runs it.
+ */
+const HARNESS = join(import.meta.dir, "../src/mastra/index.ts");
 
 function requestContextWith(context: unknown) {
   return {
@@ -72,6 +85,7 @@ async function configuredModelId(botModel: string | undefined) {
     MASTRA_TELEMETRY_DISABLED: "true",
     DO_NOT_TRACK: "1",
     NODE_ENV: "test",
+    ORBO_MANAGED_AGENT_TOKEN: "test-token",
   };
   if (botModel !== undefined) env.BOT_MODEL = botModel;
 
@@ -81,7 +95,7 @@ async function configuredModelId(botModel: string | undefined) {
       "--no-env-file",
       "-e",
       [
-        'const { mastra } = await import("./agent-orbo-mastra/src/mastra/index.ts");',
+        `const { mastra } = await import(${JSON.stringify(HARNESS)});`,
         'const model = mastra.getAgent("orbo").model;',
         "console.log(JSON.stringify({ modelId: model.modelId }));",
       ].join("\n"),
@@ -110,6 +124,7 @@ async function configuredPort(port: string | undefined) {
     MASTRA_TELEMETRY_DISABLED: "true",
     DO_NOT_TRACK: "1",
     NODE_ENV: "test",
+    ORBO_MANAGED_AGENT_TOKEN: "test-token",
   };
   if (port !== undefined) env.PORT = port;
 
@@ -119,7 +134,7 @@ async function configuredPort(port: string | undefined) {
       "--no-env-file",
       "-e",
       [
-        'const { mastra } = await import("./agent-orbo-mastra/src/mastra/index.ts");',
+        `const { mastra } = await import(${JSON.stringify(HARNESS)});`,
         "console.log(JSON.stringify({ port: mastra.getServer()?.port }));",
       ].join("\n"),
     ],
@@ -152,6 +167,7 @@ async function providerStartup(botProvider: string) {
     MASTRA_TELEMETRY_DISABLED: "true",
     DO_NOT_TRACK: "1",
     NODE_ENV: "test",
+    ORBO_MANAGED_AGENT_TOKEN: "test-token",
     BOT_PROVIDER: botProvider,
   };
 
@@ -160,10 +176,40 @@ async function providerStartup(botProvider: string) {
       Bun.argv[0],
       "-e",
       [
-        'const { mastra } = await import("./agent-orbo-mastra/src/mastra/index.ts");',
+        `const { mastra } = await import(${JSON.stringify(HARNESS)});`,
         'const model = mastra.getAgent("orbo").model;',
         "console.log(JSON.stringify({ modelId: model.modelId }));",
       ].join("\n"),
+    ],
+    env,
+  );
+  return { exitCode, stderr };
+}
+
+/**
+ * How this Bot answers a missing server token: refused at boot, before a port is bound.
+ *
+ * The per-request middleware stays (a server started before the token existed must still refuse
+ * every call), but a harness that boots "healthy" and answers 401 forever is the failure Compose
+ * cannot see - the shell restarts a dead process, never a useless one. Same posture as
+ * agent-orbo-bot/src/index.ts.
+ */
+async function tokenStartup(token: string | undefined) {
+  const env: Record<string, string> = {
+    PATH: process.env.PATH ?? "/opt/homebrew/bin:/usr/bin:/bin",
+    MASTRA_TELEMETRY_DISABLED: "true",
+    DO_NOT_TRACK: "1",
+    NODE_ENV: "test",
+    BOT_PROVIDER: "openai",
+  };
+  if (token !== undefined) env.ORBO_MANAGED_AGENT_TOKEN = token;
+
+  const { stderr, exitCode } = await runProbe(
+    [
+      Bun.argv[0],
+      "--no-env-file",
+      "-e",
+      `const { mastra } = await import(${JSON.stringify(HARNESS)});`,
     ],
     env,
   );
@@ -270,6 +316,34 @@ describe("ORBO Mastra provider configuration", () => {
 
     expect(exitCode).not.toBe(0);
     expect(stderr).toContain("is not one this Bot knows");
+  });
+});
+
+/**
+ * A missing server token is refused at boot, before a port is bound, instead of booting
+ * "healthy" and answering 401 for the life of the container.
+ */
+describe("ORBO Mastra server token configuration", () => {
+  const refusalCases: { name: string; value?: string }[] = [
+    { name: "absent" },
+    { name: "empty", value: "" },
+    { name: "whitespace", value: "   " },
+  ];
+
+  for (const refusalCase of refusalCases) {
+    test(`refuses to boot when ORBO_MANAGED_AGENT_TOKEN is ${refusalCase.name}`, async () => {
+      const { exitCode, stderr } = await tokenStartup(refusalCase.value);
+
+      expect(exitCode).not.toBe(0);
+      expect(stderr).toContain("ORBO_MANAGED_AGENT_TOKEN is not set");
+    });
+  }
+
+  test("boots when a token is set", async () => {
+    const { exitCode, stderr } = await tokenStartup("test-token");
+
+    expect(exitCode).toBe(0);
+    expect(stderr).not.toContain("ORBO_MANAGED_AGENT_TOKEN is not set");
   });
 });
 
@@ -484,7 +558,7 @@ describe("ORBO Mastra provider requests", () => {
               '  request.headers.set("x-test-original-url", request.url);',
               `  return networkFetch(new Request(${JSON.stringify(provider.url.toString())} + url.pathname.slice(1) + url.search, request));`,
               "};",
-              'const { mastra } = await import("./agent-orbo-mastra/src/mastra/index.ts");',
+              `const { mastra } = await import(${JSON.stringify(HARNESS)});`,
               'const result = await mastra.getAgent("orbo").generate("Say hello");',
               "console.log(JSON.stringify({ text: result.text }));",
             ].join("\n"),
@@ -494,6 +568,7 @@ describe("ORBO Mastra provider requests", () => {
             MASTRA_TELEMETRY_DISABLED: "true",
             DO_NOT_TRACK: "1",
             NODE_ENV: "test",
+            ORBO_MANAGED_AGENT_TOKEN: "test-token",
             BOT_PROVIDER: choice.provider,
             BOT_MODEL: choice.model,
             ANTHROPIC_API_KEY:

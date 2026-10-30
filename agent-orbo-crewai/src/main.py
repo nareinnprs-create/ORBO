@@ -39,6 +39,25 @@ def _expected_token() -> str:
     return (os.environ.get("ORBO_MANAGED_AGENT_TOKEN") or "").strip()
 
 
+def _require_server_token() -> None:
+    """Refuse to boot without ORBO's token, rather than boot "healthy" and 401 every run.
+
+    The middleware below keeps checking per request — belt and braces for a container that
+    started before the token existed — but a harness that starts and then 401s every run reports
+    healthy to Compose forever, and the shell restarts a dead process, never a useless one. Boot
+    is the moment a deployment can still act, the same posture as `agent-orbo-bot/src/index.ts`.
+    `/health` stays exempt because Compose polls it before any token exists.
+    """
+    if not _expected_token():
+        raise SystemExit(
+            "ORBO_MANAGED_AGENT_TOKEN is not set. This process holds a model credential and will "
+            "not start without a token for ORBO's server."
+        )
+
+
+_require_server_token()
+
+
 def _model() -> str:
     """The provider and model ORBO chose, in the form litellm wants.
 

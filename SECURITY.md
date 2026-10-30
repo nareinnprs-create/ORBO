@@ -7,17 +7,32 @@
 | 0.1.x   | Yes       |
 | < 0.1.0 | No        |
 
-The project is pre-1.0 and only the current release line receives fixes. Whether fixes are
-backported to earlier tags, and how long a line stays supported after its successor ships, are
-[OWNER TODO].
+The project is pre-1.0 and only the current release line receives fixes. <!-- OWNER: Decide how long a release line stays supported and what gets backported (the proposal in docs/versioning.md); delete this comment and the confirm marker once decided, and keep the two files in step. -->
+Whether fixes are backported to earlier tags, and how long a line stays supported after its
+successor ships, are [OWNER TO CONFIRM: support window and backport policy — the proposal in docs/versioning.md].
 
 ## Reporting a vulnerability
 
-[OWNER TODO: security contact — where reports go (e.g. an email address or private channel),
-what acknowledgement and remediation timelines to expect, and whether coordinated disclosure
-is wanted.]
+Reports go to the security contact by email — do not open a public issue for a suspected
+vulnerability. The intended machine-readable disclosure channel is a `security.txt` file
+following RFC 9116, published at `/.well-known/security.txt` on the project's domain and on
+operated deployment domains, with `Contact:` pointing at the same mailbox, so a reporter never
+has to find this file first.
 
-Do not open a public issue for a suspected vulnerability. Include:
+<!-- OWNER: Create the security mailbox and publish /.well-known/security.txt pointing at it (Contact, plus Expires, Preferred-Languages, and this policy's URL); replace the two slots below with the real address and dates, then delete this comment. -->
+- Security contact: [OWNER TO CONFIRM: security email — the mailbox vulnerability reports go to].
+- `security.txt`: [OWNER TO CONFIRM: the published /.well-known/security.txt URL, once live].
+
+Expected timelines (proposal; the owner may adjust them):
+
+- **Acknowledgement within 2 business days** of a report arriving at the contact above.
+- **A status update at least every 7 days** while a fix is being prepared.
+- **Coordinated disclosure**: a public advisory only after a fix ships, or after 90 days,
+  whichever the reporter agrees to first.
+<!-- OWNER: Confirm the acknowledgement, update, and disclosure timelines above, or replace them; delete this comment and the confirm marker once decided. -->
+[OWNER TO CONFIRM: the acknowledgement, update, and coordinated-disclosure timelines above].
+
+A report should include:
 
 - What you found and where (file, route, or commit if you have it).
 - Steps to reproduce, and what you think the impact is.
@@ -35,10 +50,9 @@ agent harnesses and computers, the supervisor, the desktop and mobile clients, t
 chart, and the container images the release workflows publish. Third-party services ORBO
 talks to (identity providers, model vendors, Composio, CopilotKit Intelligence) belong to
 their own vendors — report issues in them to the vendor, and report issues in ORBO's use of
-them here. [OWNER TODO: confirm scope and any deployed demo/bounty-host infrastructure that
-counts as in scope.]
+them here. <!-- OWNER: Confirm the scope above and whether any deployed demo/bounty-host infrastructure counts as in scope; delete this comment and the confirm marker once confirmed. --> [OWNER TO CONFIRM: scope confirmation, including any deployed demo/bounty-host infrastructure that counts as in scope.]
 
-There is no bounty program. [OWNER TODO: remove this line if the owner establishes one.]
+There is no bounty program. <!-- OWNER: Delete this sentence and the confirm marker if a bounty program is established, and say where it lives. --> [OWNER TO CONFIRM: delete this line if a bounty program is established.]
 
 ## Posture notes for reporters
 

@@ -1,10 +1,15 @@
 ag-ui-langgraph==0.0.45
-langgraph
-langchain
-langchain-openai
-langchain-anthropic
-langchain-google-genai
-fastapi
+# Pinned, not floated: src/main.py and src/chatgpt_store.py import private
+# `langchain-openai` internals (`chat_models.codex._ChatOpenAICodex`,
+# `chatgpt_oauth`) whose shape is only known on fixed versions. This is the
+# set that resolves alongside langchain-openai==1.6.0; move it as one set.
+langgraph==1.2.18
+langchain==1.4.7
+langchain-openai==1.6.0
+langchain-anthropic==1.7.7
+langchain-google-genai==4.4.2
+# Same fastapi pin as the other Python harnesses (agent-orbo-pydantic-ai, agent-orbo-ag2, agent-orbo-langroid).
+fastapi==0.144.0
 python-multipart
 uvicorn[standard]
 httpx>=0.28,<1

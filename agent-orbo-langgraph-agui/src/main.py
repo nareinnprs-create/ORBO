@@ -32,6 +32,25 @@ from .tool_runtime import (
 
 TOKEN_HEADER = "x-orbo-agent-token"
 
+
+def _require_server_token() -> None:
+    """Refuse to boot without ORBO's token, rather than boot "healthy" and 401 every run.
+
+    The middleware below keeps checking per request — belt and braces for a container that
+    started before the token existed — but a harness that starts and then 401s every run reports
+    healthy to Compose forever, and the shell restarts a dead process, never a useless one. Boot
+    is the moment a deployment can still act, the same posture as `agent-orbo-bot/src/index.ts`.
+    `/health` stays exempt because Compose polls it before any token exists.
+    """
+    if not (os.environ.get("ORBO_MANAGED_AGENT_TOKEN") or "").strip():
+        raise SystemExit(
+            "ORBO_MANAGED_AGENT_TOKEN is not set. This process holds a model credential and will "
+            "not start without a token for ORBO's server."
+        )
+
+
+_require_server_token()
+
 # Provider names supported by LangChain's public init_chat_model contract. A colon in an opaque
 # compatible model ID (for example qwen2.5:1.5b) is not a provider separator.
 MODEL_PROVIDERS = {
@@ -134,6 +153,7 @@ def _model():
         # model and warns in the module that this one is unofficial. That is a maintenance cost we
         # took knowingly rather than a reason to withhold the plan, because a subscription someone
         # already pays for is the whole point of offering it on the model screen.
+        # Requires the langchain-openai==1.6.0 pin in requirements.txt (private, unofficial module).
         from langchain_openai.chat_models.codex import _ChatOpenAICodex
 
         from .chatgpt_store import ChatGptTokenStore
@@ -208,6 +228,7 @@ def _wants_system_turns_first(model) -> bool:
 
 async def answer(state: MessagesState):
     from openai import AuthenticationError, PermissionDeniedError
+    # Requires the langchain-openai==1.6.0 pin in requirements.txt (private, unofficial module).
     from langchain_openai.chatgpt_oauth import _ChatGPTOAuthRefreshError
     from .tool_runtime import current_tools
 

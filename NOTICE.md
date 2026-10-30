@@ -213,26 +213,21 @@ their installed packages per §3.
   `resources`, `sdk-logs`), `rxjs` (Apache-2.0); `eventsource`, `zod` (MIT);
   `yaml` (ISC).
 
-### 5.3 Mobile / Expo app (`mobile/`, `apps/app/`)
+### 5.3 Mobile / Expo app (`mobile/`)
 
-- **Expo** — `expo`, `expo-constants`, `expo-linking`, `expo-router`,
-  `expo-secure-store` (plus `mobile/`-only `expo-crypto`, `expo-dev-client`,
-  `expo-device`, `expo-network`, `expo-notifications`, `expo-web-browser`) (MIT).
+- **Expo** — `expo`, `expo-constants`, `expo-crypto`, `expo-dev-client`,
+  `expo-device`, `expo-linking`, `expo-network`, `expo-notifications`,
+  `expo-router`, `expo-secure-store`, `expo-web-browser` (MIT).
 - **React Native** — `react-native`, `react-native-screens`,
   `react-native-safe-area-context` (MIT); `react`, `react-dom` (MIT).
 - **Auth** — `better-auth`, `@better-auth/core`, `@better-auth/expo`,
   `@better-auth/sso`, `@better-fetch/fetch` (MIT).
 
-### 5.4 Shared UI (`packages/ui/`)
-
-- `clsx`, `tailwind-merge` (MIT); `class-variance-authority` (Apache-2.0);
-  peer `react` (MIT).
-
-### 5.5 Root runtime (`package.json`)
+### 5.4 Root runtime (`package.json`)
 
 - **Playwright** — `playwright-core` (Apache-2.0; §3).
 
-### 5.6 Desktop (`desktop/src-tauri/`, Rust)
+### 5.5 Desktop (`desktop/src-tauri/`, Rust)
 
 - **Tauri** — `tauri`, `tauri-build`, `tauri-plugin-shell`,
   `tauri-plugin-opener`, `tauri-plugin-dialog`,
@@ -240,7 +235,7 @@ their installed packages per §3.
 - **Utilities** — `serde`, `serde_json`, `rand`, `base64`, `reqwest`, `flate2`,
   `sha2`, `tar`, `libc` (Apache-2.0 OR MIT); `zip`, `portable-pty` (MIT).
 
-### 5.7 Transitive copyleft-adjacent packages (verified)
+### 5.6 Transitive copyleft-adjacent packages (verified)
 
 - **None under strong copyleft.** No GPL/AGPL/LGPL-only packages in the
   installed tree.

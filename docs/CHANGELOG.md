@@ -1,16 +1,18 @@
 # Changelog
 
 What changed, for somebody running ORBO and deciding whether to upgrade.
-ORBO's changelog lives here at `docs/CHANGELOG.md`. The root `CHANGELOG.md`
-is the upstream OpenBot history keep-file, not ORBO's.
+ORBO's release notes live in the root `CHANGELOG.md`: it is the release
+source, and the Create release PR workflow promotes its `## Unreleased`
+section into each tagged release. `v0.1.0` through `v0.1.6` are tagged. This
+file keeps the development history behind those releases.
 
 Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
-Initial ORBO tree toward `0.1.0` (`package.json` already carries `0.1.0`;
-no `v0.1.0` tag exists yet, so there is no upgrade from a prior ORBO release).
-Scope below is only what the 19 `ORBO*` commits on `main` and the tree prove.
+Initial ORBO tree toward `0.1.0`, tagged `v0.1.0` (there was no earlier ORBO
+release to upgrade from). Scope below is only what the 19 `ORBO*` commits on
+`main` and the tree prove.
 
 - Mechanical rebrand of the merged tree away from the upstream project names.
 - Planning and inventory slices: surface inventories, execution slices, Dots fold
@@ -94,5 +96,6 @@ No operator upgrade action is documented in this range.
 
 ## 0.1.0
 
-Not yet tagged. Stub held for the first release; content is tracked under
-`Unreleased` above until the release workflow promotes it.
+Tagged `v0.1.0`. The published notes are the section the release workflow
+promoted into the root `CHANGELOG.md`; the development history behind them
+is tracked under `Unreleased` above.

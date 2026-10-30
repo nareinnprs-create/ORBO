@@ -1,6 +1,9 @@
 agent-framework-ag-ui==1.6.0
 agent-framework-anthropic==1.0.0b261015
 agent-framework-openai==1.17.0
+# Not the fleet-wide fastapi==0.144.0 pin: agent-framework-ag-ui 1.6.0 declares
+# fastapi>=0.121.0,<0.142.0, so 0.144.0 does not resolve. Move this line only
+# together with an agent-framework-ag-ui bump that lifts the cap.
 fastapi==0.141.1
 python-multipart
 uvicorn[standard]

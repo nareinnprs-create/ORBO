@@ -934,7 +934,9 @@ const PUBLISHED: [&str; 4] = [
     "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
     "orbo-dev-supervisor-token",
     "orbo-dev-computer-token",
-    "orbo-dev-worker-secret",
+    // 29 chars, not the old 22-char value: the worker now refuses WORKER_SHARED_SECRET
+    // under 24 characters, so a desktop-prepared .env must carry a floor-passing default.
+    "orbo-dev-worker-shared-secret",
 ];
 
 /// Whether an original installation key can be reused without replacement.
@@ -2014,7 +2016,7 @@ HTTPS_PROXY=http://proxy:8080
             "KEY_ENCRYPTION_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\n\
              SUPERVISOR_TOKEN=orbo-dev-supervisor-token\n\
              ORBO_COMPUTER_TOKEN=orbo-dev-computer-token\n\
-             WORKER_SHARED_SECRET=orbo-dev-worker-secret\n",
+             WORKER_SHARED_SECRET=orbo-dev-worker-shared-secret\n",
         )
         .unwrap();
 

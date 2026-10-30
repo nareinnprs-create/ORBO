@@ -229,6 +229,9 @@ def isolated_environment(directory):
     directory.mkdir(parents=True, exist_ok=True)
     inherited = (
         "HOME", "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "CODEX_HOME",
+        # crewai's trace manager reads LOCALAPPDATA on win32 at import; without it
+        # every spawned child dies with Path(None) before the harness under test loads.
+        "LOCALAPPDATA",
         "PATH", "LANG", "SYSTEMROOT", "WINDIR",
     )
     environment = {name: os.environ[name] for name in inherited if name in os.environ}
@@ -773,6 +776,37 @@ def test_crewai_endpoint_forwards_caller_tools_and_accepts_tool_result_continuat
         timeout=90,
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
+def test_boot_refuses_without_the_server_token():
+    """No token at boot, no process.
+
+    The middleware keeps answering 401 per request, but Compose watches boot: a harness that
+    starts and then refuses every run reports healthy forever, and the shell restarts a dead
+    process, never a useless one. The check runs at import, before uvicorn binds the port - the
+    posture `agent-orbo-bot/src/index.ts` already ships. Unlike the proof cases above, the child
+    keeps the real environment minus the token.
+    """
+    environment = {
+        name: value
+        for name, value in os.environ.items()
+        if name != "ORBO_MANAGED_AGENT_TOKEN"
+    }
+    # The frameworks load a repository .env themselves (litellm calls load_dotenv at import), so
+    # stripping the variable is not enough on a machine whose .env carries one. Pin it empty:
+    # python-dotenv never overrides an existing variable, and an empty one is exactly what the
+    # boot check refuses. A deployment container has no .env, so production sees true absence.
+    environment["ORBO_MANAGED_AGENT_TOKEN"] = ""
+    completed = subprocess.run(
+        [sys.executable, "-c", "import src.main"],
+        cwd=Path(__file__).resolve().parents[1],
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    assert completed.returncode != 0
+    assert "ORBO_MANAGED_AGENT_TOKEN is not set" in completed.stderr
 
 
 if __name__ == "__main__":
