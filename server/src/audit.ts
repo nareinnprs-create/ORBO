@@ -527,6 +527,19 @@ export const auditEventTypes = [
   "routine.enabled_changed",
   /* A run refused because its model is not on the team model allowlist. */
   "model.refused",
+  /*
+   * A `/`-invoked skill, run or refused (server/src/plugins/store.ts, `invokeSkill`).
+   *
+   * The invocation trail in the same vocabulary as the tool-call trail beside it:
+   * `skill.invoked` is a run that happened, with the actor, the Bot, the skill and
+   * the words after the slug; `skill.invoke_rejected` is a refusal with the reason
+   * it was refused (`not_visible` for somebody else's skill, `not_granted` for a Bot
+   * that was never given it). A name nobody installed is refused without a row, on
+   * the same criterion as an unadvertised tool: there is no skill to decide on, so
+   * a row would claim a decision that was never made.
+   */
+  "skill.invoked",
+  "skill.invoke_rejected",
 ] as const;
 
 export type AuditEventType = (typeof auditEventTypes)[number];

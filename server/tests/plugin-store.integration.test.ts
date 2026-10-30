@@ -60,6 +60,7 @@ import {
   PluginRefusedError,
   type PluginStore,
   TokenRefusedError,
+  toolNameFor,
   unlistedAdvertisedTools,
 } from "../src/plugins/store";
 import { grantedTools, REFUSAL_MARKER } from "../src/plugins/tools";
@@ -505,6 +506,23 @@ afterAll(async () => {
   for (const id of issuedCredentialIds) {
     await database.delete(credentialRows).where(eq(credentialRows.id, id));
   }
+});
+
+/**
+ * The one mapping the slice used to pin (TD-01), pinned where the mapping lives.
+ *
+ * Pinned literally rather than against `toolNameFor` on both sides: an assertion
+ * importing the mapping it is about cannot fail when that mapping moves, because
+ * both sides move together. `mcp__<server>__<tool>` is what every model-facing
+ * surface spells, so a drift here breaks model tool calls everywhere at once.
+ */
+describe("the tool name the model is offered", () => {
+  test("the ref maps to one stable model name, and only a namespaced ref does", () => {
+    expect(toolNameFor("ws10demo/lookup")).toBe("mcp__ws10demo__lookup");
+    expect(toolNameFor("google-drive/search_files")).toBe(
+      "mcp__google-drive__search_files",
+    );
+  });
 });
 
 describe("a grant is the permission", () => {

@@ -428,7 +428,7 @@ export function createProactiveEngine(deps: ProactiveEngineDeps) {
         "started",
       );
       if (deps.tasks) {
-        acceptSuggestionAsTask({
+        await acceptSuggestionAsTask({
           suggestion: started,
           ledger: deps.tasks,
           scheduledFor: now(),

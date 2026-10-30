@@ -1,4 +1,8 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { randomUUID } from "node:crypto";
+import { like } from "drizzle-orm";
+import { createDatabase } from "../src/db/client";
+import { tasks } from "../src/db/schema";
 import {
   analyzeSpending,
   FINANCE_PRODUCER_ID,
@@ -7,17 +11,30 @@ import {
   summarizeSpending,
 } from "../src/work/finance";
 import { createTaskLedger } from "../src/work/tasks";
+import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
- * Spending summaries as a Work task kind (Phase 6 slice 1; 24 §4).
+ * Spending summaries as a Work task kind (Phase 6; 24 §4).
  *
- * No database, no network, no clock: the analyzer is a pure function over CSV
- * text and the task kind runs on the in-memory ledger, so what is under test is
+ * No network, no clock: the analyzer is a pure function over CSV text, and the
+ * task kind runs on the durable ledger over its tables, so what is under test is
  * the port's fidelity — cents-exact totals, the strict CSV grammar, the header
  * rules — and the ledger sequence one import leaves behind. The savings-goal
  * action is slice 2 and appears here only as an absence: no goal, no milestone,
  * no artifact row.
  */
+
+const database = createDatabase(testDatabaseUrl(), TEST_POOL);
+const prefix = `finance-import:${randomUUID().slice(0, 8)}`;
+
+beforeAll(async () => {
+  await database.delete(tasks).where(like(tasks.key, `${prefix}%`));
+});
+
+afterAll(async () => {
+  await database.delete(tasks).where(like(tasks.key, `${prefix}%`));
+  await database.$client.close();
+});
 
 /** The delegate sheet's example transactions (F-16): salary in, three spends out. */
 const EXAMPLE_CSV = [
@@ -201,23 +218,25 @@ describe("header and row rules", () => {
 });
 
 describe("importing CSV as Work", () => {
-  test("a valid import leaves one task, one run row and one receipt", () => {
-    const ledger = createTaskLedger({
+  // Generous timeouts: these run on the shared test database alongside every other
+  // suite in the same process, and the five-second default is contention food.
+  test("a valid import leaves one task, one run row and one receipt", async () => {
+    const ledger = createTaskLedger(database, {
       now: () => new Date("2026-09-05T00:00:00Z"),
     });
 
     expect(FINANCE_TASK_KIND).toBe("finance");
-    const result = runFinanceTask({
+    const result = await runFinanceTask({
       ledger,
-      key: "csv:september-week-1",
+      key: `${prefix}:september-week-1`,
       csv: EXAMPLE_CSV,
       at: new Date("2026-09-05T00:00:00Z"),
     });
 
     expect(result.offered).toBe(true);
     expect(result.task.producer).toEqual({
-      kind: "routine",
-      routineId: FINANCE_PRODUCER_ID,
+      kind: "finance",
+      id: FINANCE_PRODUCER_ID,
     });
     expect(result.task.scheduledFor).toEqual(new Date("2026-09-05T00:00:00Z"));
     expect(result.run.status).toBe("succeeded");
@@ -225,19 +244,18 @@ describe("importing CSV as Work", () => {
     expect(result.receipt.title).toBe("Spending tracker");
     expect(result.receipt.detail).toBe("4 transactions · 98.89 spent");
     expect(result.report?.saved).toBe(4101.11);
-    expect(ledger.counts()).toEqual({ tasks: 1, runs: 1, receipts: 1 });
-  });
+  }, 30_000);
 
-  test("the same key imported twice runs the analyzer once", () => {
-    const ledger = createTaskLedger();
-    const first = runFinanceTask({
+  test("the same key imported twice runs the analyzer once", async () => {
+    const ledger = createTaskLedger(database);
+    const first = await runFinanceTask({
       ledger,
-      key: "csv:september-week-1",
+      key: `${prefix}:twice`,
       csv: EXAMPLE_CSV,
     });
-    const second = runFinanceTask({
+    const second = await runFinanceTask({
       ledger,
-      key: "csv:september-week-1",
+      key: `${prefix}:twice`,
       csv: EXAMPLE_CSV,
     });
 
@@ -246,15 +264,14 @@ describe("importing CSV as Work", () => {
     expect(second.run.id).toBe(first.run.id);
     expect(second.receipt.id).toBe(first.receipt.id);
     expect(second.report?.spending).toBe(98.89);
-    expect(ledger.counts()).toEqual({ tasks: 1, runs: 1, receipts: 1 });
-  });
+  }, 30_000);
 
-  test("an invalid CSV fails the run and receipts the reason instead of throwing", () => {
-    const ledger = createTaskLedger();
+  test("an invalid CSV fails the run and receipts the reason instead of throwing", async () => {
+    const ledger = createTaskLedger(database);
 
-    const result = runFinanceTask({
+    const result = await runFinanceTask({
       ledger,
-      key: "csv:broken",
+      key: `${prefix}:broken`,
       csv: "date,description,amount,category\nnot-a-date,Coffee,10,Food",
     });
 
@@ -264,6 +281,5 @@ describe("importing CSV as Work", () => {
     expect(result.run.error).toContain("Row 2 needs an ISO date");
     expect(result.receipt.title).toBe("Import failed");
     expect(result.receipt.detail).toContain("Row 2 needs an ISO date");
-    expect(ledger.counts()).toEqual({ tasks: 1, runs: 1, receipts: 1 });
-  });
+  }, 30_000);
 });

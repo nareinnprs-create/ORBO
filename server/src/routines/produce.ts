@@ -1,18 +1,20 @@
 /**
- * A routine firing, as a producer of unified tasks (WS-09 slice 1; 09 §4, 08 §6).
+ * A routine firing, as a producer of unified tasks (WS-09; 09 §4, 08 §6).
  *
- * One cron routine firing one task: the schedule names the due minute, the ledger in
- * `server/src/work/tasks.ts` takes the task + run row + receipt, and the turn itself
- * is injected so this never dials a model and never reads a live clock. Both moments
- * that decide anything — `after` for the schedule, `now` for whether it is due —
- * arrive as arguments, which is what "control time explicitly" means here.
+ * One cron routine firing one task: the schedule names the due minute, the durable
+ * ledger in `server/src/work/tasks.ts` takes the task + run row + receipt, and the
+ * turn itself is injected so this never dials a model and never reads a live clock.
+ * Both moments that decide anything — `after` for the schedule, `now` for whether it
+ * is due — arrive as arguments, which is what "control time explicitly" means here.
  *
  * SCHEDULERS STAY PRODUCERS (09 R5). This decides what should fire and records that
- * it did; leases, retries, fatigue and expiry live in slice 2, on the queue and the
- * runner that already own them. Nothing here claims, renews or counts.
+ * it did; leases, retries, fatigue and expiry live on the queue and the runner that
+ * already own them. Nothing here claims, renews or counts. Duplicate-fire is answered
+ * at the storage layer: the task key this builds is unique on the `tasks` table and
+ * the same string the queue's `(kind, key)` idempotence uses, so concurrent sweeps and
+ * replayed leases collapse into the one row that got there first.
  */
-import type { Task, TaskReceipt, TaskRun } from "../work/tasks";
-import type { TaskLedger } from "../work/tasks";
+import type { Task, TaskLedger, TaskReceipt, TaskRun } from "../work/tasks";
 import { nextOccurrence } from "./schedule";
 
 export type RoutineDefinition = {
@@ -78,21 +80,21 @@ export async function fireRoutineTask(options: {
   }
 
   const key = `${routine.id}:${minuteKey(scheduledFor)}`;
-  const { task, offered } = ledger.offer({
+  const { task, offered } = await ledger.offer({
     key,
-    routineId: routine.id,
+    producer: { kind: "routine", id: routine.id },
     scheduledFor,
   });
   if (!offered) {
     // Fired before: the run row and the receipt are already there, so hand back the
     // triple rather than running the turn a second time for one due minute.
-    const run = ledger.runForTask(task.id);
-    const receipt = run ? ledger.receiptForRun(run.id) : null;
+    const run = await ledger.runForTask(task.id);
+    const receipt = run ? await ledger.receiptForRun(run.id) : null;
     if (run && receipt) return { task, run, receipt, offered };
     throw new Error("an offered task has no run row or receipt");
   }
 
-  const run = ledger.startRun(task.id);
+  const run = await ledger.startRun(task.id);
   /*
    * `fire` never throws for a turn's failure. Every outcome a turn can have is a row
    * the ledger owns — succeeded or failed, each with its receipt — which is the
@@ -101,19 +103,31 @@ export async function fireRoutineTask(options: {
    */
   try {
     await options.run({ instruction: routine.instruction, scheduledFor });
-    const finished = ledger.finishRun(run.id, "succeeded");
-    const receipt = ledger.recordReceipt(run.id, {
+    const finished = await ledger.finishRun(run.id, "succeeded");
+    const receipt = await ledger.recordReceipt(run.id, {
       title: "routine fired",
       detail: `Fired on schedule for ${minuteKey(scheduledFor)}.`,
     });
-    return { task, run: finished, receipt, offered };
+    // The task snapshot the offer returned predates its own outcome; the row now
+    // holds the run's status, and a task is its run's outcome by the ledger's rule.
+    return {
+      task: { ...task, status: finished.status },
+      run: finished,
+      receipt,
+      offered,
+    };
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
-    const finished = ledger.finishRun(run.id, "failed", reason);
-    const receipt = ledger.recordReceipt(run.id, {
+    const finished = await ledger.finishRun(run.id, "failed", reason);
+    const receipt = await ledger.recordReceipt(run.id, {
       title: "routine failed",
       detail: `The scheduled firing failed: ${reason}`,
     });
-    return { task, run: finished, receipt, offered };
+    return {
+      task: { ...task, status: finished.status },
+      run: finished,
+      receipt,
+      offered,
+    };
   }
 }

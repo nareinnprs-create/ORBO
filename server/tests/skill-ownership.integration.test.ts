@@ -213,6 +213,33 @@ describe("what a person may do over HTTP", () => {
     expect(await store.skillOwner(`written-${suite}`)).toBe(alice);
   });
 
+  test("a slug is lower-case letters, digits and hyphens, and nothing else is kept", async () => {
+    // Pinned literally (TD-02): this is the rule `parseSkillInvocation` accepts, so
+    // a `/`-typed name can only ever name a slug the route would have saved.
+    for (const slug of [
+      "Standup",
+      "has_underscore",
+      "-leading",
+      "trailing-",
+      "a",
+    ]) {
+      const response = await asAlice().request("/skills", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          slug,
+          title: "Refused",
+          instructions: "Do it.",
+        }),
+      });
+      expect(response.status).toBe(400);
+      expect((await response.json()).error).toBe(
+        "A slug is lower-case letters, numbers and hyphens.",
+      );
+      expect(await store.skillOwner(slug)).toBeUndefined();
+    }
+  });
+
   test("cannot write one for the whole deployment", async () => {
     const response = await asAlice().request("/skills", {
       method: "POST",
