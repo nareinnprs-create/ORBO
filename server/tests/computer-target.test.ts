@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   checkComputerAddress,
   checkNavigationTarget,
+  checkResolvedAddress,
 } from "../src/computer/target";
 
 describe("navigation targets", () => {
@@ -240,5 +241,71 @@ describe("checkComputerAddress", () => {
     expect(checkNavigationTarget("http://10.0.0.5/", allowed).allowed).toBe(
       true,
     );
+  });
+});
+
+/**
+ * What the resolver handed back, judged before a dial.
+ *
+ * {@link checkNavigationTarget} and {@link checkComputerAddress} both judge what a URL says. The
+ * dial-time half of the same floor — the one the agent fetch runs, so a name that rebinds from a
+ * public answer into this deployment's network is caught between the check and the socket — is
+ * {@link checkResolvedAddress}, and these are its cases: the same destinations as the string
+ * checks, arriving as the answers a resolver actually produces rather than as URL spellings.
+ */
+describe("checkResolvedAddress", () => {
+  test("allows a public answer", () => {
+    expect(checkResolvedAddress("93.184.216.34")).toEqual({
+      allowed: true,
+      url: "93.184.216.34",
+    });
+    expect(checkResolvedAddress("2606:4700:4700::1111").allowed).toBe(true);
+  });
+
+  test.each([
+    ["127.0.0.1", "loopback"],
+    ["10.0.0.5", "RFC1918 10/8"],
+    ["192.168.1.10", "RFC1918 192.168/16"],
+    ["172.16.0.9", "RFC1918 172.16/12"],
+    ["fe80::1", "link-local IPv6"],
+    ["fc00::1", "unique-local IPv6"],
+    ["::ffff:10.0.0.5", "an RFC1918 address behind IPv4-mapped IPv6"],
+    ["64:ff9b::10.0.0.5", "an RFC1918 address behind the NAT64 prefix"],
+  ])("refuses %s (%s) unless the deployment opted in", (address) => {
+    expect(checkResolvedAddress(address).allowed).toBe(false);
+    expect(
+      checkResolvedAddress(address, { allowPrivateHosts: true }).allowed,
+    ).toBe(true);
+  });
+
+  test.each([
+    ["169.254.169.254", "the metadata address"],
+    ["169.254.170.2", "the ECS task endpoint"],
+    ["fd00:ec2::254", "metadata over IPv6"],
+  ])("refuses %s (%s) even with private hosts allowed", (address) => {
+    for (const allowPrivateHosts of [false, true]) {
+      const verdict = checkResolvedAddress(address, { allowPrivateHosts });
+      expect(verdict.allowed).toBe(false);
+      expect(verdict.allowed === false && verdict.reason).toContain(
+        "cloud credentials",
+      );
+    }
+  });
+
+  test("refuses the credential endpoint in carrier NAT space, which the private ranges do not cover", () => {
+    // 100.100.100.200 is why the never-allowed list is checked on resolved addresses too: the
+    // private-range check does not know 100.64/10 and would let Alibaba's credential endpoint
+    // through on range membership alone.
+    expect(
+      checkResolvedAddress("100.100.100.200", { allowPrivateHosts: true })
+        .allowed,
+    ).toBe(false);
+  });
+
+  test("judges bracketed answers as the addresses they reach", () => {
+    // A resolver does not produce brackets, but canonicalising costs nothing and keeps this
+    // check honest against whichever form a caller passes through.
+    expect(checkResolvedAddress("[::ffff:192.168.0.1]").allowed).toBe(false);
+    expect(checkResolvedAddress("[::1]").allowed).toBe(false);
   });
 });

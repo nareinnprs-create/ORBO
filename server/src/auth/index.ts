@@ -284,6 +284,25 @@ export function createAuth(
 
   return betterAuth({
     session: sessionOptions(config),
+    /*
+     * Stated, not inherited. The library ships a limiter already — enabled whenever it decides
+     * `NODE_ENV` looks like production, window 10 seconds, max 100 — but every part of that
+     * default is a decision this deployment should own and none of it is written anywhere an
+     * operator could read. So it is written here: on in every mode (a person signing in does not
+     * need a hundred requests a minute, and a laptop that exercises sign-in in development is
+     * owed the same proof the ceiling holds), one minute wide, one hundred requests deep. The
+     * library's own tighter rules stay on top of this for the paths where a request is a guess —
+     * sign-in, sign-up and password reset get their own smaller windows — which is exactly the
+     * shape wanted here and the reason the general numbers can stay generous.
+     *
+     * In memory, like everything else this library keeps per process: the server is one process,
+     * so there is nothing to share.
+     */
+    rateLimit: {
+      enabled: true,
+      window: 60,
+      max: 100,
+    },
     user: {
       additionalFields: {
         preferences: {

@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import type { AuditEventInput, AuditStore } from "../src/audit";
+import type { ApprovalCandidate, ApprovalGate } from "../src/approvals/types";
 import { StaleSnapshotError } from "../src/computer/client";
 import {
   ActionRefusedError,
   createComputerGateway,
+  intentOf,
   WorkspaceNotFoundError,
   WorkspaceRefusedError,
   WorkspaceTooLargeError,
@@ -795,6 +797,13 @@ describe("the computer gateway", () => {
         egress: null,
       },
       {
+        botId: "bot-outdated",
+        status: "running",
+        startedAt: "2026-08-20T09:00:00.000Z",
+        egress: null,
+        updateAvailable: true,
+      },
+      {
         botId: "bot-unknown-egress",
         status: "stopped",
         startedAt: "2026-08-20T10:00:00.000Z",
@@ -819,6 +828,13 @@ describe("the computer gateway", () => {
           running: false,
           startedAt: "2026-08-20T11:00:00.000Z",
           egress: null,
+        },
+        {
+          botId: "bot-outdated",
+          running: true,
+          startedAt: "2026-08-20T09:00:00.000Z",
+          egress: null,
+          updateAvailable: true,
         },
         {
           botId: "bot-unknown-egress",
@@ -1238,6 +1254,8 @@ describe("resolving a computer's address", () => {
       fetchImpl,
       auditStore: store,
       policy: () => PERMISSIVE,
+      // A laptop deployment, where the computer itself sits on a private network.
+      allowPrivateHosts: true,
     });
 
     await expect(gateway.locate("bot-1")).resolves.toContain("http");
@@ -1733,5 +1751,231 @@ describe("updating a computer's image", () => {
       /no computer image/,
     );
     expect(rows).toHaveLength(0);
+  });
+
+  test.each([
+    [
+      { updated: false, wasRunning: false, from: "current", to: "current" },
+      "already on the current image",
+    ],
+    [
+      { updated: true, wasRunning: false, from: "old", to: "new" },
+      "will start on new",
+    ],
+  ])("a computer that was %j is told apart on the trail", async (result, reason) => {
+    const { provider, fetchImpl } = fakeComputer();
+    const { store, rows } = fakeAudit();
+    provider.update = async () => result;
+    const gateway = createComputerGateway({
+      provider,
+      fetchImpl,
+      auditStore: store,
+      policy: () => PERMISSIVE,
+    });
+
+    await gateway.updateComputer("bot-1", ACTOR);
+
+    expect(rows[0]?.eventType).toBe("computer.updated");
+    expect(String(rows[0]?.payload.reason)).toContain(reason);
+  });
+});
+
+/**
+ * The approval gate sits between the policy's yes and the action itself.
+ *
+ * The policy decides what a Bot may do; the gate is where a person's own rules answer first, and
+ * where an action can be handed to the person instead of run. These prove the gate sees enough to
+ * decide with — who, where, what effect on what page — and that a permit carrying a replay answers
+ * with it rather than reaching the computer.
+ */
+describe("the approval gate", () => {
+  function gatewayGatedBy(approvalGate: ApprovalGate) {
+    const { provider, fetchImpl, calls } = fakeComputer();
+    const { store, rows } = fakeAudit();
+    const gateway = createComputerGateway({
+      provider,
+      fetchImpl,
+      auditStore: store,
+      policy: () => PERMISSIVE,
+      approvalGate,
+    });
+    return { gateway, calls, rows };
+  }
+
+  test("shows the action to the gate before it runs, and runs it when the gate steps aside", async () => {
+    const seen: ApprovalCandidate[] = [];
+    const { gateway, calls } = gatewayGatedBy(async (candidate) => {
+      seen.push(candidate);
+      return undefined;
+    });
+    await gateway.snapshot("bot-1");
+
+    await gateway.click("bot-1", ACTOR, { ref: "e9", snapshotId: 7 });
+
+    expect(calls).toEqual(["click"]);
+    // A click is an activation, so a write; the scope is the page the button sits on, not some
+    // earlier page. The element is the one the server resolved, like the policy saw.
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({
+      actorId: "dev-local-user",
+      botId: "bot-1",
+      toolRef: "computer_click",
+      effect: "write",
+      scope: "example.com",
+      args: { ref: "e9", snapshotId: 7, signal: undefined },
+      target: {
+        pageUrl: "https://example.com/order",
+        element: { ref: "e9", role: "button", name: "Submit order" },
+        snapshotId: 7,
+      },
+    });
+  });
+
+  test("a permit carrying a replay answers with it, and the computer is never asked", async () => {
+    const completions: unknown[] = [];
+    const replay = { action: "click", url: SNAPSHOT.url, elapsedMs: 5 };
+    const { gateway, calls, rows } = gatewayGatedBy(async () => ({
+      replay,
+      complete: async (result: unknown) => {
+        completions.push(result);
+      },
+    }));
+    await gateway.snapshot("bot-1");
+
+    const result = await gateway.click("bot-1", ACTOR, {
+      ref: "e9",
+      snapshotId: 7,
+    });
+
+    // The replay IS the answer, with the resolved label attached on the way out like any other
+    // result. The permit is told what the replay answered, and the trail still has the row.
+    expect(result).toEqual({
+      ...replay,
+      element: { role: "button", name: "Submit order" },
+    });
+    expect(calls).toEqual([]);
+    expect(completions).toEqual([replay]);
+    expect(rows.map(({ eventType }) => eventType)).toEqual([
+      "computer.action_allowed",
+    ]);
+  });
+});
+
+describe("when the computer cannot be asked", () => {
+  test("an unlocatable computer still gets its decision row, and the failed attempt beside it", async () => {
+    // The attempt failing is not allowed to take the action off the trail: the locate for the action
+    // answers "unknown" rather than throwing, so the policy decides, the decision row is written,
+    // and only the attempt that follows fails — with its own row beside the decision.
+    const { provider, fetchImpl } = fakeComputer();
+    const { store, rows } = fakeAudit();
+    let first = true;
+    provider.locate = async () => {
+      if (first) {
+        first = false;
+        return "http://agent-computer:4100";
+      }
+      throw new Error("the supervisor is unreachable");
+    };
+    const gateway = createComputerGateway({
+      provider,
+      fetchImpl,
+      auditStore: store,
+      policy: () => PERMISSIVE,
+    });
+    await gateway.snapshot("bot-1");
+
+    await expect(
+      gateway.click("bot-1", ACTOR, { ref: "e9", snapshotId: 7 }),
+    ).rejects.toThrow("the supervisor is unreachable");
+
+    expect(rows.map(({ eventType }) => eventType)).toEqual([
+      "computer.action_allowed",
+      "computer.action_failed",
+    ]);
+    expect(rows[1]?.payload.failure).toContain("unreachable");
+  });
+
+  test("a snapshot is still recorded when the computer's run cannot be read", async () => {
+    // A session that cannot be read must not stop a snapshot being recorded, because a snapshot
+    // nobody stored is a ref that resolves to nothing and a boundary deciding with no element in
+    // front of it.
+    const snapshots = createInMemorySnapshotStore();
+    const { provider, fetchImpl } = fakeComputer({
+      session: () => {
+        throw new Error("the run is gone");
+      },
+    });
+    const { store } = fakeAudit();
+    const gateway = createComputerGateway({
+      provider,
+      fetchImpl,
+      auditStore: store,
+      policy: () => PERMISSIVE,
+      snapshots,
+    });
+
+    const taken = await gateway.snapshot("bot-1");
+
+    expect(taken.snapshotId).toBe(7);
+    const held = await snapshots.load("bot-1");
+    expect(held?.snapshotId).toBe(7);
+    expect(held?.session).toBeUndefined();
+  });
+});
+
+describe("status and a person's sign-in", () => {
+  test("status passes straight through to the provider", async () => {
+    const { gateway } = await gatewayWith(PERMISSIVE);
+    await expect(gateway.status("bot-1")).resolves.toEqual({
+      botId: "bot-1",
+      state: "ready",
+    });
+  });
+
+  test("typing a person's sign-in reaches the computer, and is not audited here", async () => {
+    const { gateway, requests, rows } = await gatewayWith(PERMISSIVE, {
+      routes: {
+        "/sign-in/fill": () =>
+          Response.json({
+            submitted: true,
+            passwordFieldVisible: false,
+            url: "https://example.com/account",
+          }),
+      },
+    });
+
+    const result = await gateway.signIn("bot-1", {
+      origin: "https://example.com",
+      username: "grace",
+      password: "hunter2-not-a-real-password",
+    });
+
+    expect(result).toEqual({
+      submitted: true,
+      passwordFieldVisible: false,
+      url: "https://example.com/account",
+    });
+    // The credential goes straight to the computer — it has to, to be typed — and the passwords
+    // module owns the trail here, so the gateway itself writes no row that could carry it.
+    expect(rows).toHaveLength(0);
+    const request = requests.at(-1);
+    expect(new URL(request?.url ?? "").pathname).toBe("/sign-in/fill");
+    expect(String(request?.init?.body)).toContain(
+      "hunter2-not-a-real-password",
+    );
+  });
+});
+
+/**
+ * `intentOf` is exported because the dry-run renderer classifies recorded actions with the same
+ * mapping the gateway decides by. The read-only tools are classified there even though they never
+ * pass through `govern` here, and an unknown name has to answer nothing rather than guess.
+ */
+describe("the intent an action is decided by", () => {
+  test("read-only tools read, and a name the gateway does not act with has none", () => {
+    expect(intentOf("computer_read", undefined)).toBe("read");
+    expect(intentOf("computer_snapshot", undefined)).toBe("read");
+    expect(intentOf("computer_screenshot", undefined)).toBe("read");
+    expect(intentOf("not a tool", undefined)).toBeUndefined();
   });
 });

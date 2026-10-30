@@ -79,6 +79,20 @@ services:
     # and a Compose-derived name would change with the project.
     image: ${ORBO_COMPUTER_IMAGE:-orbo-computer:latest}
     pull_policy: ${IMAGE_PULL_POLICY:-build}
+    # The browser's user, stated where the container starts rather than left to the image.
+    #
+    # 1001 is the pinned `pwuser` the image creates and the number the supervisor passes for every
+    # per-Bot computer it starts, so the shared computer and all of those run the browser as the
+    # same unprivileged user who owns its profile and its workspace — the boundary a `--no-sandbox`
+    # Chromium actually has. Stated here for the same reason the supervisor states it: a container
+    # that says nothing inherits whatever the named image carries, and this service is how the
+    # shared computer is built AND where a release image is pulled to.
+    #
+    # The override is the documented way through a one-time upgrade wrinkle: volumes created by
+    # images that ran as root carry root-owned profile directories, and a 1001 browser cannot write
+    # into them. Set ORBO_COMPUTER_USER=0:0 for one restart, or chown (or delete, costing the
+    # logins) the `agent-profiles` volume; then go back off it.
+    user: ${ORBO_COMPUTER_USER:-1001:1001}
     ports:
       # Loopback only. This process drives a browser holding real logins; ORBO_COMPUTER_TOKEN is the
       # request control, and loopback keeps the surface off routed networks.
@@ -244,6 +258,14 @@ services:
       # the process still listens on every interface inside its own container.
       - "127.0.0.1:${SUPERVISOR_PORT:-4500}:4300"
       - "[::1]:${SUPERVISOR_PORT:-4500}:4300"
+    # The image runs as a non-root user (supervisor/Dockerfile), so opening the socket mounted below
+    # needs the group that owns it on THIS host. DOCKER_GID is that GID — `stat -c %g
+    # /var/run/docker.sock` says what it is; 999 is the stock Debian/Ubuntu value — and it is passed
+    # at runtime rather than baked into the image, because a pulled release was built on a host
+    # whose number says nothing about this one. Rootful Podman's socket is root:root: set
+    # DOCKER_GID=0 there.
+    group_add:
+      - "${DOCKER_GID:-999}"
     volumes:
       # Read-only because this service only ever needs to ask; it is still root-equivalent, which is
       # the whole reason nothing else here gets it.

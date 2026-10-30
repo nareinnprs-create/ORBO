@@ -1,4 +1,9 @@
-import { checkNavigationTarget } from "../computer/target";
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
+import {
+  checkNavigationTarget,
+  checkResolvedAddress,
+} from "../computer/target";
 
 /**
  * Where an external agent lives, and whether we are willing to talk to it.
@@ -204,6 +209,32 @@ function strippedBody(body: BodyInit | null | undefined): { body?: BodyInit } {
 }
 
 /**
+ * A resolver, as this module wants one: a hostname, the addresses it answers with.
+ *
+ * Injectable for the same reason `fetchImpl` is — a check this file decides should be testable
+ * without the network that feeds it. A test's stub answers with fixed addresses; production gets
+ * {@link systemResolver} by default, which is the operating system's own resolver, the same one
+ * the fetch below would eventually consult, asked directly and ahead of the dial so the answer
+ * can be judged before the socket exists.
+ */
+export type DnsResolver = (hostname: string) => Promise<string[]>;
+
+/**
+ * The real resolver, every address it answers with.
+ *
+ * `all: true` because a name with several answers is only as safe as its worst one: a rebinding
+ * attacker rotates between a public answer that passes and a private one that does not, and
+ * reading only the first is reading whichever the resolver happened to order first.
+ */
+export const systemResolver: DnsResolver = async (hostname) => {
+  const answers = await lookup(hostname, {
+    all: true,
+    verbatim: true,
+  });
+  return answers.map((answer) => answer.address);
+};
+
+/**
  * `fetch`, with the endpoint check applied to every hop rather than only the address a person typed.
  *
  * Checking the URL once and then handing it to a fetch that follows redirects is a check with a hole
@@ -242,6 +273,21 @@ export function createAgentFetch(
     allowedHosts?: ReadonlySet<string>;
     fetchImpl?: typeof fetch;
     /**
+     * What names are resolved with, ahead of every dial.
+     *
+     * The string checks decide where a URL claims to go; a name resolves to addresses this
+     * deployment has never seen, and a resolver is the one component on this path a registrable
+     * agent can answer through: rebinding a name from a public address to `169.254.169.254` turns
+     * a check that approved the name into a fetch that reads the metadata service. So every
+     * answer is fetched, judged by {@link checkResolvedAddress} — the same floor the string check
+     * applies, applied to what will actually be dialed — and the dial is refused when any answer
+     * fails or the name does not answer at all. Failing closed on a resolver outage is the whole
+     * point: an agent that cannot be resolved into a safe address is an agent that is not dialed.
+     *
+     * Defaults to {@link systemResolver}; tests substitute their own.
+     */
+    resolveDns?: DnsResolver;
+    /**
      * Told about every address this refused to dial, and why.
      *
      * A refusal is the one thing on this path an operator cannot otherwise learn. The person who
@@ -261,6 +307,7 @@ export function createAgentFetch(
   } = {},
 ): (url: string, init?: RequestInit) => Promise<Response> {
   const doFetch = options.fetchImpl ?? fetch;
+  const resolve = options.resolveDns ?? systemResolver;
   const refuse = (address: string, reason: string) => {
     try {
       options.onRefusal?.({ address, reason });
@@ -277,6 +324,64 @@ export function createAgentFetch(
       ...(options.allowedHosts ? { allowedHosts: options.allowedHosts } : {}),
     });
 
+  /**
+   * Judge where a name really goes, before anything is dialled at it.
+   *
+   * Literal addresses skip the resolver — the string check has already judged the address
+   * itself, and asking DNS about an IP is a second opinion nobody needs — and a name the
+   * deployment itself allowed through the `allowedHosts` list carries the private-host floor
+   * with it, because refusing its own private answers would refuse exactly the addresses an
+   * operator named. Everything else runs every resolved address through the same private and
+   * metadata checks the URL passed.
+   *
+   * RESIDUAL TOCTOU, WRITTEN DOWN BECAUSE IT IS REAL. Between this resolution and the moment
+   * `fetch` connects, the record can expire, the attacker's answer can rotate to the next window,
+   * and the platform's own resolver — which fetch consults, not the answer validated here — is
+   * free to hand back a different address. Pinning the connection to the validated IP would need
+   * a socket this side of `fetch`, which would mean re-speaking TLS by hand to keep the
+   * certificate check honest; until that trade is taken, resolve-then-validate closes the
+   * rebinding case where the check and the dial are one round apart and leaves the narrow
+   * rotation race documented rather than pretended away. The redirect loop re-runs this per hop,
+   * which is also why it is a function and not a line.
+   */
+  const assertDialable = async (address: string, via: string) => {
+    const url = new URL(address);
+    const hostname = url.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+    if (isIP(hostname) !== 0) return;
+
+    const namedByOperator =
+      options.allowPrivateHosts === true ||
+      namedAsAllowed(address, options.allowedHosts);
+
+    let answers: string[];
+    try {
+      answers = await resolve(hostname);
+    } catch {
+      throw refuse(
+        address,
+        `${via} could not be resolved, and this deployment does not dial an address it could not check.`,
+      );
+    }
+    if (answers.length === 0) {
+      throw refuse(
+        address,
+        `${via} resolved to nothing, and this deployment does not dial an address it could not check.`,
+      );
+    }
+
+    for (const answer of answers) {
+      const verdict = checkResolvedAddress(answer, {
+        ...(namedByOperator ? { allowPrivateHosts: true } : {}),
+      });
+      if (!verdict.allowed) {
+        throw refuse(
+          address,
+          `${via} resolves to ${answer}, and ${verdict.reason}.`,
+        );
+      }
+    }
+  };
+
   return async function guardedFetch(url: string, init?: RequestInit) {
     const stored = check(url);
     if (!stored.allowed) {
@@ -285,6 +390,7 @@ export function createAgentFetch(
         `This deployment will not dial ${url}: ${stored.reason.charAt(0).toLowerCase()}${stored.reason.slice(1)}`,
       );
     }
+    await assertDialable(url, "That address");
 
     const origin = stored.url;
     let target = stored.url;
@@ -312,6 +418,9 @@ export function createAgentFetch(
           `That address redirected to ${next}, and ${verdict.reason.charAt(0).toLowerCase()}${verdict.reason.slice(1)}`,
         );
       }
+      // The hop's name is resolved and judged like the stored address's was; a redirect is no way
+      // to arrive at an address the resolution check would have refused.
+      await assertDialable(next, "That address redirected to an address that");
       if (!sameCredentialScope(origin, verdict.url)) {
         // A body this cannot strip refuses the hop rather than forwarding it, and that refusal is
         // worth the same row as any other: it means a run was carrying something unreadable to a

@@ -166,6 +166,13 @@ export type HandoffCaps = {
 export type DeploymentConfig = {
   /** Optional environment default. A saved Admin setting takes precedence. */
   learning?: LearningTarget;
+  /**
+   * How fast one caller may use the API, when the deployment has not switched the limiter off.
+   *
+   * Absent only under `ORBO_RATE_LIMIT=off`, which is an operator's decision to run with no
+   * ceiling rather than a deployment that never chose one: every other boot gets the defaults.
+   */
+  rateLimit?: RateLimitSettings;
   /** Audio configuration is independent of agent model providers. */
   transcription?: TranscriptionConfig;
   voice?: VoiceConfig;
@@ -1182,6 +1189,158 @@ export function durationMs(value: string): number {
   }
 }
 
+/**
+ * How fast one caller may use the API, and who decides it.
+ *
+ * A number a deployment chooses, not a constant, because the right answer is a fact about the
+ * deployment: a single person on a laptop and a company behind a shared ingress sit at very
+ * different points on the same curve, and the browser's own polling is part of the traffic being
+ * counted. See `server/src/rate-limit.ts` for what is counted and what the buckets are.
+ *
+ * Everything here refuses to boot on a malformed value rather than falling back to the default,
+ * for the reason the caps above state: an operator who wrote `ORBO_RATE_LIMIT_MAX=30O` (letter O)
+ * would otherwise get a running deployment that quietly means 300, and no indication that the
+ * number they chose was never read.
+ */
+export type RateLimitSettings = {
+  /** Requests one identity may make across the API in one window. */
+  max: number;
+  /** How long a window stays open, in milliseconds. */
+  windowMs: number;
+  /** The tighter ceiling on the sign-in routes, where a request may be a guess. */
+  authMax: number;
+};
+
+/** Three hundred a minute: a person's browser polling several surfaces at once sits under half of it. */
+const DEFAULT_RATE_LIMIT_MAX = 300;
+const DEFAULT_RATE_LIMIT_WINDOW = "1m";
+/** Where a request can be an attempt at somebody's account, the ceiling drops to one every two seconds. */
+const DEFAULT_RATE_LIMIT_AUTH_MAX = 30;
+
+function rateLimitConfig(
+  environment: Environment,
+): RateLimitSettings | undefined {
+  if (optional(environment, "ORBO_RATE_LIMIT") === "off") return undefined;
+
+  const wholeNumber = (name: string, fallback: number): number => {
+    const raw = optional(environment, name);
+    if (raw === undefined) return fallback;
+    const value = Number(raw);
+    if (!Number.isInteger(value) || value < 1) {
+      throw new Error(`${name} must be a whole number of 1 or more`);
+    }
+    return value;
+  };
+
+  const windowRaw = optional(environment, "ORBO_RATE_LIMIT_WINDOW");
+  const windowMs = windowRaw
+    ? durationMs(windowRaw)
+    : durationMs(DEFAULT_RATE_LIMIT_WINDOW);
+  if (windowMs < 1_000) {
+    throw new Error(
+      "ORBO_RATE_LIMIT_WINDOW must be at least one second; anything shorter is a threshold nobody chose on purpose",
+    );
+  }
+
+  return {
+    max: wholeNumber("ORBO_RATE_LIMIT_MAX", DEFAULT_RATE_LIMIT_MAX),
+    windowMs,
+    authMax: wholeNumber(
+      "ORBO_RATE_LIMIT_AUTH_MAX",
+      DEFAULT_RATE_LIMIT_AUTH_MAX,
+    ),
+  };
+}
+
+/**
+ * The tokens the install scripts mint when a deployment leaves the secrets blank, which are
+ * printed in this repository and therefore not secrets at all.
+ *
+ * They were never refused: `scripts/install.sh` and `scripts/start.sh` (and the PowerShell twins)
+ * generate exactly these when `.env` carries nothing, and the server accepted them under any
+ * `NODE_ENV` at any address. A deployment that kept the defaults and put a URL on the deployment
+ * was running its browser, its computer network and its worker channel on three passwords anybody
+ * who can read this repository already has — indistinguishable from the outside from one that
+ * generated real values, which is the property that makes the example encryption key above worth
+ * refusing.
+ *
+ * The same reachability question that gate asks, because the answer is the same answer: the
+ * tokens are convenient locally and public in any deployment somebody else can reach.
+ * `NODE_ENV=production` refuses on its own, because the image and the chart set it and the honest
+ * loopback deployment that kept them is not owed a pass. A token is only judged when this server
+ * would actually use it — a stray `SUPERVISOR_TOKEN` in an environment with no supervisor
+ * configured authenticates nothing and is nobody's business.
+ */
+const DEVELOPMENT_TOKENS = {
+  SUPERVISOR_TOKEN: "orbo-dev-supervisor-token",
+  ORBO_COMPUTER_TOKEN: "orbo-dev-computer-token",
+  WORKER_SHARED_SECRET: "orbo-dev-worker-shared-secret",
+} as const;
+
+function refuseDevelopmentTokens(environment: Environment): void {
+  const production = isProduction(environment);
+  const bind = bindBeyondLoopback(environment);
+  const beyondLoopback = [
+    ...reachableAddresses(environment)
+      .filter((address) => address.reach !== "loopback")
+      .map((address) => address.value),
+    ...(bind ? [`ORBO_SERVER_HOST=${bind}`] : []),
+  ];
+
+  /*
+   * Whether each token is in a position where this server would send or check it, read the same
+   * way `computerConfig` and `loadConfig` read them. Kept here rather than plumbed through those
+   * functions, so one gate answers one question and the wiring cannot drift out of agreement.
+   */
+  const supervisorAddress = optional(
+    environment,
+    "ORBO_COMPUTER_SUPERVISOR_URL",
+  );
+  const sharedAddress = optional(environment, "ORBO_AGENT_COMPUTER_URL");
+  const sandboxNamespace = optional(
+    environment,
+    "ORBO_COMPUTER_SANDBOX_NAMESPACE",
+  );
+  const computerConfigured = Boolean(
+    supervisorAddress || sharedAddress || sandboxNamespace,
+  );
+
+  const inUse: Array<[string, boolean]> = [
+    // Checked before SUPERVISOR_TOKEN, because a deployment pointing at a supervisor is the only
+    // one the supervisor token means anything to.
+    ["ORBO_COMPUTER_TOKEN", computerConfigured],
+    ["SUPERVISOR_TOKEN", Boolean(supervisorAddress)],
+    [
+      "WORKER_SHARED_SECRET",
+      Boolean(optional(environment, "WORKER_SHARED_SECRET")),
+    ],
+  ];
+
+  for (const [name, used] of inUse) {
+    const value = optional(environment, name);
+    if (
+      !used ||
+      value !== DEVELOPMENT_TOKENS[name as keyof typeof DEVELOPMENT_TOKENS]
+    ) {
+      continue;
+    }
+
+    if (production) {
+      throw new Error(
+        `${name} is still the development token printed in this repository, which is public. Generate a real one before running in production.`,
+      );
+    }
+    if (beyondLoopback.length > 0) {
+      throw new Error(
+        `${name} is the development token printed in this repository, which is public, and this deployment answers beyond this machine at ${beyondLoopback.join(", ")}. Generate a real one.`,
+      );
+    }
+    console.warn(
+      `${name} is the development token printed in this repository. Fine on a loopback laptop. Generate a real one before deploying.`,
+    );
+  }
+}
+
 function computerConfig(environment: Environment): ComputerConfig | undefined {
   const supervisorAddress = optional(
     environment,
@@ -1508,6 +1667,11 @@ export function loadConfig(
     : undefined;
   const managedAgent = managedAgentConfig(environment);
   const workerSharedSecret = optional(environment, "WORKER_SHARED_SECRET");
+  // Before anything below builds on these values: a deployment carrying the tokens the install
+  // scripts mint refuses here rather than at the first use, where it would instead be one working
+  // request away from being exploited.
+  refuseDevelopmentTokens(environment);
+  const rateLimit = rateLimitConfig(environment);
 
   return {
     port: serverPort(environment),
@@ -1554,6 +1718,7 @@ export function loadConfig(
       : {}),
     computer: computerConfig(environment),
     handoff: handoffCaps(environment),
+    ...(rateLimit ? { rateLimit } : {}),
     ...(optional(environment, "ORBO_AGENT_TOOL_TOKEN")
       ? {
           agentToolToken: optional(

@@ -2,7 +2,10 @@ import type { Hono as HonoApp, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { serveStatic } from "hono/bun";
+import { HTTPException } from "hono/http-exception";
+import type { ErrorHandler } from "hono/types";
 import { MAX_IMAGE_BYTES } from "../../shared/attachments";
+import { MAX_DICTATION_BYTES } from "../../shared/dictation";
 import { enterpriseControls } from "./admin/controls";
 import { createEnterpriseGate } from "./admin/gate";
 import { createEnterpriseAdminRoutes } from "./admin/routes";
@@ -115,6 +118,7 @@ import {
   type ModelProviderProxy,
   mountProviderOAuthProxy,
 } from "./provider-oauth";
+import { createRateLimit } from "./rate-limit";
 import type { ResponsibilityBindingStore } from "./responsibilities/bindings";
 import type { ResponsibilityEngine } from "./responsibilities/engine";
 import { createGithubResponsibilityRoutes } from "./responsibilities/github";
@@ -126,6 +130,7 @@ import type { RoutineRunner } from "./routines/runner";
 import type { IntentRouter } from "./routing/classify";
 import { createRoutingRoutes } from "./routing/routes";
 import { createCoworkerRoutingService } from "./routing/service";
+import { createSecurityHeaders } from "./security-headers";
 import { createTeamBotRoutes } from "./team-bots/routes";
 import type { TeamBots } from "./team-bots/team-bots";
 import { createAccessLog } from "./telemetry/access-log";
@@ -177,6 +182,28 @@ export const UPLOAD_BODY_LIMIT_BYTES =
   MAX_IMAGE_BYTES + MULTIPART_FRAMING_ALLOWANCE;
 
 /**
+ * The ceiling on any request body this server has not put a smaller ceiling on.
+ *
+ * Ten and a half megabytes is not one number chosen for the JSON it protects; it is the largest
+ * ceiling any route below already enforces (dictation's, an audio upload with the same framing
+ * slack the attachment ceiling carries), and THAT is the property it must have, because of how
+ * `bodyLimit` composes. The first limit a request meets is the only one that can refuse it: a
+ * global gate mounted ahead of the routes cannot be widened by a route's own wider gate, only
+ * narrowed. Sized below the specific limits, this one would silently cut dictation's 10MiB
+ * recordings and the attachment ceiling's 8MiB images to whatever it says, with every route-level
+ * number below it now unreachable and every error message lying about the real limit. Sized at
+ * that maximum, the gates keep exactly the meanings they were each written for, and the routes
+ * that never had a limit — the JSON APIs, the longest-running of which take a few kilobytes — are
+ * capped at the point where nothing honest was ever at stake anyway.
+ *
+ * What this buys is the 2GB body: a client that streams an unbounded POST at a route that never
+ * grew a `bodyLimit` of its own used to have it buffered in full before any handler could look at
+ * it. Now it is refused at the door with the same `{ error }` shape every other refusal here
+ * speaks, and the memory it would have pinned stays unpinned.
+ */
+const GLOBAL_BODY_LIMIT_BYTES = MAX_DICTATION_BYTES + 64 * 1024;
+
+/**
  * One row for something an administrator did to somebody's access.
  *
  * The address is on the row rather than only the user id, because the id means nothing to a person
@@ -214,6 +241,66 @@ async function recordPersonEvent(
     payload: { email: person.email, ...payload },
   });
 }
+
+/**
+ * The answer when a handler throws instead of answering.
+ *
+ * There WAS no `app.onError` behind this server — a thrown error reached Hono's default, which
+ * answers `Internal Server Error` as plain text with a status and no body, and every `catch` in
+ * every route was the only thing standing between a query failure and its statement travelling to
+ * a browser. One route's forgotten catch is all it takes, so the backstop lives here, at the app,
+ * where no route can route around it.
+ *
+ * THE BODY IS THE SHAPE EVERY REFUSAL ALREADY WEARS: `{ error: <a sentence> }`, so a client that
+ * reads one error reads them all. The sentence goes through the same hygiene the tool paths do —
+ * the `isDeploymentFault` shelf settles who may be told (a query failure is this deployment's own
+ * complaint, never the asker's to act on) and `withoutStatement` settles WHAT may be said, so no
+ * drizzle statement or bound value can travel even if that is what was thrown. Anything else keeps
+ * its own message: a vendor's refusal or an invariant's sentence is the useful half, and capping it
+ * bounds a message that came from somewhere else.
+ *
+ * The reason is logged here, scrubbed the same way — the operator's copy of this failure is the log
+ * line, not the browser's.
+ *
+ * Exported for its tests: a Hono app matches its own fallback before a route mounted after the
+ * fact, so driving this through a mounted throwing route tests the router, not the handler.
+ */
+export const uncaughtErrorHandler: ErrorHandler<{ Variables: AppVariables }> = (
+  error,
+  context,
+) => {
+  if (error instanceof HTTPException) {
+    // Hono's own refusal — a body limit or a route's deliberate throw — is not an incident: it
+    // keeps its status and any custom response it was handed, and only its bare message is
+    // rewritten into the JSON shape the rest of this app answers with.
+    if (error.res) return error.res;
+    return context.json({ error: error.message }, error.status);
+  }
+  // A Hono error handler is handed an Error, so the WHAT-gate is `withoutStatement` itself: a
+  // query failure becomes the database's own complaint, anything else its message, capped. A
+  // `throw "string"` still reaches this function at runtime whatever the type says, so a non-Error
+  // becomes one here rather than the backstop being the second crash.
+  const errorAsThrown =
+    error instanceof Error ? error : new Error(String(error));
+  const sentence = withoutStatement(errorAsThrown).slice(0, 400);
+  console.error(
+    JSON.stringify({
+      type: "unhandled-handler-error",
+      method: context.req.method,
+      path: context.req.path,
+      error: withoutStatement(errorAsThrown),
+      timestamp: new Date().toISOString(),
+    }),
+  );
+  return context.json(
+    {
+      error: `Something went wrong handling this request${
+        sentence ? `: ${sentence}` : "."
+      }`,
+    },
+    500,
+  );
+};
 
 export function createApp(
   config: DeploymentConfig,
@@ -452,6 +539,8 @@ export function createApp(
   const app = new Hono<{ Variables: AppVariables }>();
   mountDesktopConnectionFailure(app, desktopHostToken);
   mountProviderOAuthProxy(app, modelProviderProxy);
+  // The backstop behind every route, including the mounted ones. See the handler, above.
+  app.onError(uncaughtErrorHandler);
 
   /*
    * The golden signals, before any route claims a path: every request that is answered after this
@@ -460,11 +549,54 @@ export function createApp(
   const metrics = createMetricsRegistry();
   app.use("*", createAccessLog({ metrics }));
 
+  /*
+   * The headers every answer wears, mounted here so they reach refusals too — a 413 or a 429 is
+   * precisely the response whose interpretation nobody planned. Ahead of the limiter and the body
+   * ceiling for the same reason, and ahead of the routes because a header added by the handler
+   * that answered would only ever be there when a handler answered.
+   */
+  app.use("*", createSecurityHeaders());
+
+  /*
+   * How fast one caller may ask, when the deployment has not switched it off. Ahead of every
+   * route, because a limit consulted after the handler has already done the work protects
+   * nothing; the routes it must not count are named inside the limiter itself.
+   */
+  if (config.rateLimit) {
+    app.use("*", createRateLimit(config.rateLimit));
+  }
+
+  /*
+   * The ceiling no route can fall below, before the mounts: after them it would cover nothing,
+   * because a mounted route answers the request itself and middleware registered later never
+   * runs. The routes with ceilings of their own keep them — this is sized above every one of
+   * those, and the first limit a request meets is the only one that can refuse it. See the
+   * constant.
+   */
+  app.use(
+    "*",
+    bodyLimit({
+      maxSize: GLOBAL_BODY_LIMIT_BYTES,
+      onError: (context) =>
+        context.json(
+          { error: "That request is larger than this deployment accepts." },
+          413,
+        ),
+    }),
+  );
+
   app.get(
     "/health",
     createHealthRoute({
       database: healthDatabase,
       databaseUrl: config.databaseUrl,
+      // Reachability of the model runtime, probed like the database and reported under its own
+      // name. The key rides only on the probe's request; neither the URL nor the key can appear in
+      // what the route answers — see `describe` in telemetry/health.ts.
+      intelligence: {
+        url: config.runtime.intelligence.apiUrl,
+        apiKey: config.runtime.intelligence.apiKey,
+      },
     }),
   );
   /*
