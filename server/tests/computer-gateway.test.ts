@@ -1762,22 +1762,25 @@ describe("updating a computer's image", () => {
       { updated: true, wasRunning: false, from: "old", to: "new" },
       "will start on new",
     ],
-  ])("a computer that was %j is told apart on the trail", async (result, reason) => {
-    const { provider, fetchImpl } = fakeComputer();
-    const { store, rows } = fakeAudit();
-    provider.update = async () => result;
-    const gateway = createComputerGateway({
-      provider,
-      fetchImpl,
-      auditStore: store,
-      policy: () => PERMISSIVE,
-    });
+  ])(
+    "a computer that was %j is told apart on the trail",
+    async (result, reason) => {
+      const { provider, fetchImpl } = fakeComputer();
+      const { store, rows } = fakeAudit();
+      provider.update = async () => result;
+      const gateway = createComputerGateway({
+        provider,
+        fetchImpl,
+        auditStore: store,
+        policy: () => PERMISSIVE,
+      });
 
-    await gateway.updateComputer("bot-1", ACTOR);
+      await gateway.updateComputer("bot-1", ACTOR);
 
-    expect(rows[0]?.eventType).toBe("computer.updated");
-    expect(String(rows[0]?.payload.reason)).toContain(reason);
-  });
+      expect(rows[0]?.eventType).toBe("computer.updated");
+      expect(String(rows[0]?.payload.reason)).toContain(reason);
+    },
+  );
 });
 
 /**

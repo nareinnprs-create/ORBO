@@ -27,19 +27,19 @@ COPY supervisor/src ./src
 #
 # THE GROUP IS THE WHOLE TRICK. The engine socket on the host is owned `root:docker`, and its GID
 # is a fact about the HOST, not about this image: Debian and Ubuntu install it at 999, other
-# engines differ. DOCKER_GID names it here so the image can carry a `docker` group at the right
-# number and this user can open the socket. Rebuild with
-# `--build-arg DOCKER_GID=$(stat -c %g /var/run/docker.sock)` when the default does not match —
-# and note that deploy/compose/docker-compose.yml passes the same number at RUNTIME with
-# `group_add`, which is what covers images pulled from a release, whose build host's GID says
+# engines differ. The build-time `docker` group here is intentionally arbitrary - base images
+# already carry groups at common numbers (999 included), so forcing a GID at build time collides.
+# What maps the socket's real GID is deploy/compose/docker-compose.yml adding `group_add:
+# ${DOCKER_GID}` at RUNTIME, which is what covers pulled images too, whose build host's GID says
 # nothing about the machine now running them.
 #
-# UID 1000 ON PURPOSE. The SPIRE containers run as uid 1000 — spire-init in the compose file
-# chowns their volumes to it — and src/identity.ts connects this process to the spire-server
+# UID 1000 ON PURPOSE. The SPIRE containers run as uid 1000 - spire-init in the compose file
+# chowns their volumes to it - and src/identity.ts connects this process to the spire-server
 # socket inside one of those volumes. Matching the number means the socket's owner and this
-# process's are the same, so the connection does not depend on the socket's other bits.
-ARG DOCKER_GID=999
-RUN addgroup -g "$DOCKER_GID" docker \
+# process's are the same, so the connection does not depend on the socket's other bits. The
+# stock `bun` user already owns uid 1000, so it goes first.
+RUN deluser bun \
+  && addgroup docker \
   && adduser -D -u 1000 -G docker orbo
 USER orbo:docker
 

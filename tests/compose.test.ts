@@ -142,6 +142,9 @@ function runLangGraphAguiModelProbe(
       ...process.env,
       BOT_MODEL: options.botModel ?? "gpt-test",
       OPENAI_API_KEY: options.openaiApiKey ?? "sk-test",
+      // src/main runs its boot token guard at import; a real container always has this set,
+      // and without it the probe dies before _model() is ever reached.
+      ORBO_MANAGED_AGENT_TOKEN: "orbo-test-agent-token",
       // The platform's own path separator: Python splits PYTHONPATH on `;` on Windows, where a
       // `:`-joined list is one unreadable path and the probe dies on a missing `src`.
       PYTHONPATH: [
