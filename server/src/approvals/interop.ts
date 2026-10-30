@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
 import {
-  ApprovalRefusedError,
   type ApprovalCandidate,
   type ApprovalContinuation,
   type ApprovalDecision,
   type ApprovalRecord,
+  ApprovalRefusedError,
 } from "./types";
 
 /**

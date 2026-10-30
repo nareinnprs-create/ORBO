@@ -7,10 +7,9 @@
 // client, redirects are rejected before the destination is contacted, and an
 // abort tears down an in-flight read. No external network.
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { createServer, type Server } from "node:http";
-import type { AddressInfo } from "node:net";
-import http from "node:http";
+import http, { createServer, type Server } from "node:http";
 import https from "node:https";
+import type { AddressInfo } from "node:net";
 
 type Resolve = (
   hostname: string,

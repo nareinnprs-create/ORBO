@@ -17,15 +17,15 @@ COPY package.json bun.lock ./
 COPY tsconfig.base.json tsconfig.base.json
 COPY bunfig.toml bunfig.toml
 COPY app/package.json app/package.json
-COPY apps/app/package.json apps/app/package.json
-COPY packages/ui/package.json packages/ui/package.json
 COPY server/package.json server/package.json
 COPY worker/package.json worker/package.json
-# Only the workspaces this image builds. `@orbo/app` is the Expo mobile client: nothing the app
-# build or the server imports, but hundreds of packages that every full install downloads and keeps
-# in this layer. The manifests above still include it, so `--frozen-lockfile` keeps pinning the
-# whole tree. Same scope as the root Dockerfile's build install, which this stage mirrors.
-RUN bun install --frozen-lockfile --filter app --filter server --filter worker --filter '@orbo/ui'
+# Only the workspaces this image builds: app, server and worker, the three directories `workspaces`
+# in the root package.json names. Two manifests used to be copied here besides these — the Expo
+# client (apps/app) and packages/ui — but both stopped being workspaces in v0.1.5, so the
+# `--filter '@orbo/ui'` that justified copying them matched nothing and the copies were dead
+# weight. `--frozen-lockfile` still pins what IS installed to the committed lockfile. Same scope as
+# the root Dockerfile's build install, which this stage mirrors.
+RUN bun install --frozen-lockfile --filter app --filter server --filter worker
 
 
 FROM deps AS app-build

@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { createApp } from "../src/app";
-import { loadConfig } from "../src/config";
 import type { ComputerGateway } from "../src/computer/gateway";
 import {
   createPolicyStore,
   DEFAULT_ACTION_POLICY,
 } from "../src/computer/policy-store";
+import { loadConfig } from "../src/config";
 import { testEnvironment } from "./support/environment";
 
 /**

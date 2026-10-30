@@ -20,5 +20,28 @@ COPY --from=spire /opt/spire/bin/spire-server /usr/local/bin/spire-server
 
 COPY supervisor/src ./src
 
+# NOT ROOT, although this is the process holding the Docker socket. Nothing here needs privileges:
+# it asks the socket over dockerode, whose mount in every deployment is read-only, and the one
+# binary it shells out to (spire-server, for entry registration) talks to a Unix socket the same
+# way. Root would buy nothing and mean a bug in one of four request handlers owned the host.
+#
+# THE GROUP IS THE WHOLE TRICK. The engine socket on the host is owned `root:docker`, and its GID
+# is a fact about the HOST, not about this image: Debian and Ubuntu install it at 999, other
+# engines differ. DOCKER_GID names it here so the image can carry a `docker` group at the right
+# number and this user can open the socket. Rebuild with
+# `--build-arg DOCKER_GID=$(stat -c %g /var/run/docker.sock)` when the default does not match —
+# and note that deploy/compose/docker-compose.yml passes the same number at RUNTIME with
+# `group_add`, which is what covers images pulled from a release, whose build host's GID says
+# nothing about the machine now running them.
+#
+# UID 1000 ON PURPOSE. The SPIRE containers run as uid 1000 — spire-init in the compose file
+# chowns their volumes to it — and src/identity.ts connects this process to the spire-server
+# socket inside one of those volumes. Matching the number means the socket's owner and this
+# process's are the same, so the connection does not depend on the socket's other bits.
+ARG DOCKER_GID=999
+RUN addgroup -g "$DOCKER_GID" docker \
+  && adduser -D -u 1000 -G docker orbo
+USER orbo:docker
+
 EXPOSE 4300
 CMD ["bun", "src/index.ts"]

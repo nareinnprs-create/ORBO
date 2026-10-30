@@ -1,5 +1,17 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [],
-  "dependencyDashboard": false
+  "extends": ["config:recommended"],
+  "dependencyDashboard": false,
+  "schedule": ["before 6am on monday"],
+  "packageRules": [
+    {
+      "description": "Every non-major update lands together in one weekly PR. Patch and minor bumps across ~40 dependencies are noise one at a time; reviewed as a single batch they get one look and one CI run.",
+      "groupName": "all non-major updates",
+      "matchUpdateTypes": ["minor", "patch", "pin", "digest"]
+    },
+    {
+      "description": "Major updates deliberately stay out of that group: config:recommended keeps them as one PR per package, which is the review they earn, since a major is the update that can break.",
+      "matchUpdateTypes": ["major"]
+    }
+  ]
 }

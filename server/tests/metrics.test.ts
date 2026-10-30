@@ -15,11 +15,24 @@ const HEALTHY_DATABASE = {
   execute: async () => [],
 } as unknown as Database;
 
+// /health now probes Intelligence and answers 503 degraded when it cannot be reached, so the
+// apps under test here need a live stand-in for the counters and quiet-route assertions.
+function intelligenceStub() {
+  const server = Bun.serve({
+    port: 0,
+    fetch: () => new Response("ok", { status: 200 }),
+  });
+  return `http://localhost:${server.port}`;
+}
+const intelligenceUrl = intelligenceStub();
+
 function appFor(options: { health?: Database } = {}) {
   // createApp takes positional stores; healthDatabase is the last parameter (36th). Build the
   // argument list by index so a future appended store cannot silently shift it.
   const args: unknown[] = Array.from({ length: 36 });
-  args[0] = loadConfig(testEnvironment());
+  args[0] = loadConfig(
+    testEnvironment({ INTELLIGENCE_API_URL: intelligenceUrl }),
+  );
   args[1] = {
     handler: () => new Response(null, { status: 204 }),
     api: {

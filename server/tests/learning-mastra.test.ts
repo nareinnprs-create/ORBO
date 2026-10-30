@@ -88,6 +88,9 @@ test("Mastra's maintained AG-UI bridge consumes the catalog and both learned too
       BOT_MODEL: "gpt-4.1-mini",
       OPENAI_API_KEY: "synthetic-key",
       OPENAI_BASE_URL: `${provider.url}v1`,
+      // The harness now refuses to boot without its managed-agent token (fail-closed at
+      // startup, matching the other harnesses), so the bridge child must carry one.
+      ORBO_MANAGED_AGENT_TOKEN: "synthetic-mastra-bridge-token",
       MASTRA_TELEMETRY_DISABLED: "true",
       DO_NOT_TRACK: "1",
       NODE_ENV: "test",
