@@ -304,6 +304,9 @@ jobs:
       # comes from the job env instead, which drizzle.config.ts already reads.
       - run: bunx drizzle-kit migrate --config=drizzle.config.ts
         working-directory: server
+      # The compose contract tests spawn the real LangGraph AG-UI harness, whose src imports the
+      # langchain stack; the pins are the same set the harness image installs.
+      - run: python -m pip install --requirement agent-orbo-langgraph-agui/requirements.txt
       # A passing job must include the expected test floor. Import-time failures can otherwise skip
       # files before their tests are registered.
       - run: bun run test:ci
