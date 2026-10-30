@@ -12,6 +12,8 @@
  * guessed the envelope would be a client that had to be argued with.
  */
 
+import { isSessionPath, sessionExpired } from "@/lib/auth/session-expiry";
+
 export type ClientOptions = {
   /** Absent means GET. */
   method?: string;
@@ -40,6 +42,25 @@ async function send(path: string, options: ClientOptions): Promise<Response> {
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
     ...(options.signal ? { signal: options.signal } : {}),
   });
+}
+
+/**
+ * A refused request that remembers how it was refused.
+ *
+ * The sentence stays what callers show; the status and path are for the two callers that read the
+ * difference — the query and mutation caches, which have to tell a dead session (drop everything,
+ * go and sign in) from a broken thing (show the failure where it happened).
+ */
+export class RequestError extends Error {
+  readonly status: number;
+  readonly path: string;
+
+  constructor(message: string, status: number, path: string) {
+    super(message);
+    this.name = "RequestError";
+    this.status = status;
+    this.path = path;
+  }
 }
 
 /**
@@ -93,7 +114,20 @@ export async function client<T>(
       .json()
       .then((body: { error?: string }) => body.error)
       .catch(() => undefined);
-    throw new Error(message ?? options.fallback ?? "That request failed.");
+    /*
+     * A 401 here is the session dying under a request that presumed it. This is the one place every
+     * authenticated call passes, so the expiry is signalled here rather than at each of the caches
+     * and screens that would otherwise each learn it privately. The paths that manage the session
+     * are excluded: their 401s are answers the sign-in and sign-out flows already handle.
+     */
+    if (response.status === 401 && !isSessionPath(path)) {
+      sessionExpired();
+    }
+    throw new RequestError(
+      message ?? options.fallback ?? "That request failed.",
+      response.status,
+      path,
+    );
   }
 
   if (key === undefined) return response;
@@ -102,7 +136,11 @@ export async function client<T>(
   // a TypeError on property access. Malformed success is a failed request with the fallback.
   const body = (await response.json().catch(() => null)) as unknown;
   if (!body || typeof body !== "object" || Array.isArray(body)) {
-    throw new Error(options.fallback ?? "That request failed.");
+    throw new RequestError(
+      options.fallback ?? "That request failed.",
+      response.status,
+      path,
+    );
   }
   return (body as Record<string, T>)[key];
 }
