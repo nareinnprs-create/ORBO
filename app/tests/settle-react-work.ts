@@ -40,9 +40,20 @@ import { act } from "react";
  * Reaching that needs a single render to exceed the scheduler's 5ms budget, which a tree of a few
  * dozen nodes does not do — and a test that did would be telling us something worth hearing anyway.
  *
+ * There is a second escapee act never sees at all: on finishing a commit that ran effects, react-dom
+ * posts its passive-effect flush as a plain NormalPriority scheduler task, and that task opens with
+ * `schedulerEvent = window.event` (it records the event for discrete-event attribution). Posted
+ * DURING the drain it lands behind our yields, so it fires after `afterAll` has unregistered the
+ * DOM — `ReferenceError: window is not defined`, unhandled, between files, and bun's runner aborts
+ * the rest of the run. Yield one immediate of our own (same queue, posted later, so strictly after
+ * whatever the commit posted) and twice more for what that flush can cascade, then unregister.
+ *
  * `act` needs `IS_REACT_ACT_ENVIRONMENT`, which `@testing-library/react` sets when it is imported;
  * every caller of this renders through it, so the flag is on by the time `afterAll` runs.
  */
 export async function settleReactWork(): Promise<void> {
   await act(async () => {});
+  for (let turn = 0; turn < 3; turn += 1) {
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
 }

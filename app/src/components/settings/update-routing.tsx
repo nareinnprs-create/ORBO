@@ -13,12 +13,12 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { setUpdateRoutingMutationOptions } from "@/lib/bot-lifecycle/mutations";
-import { deliveryQueryOptions } from "@/lib/delivery";
 import {
   type UpdateKind,
   type UpdateTransport,
   updateRoutingQueryOptions,
 } from "@/lib/bot-lifecycle/queries";
+import { deliveryQueryOptions } from "@/lib/delivery";
 import { queryClient } from "@/query-client";
 
 const KIND_LABEL: Record<UpdateKind, { title: string; description: string }> = {

@@ -8,6 +8,8 @@ import {
   test,
 } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import * as TauriCore from "@tauri-apps/api/core";
+import * as TauriEvent from "@tauri-apps/api/event";
 import {
   act,
   cleanup,
@@ -18,8 +20,6 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StrictMode } from "react";
-import * as TauriCore from "@tauri-apps/api/core";
-import * as TauriEvent from "@tauri-apps/api/event";
 
 type Invoke = (command: string, args?: unknown) => Promise<unknown>;
 type ProgressEvent = {

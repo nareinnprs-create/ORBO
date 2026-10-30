@@ -8,8 +8,8 @@
 // before retrying, and the card hides decisions until the receipt is checked
 // while rendering draft Markdown tables as tables.
 import { expect, test } from "bun:test";
-import { renderToStaticMarkup } from "react-dom/server";
 import { createElement, type ReactNode } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 
 type Draft = { title?: string; content?: string; spaceId?: string };
 type Page = { id: string; spaceId: string };

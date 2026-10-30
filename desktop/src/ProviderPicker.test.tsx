@@ -8,6 +8,8 @@ import {
   test,
 } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import * as TauriCore from "@tauri-apps/api/core";
+import * as TauriEvent from "@tauri-apps/api/event";
 import { act, cleanup, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type {
@@ -15,8 +17,6 @@ import type {
   ModelChoice,
   Provider,
 } from "./ProviderPicker";
-import * as TauriCore from "@tauri-apps/api/core";
-import * as TauriEvent from "@tauri-apps/api/event";
 
 const providers: Provider[] = [
   {
