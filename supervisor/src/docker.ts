@@ -379,6 +379,24 @@ async function waitUntilAnswering(
 
 export type EnsureOptions = {
   image: string;
+  /**
+   * The user the computer runs as, `uid:gid`.
+   *
+   * 1001 is the contract: `agent-orbo-computer/Dockerfile` creates `pwuser` at exactly that uid
+   * and the root image pins the same number for its browser, so a computer container runs the
+   * browser as the user who owns its browser profile, its workspace and nothing else. Chromium is
+   * launched with `--no-sandbox` where the host cannot support its sandbox, and with that flag the
+   * process user IS the boundary, which is why the image's own comment calls the number a contract
+   * rather than a default.
+   *
+   * Overridable per deployment (`ORBO_COMPUTER_USER`) for one occasion, written down because it is
+   * a real one: a deployment upgraded from images that ran as root carries named volumes whose
+   * profile directories are owned by uid 0, and a browser running as 1001 cannot write into them.
+   * The volumes outlive the container by design, so the ownership came with the upgrade. Setting
+   * `0:0` rides through that one restart; `chown`-ing the volumes (or deleting them, which costs
+   * the Bot's logins) is the way back off it.
+   */
+  user?: string;
   /** Passed to the computer so a Bot's traffic still leaves by the route configured for it. */
   environment: string[];
   /** A network to join, when the supervisor runs alongside a compose stack. */
@@ -522,6 +540,14 @@ export async function ensure(
         await docker.createContainer({
           name: names.container,
           Image: options.image,
+          /*
+           * The pinned browser user, 1001:1001, unless a deployment said otherwise — see the
+           * option. Stated here rather than left to the image's `USER` because the image this
+           * names is a setting (`ORBO_COMPUTER_IMAGE`), and a create call that says nothing
+           * inherits whatever the named image happens to carry, which is precisely the drift the
+           * pinned-uid contract exists to prevent.
+           */
+          User: options.user ?? "1001:1001",
           // The Bot id is a label because that is what a SPIRE docker workload attestor selects on:
           // an identity per Bot then falls out of the same fact that names the container.
           Labels: labelsFor(names),

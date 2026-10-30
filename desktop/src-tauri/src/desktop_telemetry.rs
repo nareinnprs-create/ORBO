@@ -10,27 +10,92 @@ pub struct DesktopTelemetry {
     runtime_env: Mutex<BTreeMap<String, String>>,
 }
 
+/// The operator's telemetry endpoint, when one is configured.
+///
+/// Setup telemetry is OFF unless an operator turns it on by name — either explicitly through
+/// `ORBO_TELEMETRY_ENABLED`, or implicitly by naming a target through `ORBO_TELEMETRY_URL`.
+/// `DO_NOT_TRACK` stays the always-wins kill switch. In debug builds the pre-rename
+/// `COPILOTKIT_TELEMETRY_*` names still answer, loudly saying where they are going.
+fn opt_in() -> Option<String> {
+    let url = std::env::var("ORBO_TELEMETRY_URL")
+        .ok()
+        .filter(|value| !value.trim().is_empty());
+    #[cfg(debug_assertions)]
+    if std::env::var("COPILOTKIT_TELEMETRY_URL")
+        .map(|value| !value.trim().is_empty())
+        .unwrap_or(false)
+    {
+        eprintln!(
+            "[telemetry] COPILOTKIT_TELEMETRY_URL is deprecated; set ORBO_TELEMETRY_URL instead"
+        );
+        return std::env::var("COPILOTKIT_TELEMETRY_URL")
+            .ok()
+            .filter(|value| !value.trim().is_empty());
+    }
+    url
+}
+
+fn explicitly_enabled() -> bool {
+    match std::env::var("ORBO_TELEMETRY_ENABLED") {
+        Ok(value) => matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true"),
+        Err(_) => false,
+    }
+}
+
+/// The runtime still speaks the pre-rebrand env names: the third-party CopilotKit runtime reads
+/// `COPILOTKIT_TELEMETRY_*` literals directly (gate, sink URL, sample rate), and the identity
+/// crosses as `CPK_TELEMETRY_ID`. Remove all of these with the runtime, in wave 3.
+const RUNTIME_BRIDGE: [(&str, &str); 4] = [
+    ("ORBO_TELEMETRY_DISABLED", "COPILOTKIT_TELEMETRY_DISABLED"),
+    (
+        "ORBO_TELEMETRY_SAMPLE_RATE",
+        "COPILOTKIT_TELEMETRY_SAMPLE_RATE",
+    ),
+    ("ORBO_TELEMETRY_URL", "COPILOTKIT_TELEMETRY_URL"),
+    ("DO_NOT_TRACK", "DO_NOT_TRACK"),
+];
+
+/// Debug-only legacy operator inputs, the way the same names are honored for pre-rename setups
+/// elsewhere: a warning is printed, and everything goes back over the `ORBO_TELEMETRY_*` bridge.
+#[cfg(debug_assertions)]
+const LEGACY_RUNTIME_BRIDGE: [(&str, &str); 2] = [
+    (
+        "COPILOTKIT_TELEMETRY_DISABLED",
+        "COPILOTKIT_TELEMETRY_DISABLED",
+    ),
+    ("COPILOTKIT_TELEMETRY_URL", "COPILOTKIT_TELEMETRY_URL"),
+];
+
 pub fn initialize<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
     let initialized = (|| {
         let context = context(&app.package_info().version.to_string())?;
+        // The endpoint an operator names opts telemetry in on its own; without one or an
+        // explicit flag the emitter (and the runtime's own telemetry) stay asleep.
+        let endpoint = opt_in();
         let emitter = telemetry::Telemetry::open(
             app.path().app_local_data_dir().ok()?.join("telemetry"),
             context,
             telemetry::Config {
-                enabled: true,
-                endpoint: std::env::var("COPILOTKIT_TELEMETRY_URL").ok(),
+                enabled: explicitly_enabled() || endpoint.is_some(),
+                endpoint,
                 max_queue: 256,
             },
         )
         .ok()?;
         let mut runtime_env = emitter.runtime_env();
-        for variable in [
-            "COPILOTKIT_TELEMETRY_DISABLED",
-            "DO_NOT_TRACK",
-            "COPILOTKIT_TELEMETRY_URL",
-        ] {
+        for (variable, bridged) in RUNTIME_BRIDGE {
             if let Ok(value) = std::env::var(variable) {
-                runtime_env.insert(variable.into(), value);
+                runtime_env.insert(bridged.into(), value);
+            }
+        }
+        #[cfg(debug_assertions)]
+        for (variable, bridged) in LEGACY_RUNTIME_BRIDGE {
+            if let Ok(value) = std::env::var(variable) {
+                eprintln!(
+                    "[telemetry] {variable} is deprecated; set ORBO_TELEMETRY_URL or \
+                     ORBO_TELEMETRY_DISABLED instead"
+                );
+                runtime_env.insert(bridged.into(), value);
             }
         }
         if emitter.install_id().is_none() {

@@ -3,7 +3,7 @@
 > **Product:** ORBO
 > **Boss agent:** DIYA (the primary orchestrator inside ORBO)
 > **Owner:** Opraiz Technology Pvt Ltd · **Developer:** Narein Rao
-> **Status:** Phases 1–2 complete and pushed; Phase 3 designs in `docs/planning/01–09`; Phase 4 kickoff done (10–15 + `apps/app` scaffold); Phase 5 kickoff done (16–22); Phase 6 kickoff done (23–29); Phase 7 executing; Phase 8 kickoff done (30–31); Waves 1–3 done + freehand execution (W0 slate, service/image names, deploy/ layout, scheme orbo:, permitted_agents, catalog fixes, legal/security/privacy runs; tree re-verify 2026-10-16: 0055 spaces/pages landed, server/tests 319, ui 36 tsx, contrast math done gated D6, mobile npm pending expo-doctor BLOCKED) — CI green baseline; accounts/domain/certs/legal sign-off owner-only.
+> **Status:** Phases 1–2 complete and pushed; Phase 3 designs in `docs/planning/01–09`; Phase 4 kickoff done (10–15 + `apps/app` scaffold); Phase 5 kickoff done (16–22); Phase 6 kickoff done (23–29); Phase 7 executing; Phase 8 kickoff done (30–31); Waves 1–3 done + freehand execution (W0 slate, service/image names, deploy/ layout, scheme orbo:, permitted_agents, catalog fixes, legal/security/privacy runs; tree re-verify 2026-10-16: 0055 spaces/pages landed, server/tests 319, ui 36 tsx, contrast math done gated D6, mobile npm pending expo-doctor BLOCKED) — CI green baseline; accounts/domain/certs/legal sign-off owner-only. **2026-10-28:** `apps/app/` and `packages/ui/` deleted (TD-10/11/12 resolved by removal); mobile release config landed (`mobile/eas.json`, `docs/mobile-release.md`) with EAS org + store accounts still owner-pending.
 
 This document is the single source of truth for merging three upstream products into one
 unified product, **ORBO**, with a single interface and no visible origin traces. Upstream
@@ -89,8 +89,10 @@ ORBO/
 ```
 
 ### Rules
-- All three source UIs converge into `apps/app` + `packages/ui`. The OpenBot Vite app,
-  OpenDots web app, and OpenMuse app-as-shell are **deleted** once ported.
+- ~~All three source UIs converge into `apps/app` + `packages/ui`.~~ **Revised 2026-10-28:** the
+  `apps/app` Expo placeholder and the `packages/ui` static shells were deleted (TD-10/11/12,
+  `docs/planning/34`) — the canonical surfaces are `app/` (web) and `mobile/` (Expo). The OpenBot
+  Vite app, OpenDots web app, and OpenMuse app-as-shell are **deleted** once ported.
 - All business logic lives in `apps/server`. The UI is presentation only.
 - Where the three overlap (computers, browser workers, memory, approvals, threads,
   agent entity), ORBO ships **one** subsystem carrying the **superset** of behavior.
@@ -295,14 +297,14 @@ and collapse into **one** ORBO subsystem.
 9. ORBO version → `0.1.0`.
 10. DB default → `EMBEDDED_POSTGRES=off` (opt-in `on`); external `DATABASE_URL` supported.
 11. Ports → keep upstream, documented centrally.
-12. Bundle IDs → `ai.orbo.app` (mobile), `ai.orbo.desktop`; display name ORBO.
+12. Bundle IDs → `ai.orbo.mobile` (mobile; `mobile/app.config.ts`), `ai.orbo.desktop`; display name ORBO. *(The earlier `ai.orbo.app` mobile id belonged to the deleted `apps/app` scaffold.)*
 13. Installers → Windows MSI, macOS DMG, Linux AppImage + deb.
 14. Desktop auto-update → updater removed (no config/crate/endpoint) pending domain + signing.
 15. UI state/data → TanStack Query only (no Zustand).
 16. Canonical auth → OpenBot Better Auth only.
 17. Agent catalog → owner approves names/roles I draft (DIYA boss + rebranded set).
 18. DIYA persona → neutral default prompt; admin-editable.
-19. CI → new GitHub Actions (lint/test/build, macOS runner); EAS config present but no workflow invokes EAS builds.
+19. CI → new GitHub Actions (lint/test/build, macOS runner). **2026-10-28:** the EAS pipeline config is now present — `mobile/eas.json` (development/preview/production build profiles with remote credentials + auto-increment, and App Store / Google Play submit blocks) and the end-to-end flow in `docs/mobile-release.md` — but the EAS organization account, store credentials and notification keys are still owner-provided, and no CI workflow invokes EAS builds yet.
 20. Docs → in-repo `docs/`.
 21. Observability → structured logs + `/health`; no third-party APM for v1.
 
@@ -310,7 +312,7 @@ and collapse into **one** ORBO subsystem.
 22. Schema unification (three data models → one Postgres schema) + mapping doc.
 23. API surface unification (three servers → one Hono API) + route inventory.
 24. Route tree unification → final Expo Router map.
-25. Design system spec (component inventory + tokens) before building `packages/ui`.
+25. ~~Design system spec (component inventory + tokens) before building `packages/ui`.~~ Moot 2026-10-28: `packages/ui` was deleted (TD-11/12, `docs/planning/34`); web styling stays in `app/src`, native in `mobile/`.
 26. Visual design — wireframes/mockups first, or design-in-code.
 27. Mobile vs web parity — where native differs.
 28. Test strategy — merge suites; coverage target; fixtures.

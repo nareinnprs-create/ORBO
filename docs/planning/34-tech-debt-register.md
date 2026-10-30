@@ -3,22 +3,43 @@
 > Status: register only. No product code modified. Every item verified on disk 2026-10-16.
 > Scope: deliberate duplication introduced by Wave 1–3 slice work (09 §4) that Phase 7 proper must collapse.
 > Rule: slices prove shape in isolation; Phase 7 deletes the slice once the canonical home absorbs it.
+> **2026-10-28:** TD-10, TD-11 and TD-12 are resolved by removal — `apps/app/` and `packages/ui/`
+> were deleted outright (the real mobile app is `mobile/`, and every behavior the shells stubbed
+> already lived in its canonical home under `app/src`). Their register entries stand as the record
+> of why the scaffolds existed; no port-into-scaffold work is owed.
+> **2026-10-28 (server batch):** TD-01 through TD-06 are collapsed — the two plugin slices are
+> deleted and their jobs are the store's (`store.callTool`, `store.invokeSkill`); the task ledger
+> is the `tasks` / `task_runs` / `task_events` tables (migration `0056`); routine firing, proactive
+> accept and monitor fan-out write through it. TD-09's in-path steps (the `task_id` FK and the
+> fan-out columns) landed with TD-06; its legacy import is still owed. See the RESOLVED notes on
+> each entry.
+> **2026-10-29 (server batch):** TD-06 is fully resolved — the scheduler now runs
+> (`monitorSweep` in `index.ts`, over `runDueWatchChecks`). TD-02's last seam is closed — a chat
+> surface's `/` text reaches the turn runner through `plugins/invocation-turn.ts`.
 
 ## Collapse order (Phase 7 sequence)
 
 | Order | Item | Why this position |
 |---|---|---|
-| 1 | TD-03 tasks ledger → DB tables | Unblocks TD-04, TD-05, TD-08 (all hold FK-less `task_id` waiting on it) |
-| 2 | TD-04 routine producer → ledger | Proves one firing path before fan-out grows |
-| 3 | TD-05 proactive accept link → engine/queue | Second producer onto the same ledger; do with TD-04 |
-| 4 | TD-06 monitor executor → unified tasks | Attaches third producer + fan-out; needs TD-01 done |
-| 5 | TD-01/02 ws10 + ws11 slices → plugins store | Governance convergence; delete injected-transport/model seams |
-| 6 | TD-07/08/09 tables → superset importers | Schema collapse once producers are stable |
-| 7 | TD-10/11/12 UI shells → real behavior | Last: no server coupling, largest surface, mechanical ports |
+| 1 | TD-03 tasks ledger → DB tables | Unblocks TD-04, TD-05, TD-08 (all hold FK-less `task_id` waiting on it). **Resolved 2026-10-28** |
+| 2 | TD-04 routine producer → ledger | Proves one firing path before fan-out grows. **Resolved 2026-10-28** |
+| 3 | TD-05 proactive accept link → engine/queue | Second producer onto the same ledger; do with TD-04. **Resolved 2026-10-28** |
+| 4 | TD-06 monitor executor → unified tasks | Attaches third producer + fan-out; needs TD-01 done. **Resolved 2026-10-28** |
+| 5 | TD-01/02 ws10 + ws11 slices → plugins store | Governance convergence; delete injected-transport/model seams. **Resolved 2026-10-28** |
+| 6 | TD-07/08/09 tables → superset importers | Schema collapse once producers are stable. TD-09's schema steps (FK + fan-out columns) landed 2026-10-28 with TD-06; the importers are still owed |
+| 7 | TD-10/11/12 UI shells → real behavior | Last: no server coupling, largest surface, mechanical ports. **Resolved 2026-10-28 by deletion** — see the register entries |
 
 ## Register
 
 ### TD-01 — WS-10 MCP allowlist slice vs canonical plugin store
+
+> **COLLAPSED 2026-10-28.** `ws10-slice.ts` and its tests are deleted. Step (1) had already
+> landed — `store.callTool` is the DB-backed grant + policy (deny-beats-allow) + audit path, and
+> `plugin-store.integration.test.ts` already proved the ungranted refusal (`mcp.call_rejected`
+> with `refusal: "not_granted"` before any network) and the policy's answer on the real transport
+> seam. Step (3)'s remainder is done: the literal tool-name pin now lives as a store test
+> (`toolNameFor("ws10demo/lookup") === "mcp__ws10demo__lookup"` in the same suite), so the
+> mapping can no longer drift from what the model is offered.
 
 | Field | Content |
 |---|---|
@@ -31,6 +52,22 @@
 
 ### TD-02 — WS-11 personal-skill slice vs canonical skills/learning store
 
+> **COLLAPSED 2026-10-28; the last seam wired 2026-10-29.** `ws11-slice.ts` and its tests are
+> deleted. Steps (1) and (2) are
+> the store's now: `store.invokeSkill` parses (`parseSkillInvocation`, canonical in
+> `plugins/store.ts`), resolves against the DB `skills` table (owner visibility — null owner is
+> the deployment's), checks the `plugin_grants` row for the Bot, audits `skill.invoked` /
+> `skill.invoke_rejected` (event types added to `audit.ts`), and refuses through
+> `PluginRefusedError` with `rule: null` — the slice's mirrored shape, reused instead of
+> reimplemented. Step (3): the slug rule is pinned as a route test in
+> `skill-ownership.integration.test.ts` (the route refuses what the parser would never name).
+> The one remaining seam is no longer one: a chat surface's `/` text reaches the turn runner
+> through `plugins/invocation-turn.ts` (`runTurnOrSkill`), which `index.ts` puts in front of the
+> delivery router's person-text turn — text that parses as `/slug …` runs through
+> `store.invokeSkill` with the very turn runner as the store's injected `run`, a refusal becomes
+> the reply (the audit row was already written), and everything else turns unchanged. Pinned in
+> `skill-invocation-turn.test.ts`.
+
 | Field | Content |
 |---|---|
 | Slice | `server/src/plugins/ws11-slice.ts` (334 lines: `Ws11Skill`, `Ws11Model`, `Ws11RefusedError`, `/slug` parser, slug regex) |
@@ -41,6 +78,17 @@
 | Risk if never collapsed | Two skill resolvers disagree on visibility/ownership (somebody-else's skill executable in one path); invocation audit splits across two event vocabularies; model seam stays ungoverned |
 
 ### TD-03 — In-memory task ledger vs durable work queue + future `tasks` tables
+
+> **COLLAPSED 2026-10-28 — TOP RISK retired.** The `tasks` / `task_runs` / `task_events` tables
+> exist (migration `0056_unified_task_ledger`), and `createTaskLedger` is the DB ledger over
+> them: offer is one `insert … on conflict do nothing` against the unique key — the same key
+> string the queue's `(kind, key)` idempotence uses — so task creation is idempotent against
+> queue lease state by constraint, and a replayed or concurrent firing cannot double-create.
+> `startRun` flips the task out of `open` and opens its one run row in one transaction
+> (`task_runs.task_id` unique); `finishRun` finishes once; receipts are one per run. Steps (3)
+> and (4) are done: produce/accept/finance offer through it, the in-memory ledger is gone, and
+> the key-format pin plus the concurrent double-fire proof live in
+> `work-ledger.integration.test.ts` and `routine-fire.test.ts` against real Postgres.
 
 | Field | Content |
 |---|---|
@@ -53,6 +101,13 @@
 
 ### TD-04 — Routine firing producer vs ledger + runner
 
+> **COLLAPSED 2026-10-28.** `fireRoutineTask` offers into the durable ledger (TD-03) as the
+> `routine` producer kind; there are no in-memory overloads to delete. Duplicate-fire on
+> concurrent sweeps is answered at the storage layer: two replicas firing one due minute run the
+> turn once, the loser reporting the lost firing rather than a second run (pinned in
+> `routine-fire.test.ts`). Leases/retries/fatigue remain the queue's and the runner's, as planned
+> — step (2) was already their shape, so nothing grew here.
+
 | Field | Content |
 |---|---|
 | Slice | `server/src/routines/produce.ts` (`fireRoutineTask`, `minuteKey`, `RoutineNotDueError`) over `server/src/work/tasks.ts` ledger |
@@ -64,6 +119,15 @@
 
 ### TD-05 — Proactive accept-as-task link vs proactive engine
 
+> **COLLAPSED 2026-10-28.** `acceptSuggestionAsTask` mints through the durable ledger (TD-03),
+> and the engine awaits it. Step (2) is done as a schema fact rather than a convention:
+> `proactive` is its own producer kind (`{kind: "proactive", id: "proactive:<settingId>"}`), the
+> `suggestion:<id>` key namespace is the `tasks.key` unique constraint, and a second accept sees
+> the same triple across restarts. The receipt's one-line detail rule is unchanged and still
+> pinned. The mint runs after the suggestion flips to `started` in the store (the engine's
+> transaction is the store's own conditional resolve, which refuses the second accept before
+> the ledger is touched).
+
 | Field | Content |
 |---|---|
 | Slice | `server/src/proactive/accept.ts` (65 lines: `acceptSuggestionAsTask`, `suggestionTaskKey`, `SuggestionAcceptance`) |
@@ -74,6 +138,22 @@
 | Risk if never collapsed | Suggestion accepts and routine firings collide or double-mint (key namespace is code-only, not a DB constraint); receipts readable by feeds leak turn content if detail rule drifts |
 
 ### TD-06 — Monitor check executor vs unified tasks + legacy `observe`
+
+> **FULLY RESOLVED 2026-10-29 — the scheduler is wired.** Alerts persist durably AND a clock runs
+> them: `index.ts` now drives `monitorSweep` (`repeatAfterEach`, 60s) over `runDueWatchChecks`
+> with the other sweeps, stopped on shutdown like the rest, and logs each pass's outcomes. There
+> was no legacy in-memory check loop in `index.ts` to remove — the check path was never scheduled
+> there, which is why watches were silent rather than duplicated. The durable half landed
+> 2026-10-28: a `NotificationWriter` over the
+> `notifications` table (the `monitor:<id>:<seq>:<hash>` dedup key as the row id,
+> `on conflict do nothing`), `claimDueMonitors` (the due sweep, `for update skip locked`,
+> reserving the slot in the claim's own transaction), `persistMonitorUpdate`, and
+> `runDueWatchChecks` tying claim → check → fan-out → persist into one call. TD-09's fan-out
+> columns (`consecutive_failures`, `alert_sequence`, `last_timeless_hash`) exist so the state
+> survives restarts. Proven against real Postgres in `monitor-store.integration.test.ts`: one
+> row per firing, replay dedupes, the fifth strike pauses. Step (2) is moot — the legacy
+> `observe` executor is not in this tree (nothing imports it; `fanout.ts` already cited it in
+> the past tense). `check.ts` remains the pure core the runner drives inside `runDueWatchChecks`.
 
 | Field | Content |
 |---|---|
@@ -108,6 +188,13 @@
 
 ### TD-09 — `monitors` table vs legacy `Monitor` kind
 
+> **PARTIALLY COLLAPSED 2026-10-28 — steps (1) and (2) landed with TD-06.** `task_id` now
+> references `tasks` (nullable, `on delete set null`), and the fan-out columns
+> (`consecutive_failures`, `alert_sequence`, `last_timeless_hash`) exist, so watch state and
+> backoff persist across restarts. Steps (3) and (4) — importing the legacy `Monitor` kind and
+> dropping it — are still owed; the legacy kind is not in this tree, so there is nothing here to
+> delete, and the import belongs to the superset-importer slice alongside TD-07/TD-08.
+
 | Field | Content |
 |---|---|
 | Slice | `server/src/db/schema/monitors.ts` (90 lines: `url/condition/value/intervalMinutes/status/nextCheckAt`, FK-less `task_id`) + `0054` migration |
@@ -118,6 +205,11 @@
 | Risk if never collapsed | Watches with no unified task, no alert history, and no backoff: a dead URL retries forever at full interval; legacy and new monitors diverge silently |
 
 ### TD-10 — `apps/app` Expo placeholder shell vs mobile shell + web canonical
+
+> **RESOLVED 2026-10-28 — resolved by removal.** `apps/app/` was deleted. The real mobile app is
+> `mobile/` (Expo shell under test), and the scaffold never gained an export script or a single
+> live screen, so there was no behavior to collapse into it — deleting it retires the duplication
+> rather than porting it. The rows below record why the scaffold existed.
 
 | Field | Content |
 |---|---|
@@ -130,6 +222,11 @@
 
 ### TD-11 — `packages/ui` static Select/Dialog/Combobox/menu shells vs Base-UI behavior
 
+> **RESOLVED 2026-10-28 — resolved by removal.** `packages/ui/` was deleted. The shells never
+> gained Base-UI behavior, and every consumer of select/dialog/combobox/menu behavior already
+> lived in its canonical home (`app/src/components/ui/*`), so nothing imported the shells for
+> anything but copy-paste reference. The TOP RISK below is retired with the trees.
+
 | Field | Content |
 |---|---|
 | Slice | `packages/ui/src/select.tsx` (235 lines), `dialog.tsx` (181), `combobox.tsx` (354), `dropdown-menu.tsx` (339), `context-menu.tsx` (323): `data-slot` + Tailwind mirror `app/src/components/ui/*` |
@@ -140,6 +237,11 @@
 | Risk if never collapsed | **TOP RISK — lookalike controls:** forms and menus render correctly but accept no keyboard input, trap no focus, announce no roles — axe + a11y claims fail while screenshots pass |
 
 ### TD-12 — `packages/ui` Composer + MessageScroller static shells vs chat behavior
+
+> **RESOLVED 2026-10-28 — resolved by removal.** `packages/ui/` was deleted (same decision as
+> TD-11). Chat behavior lives only in its canonical homes (`app/src/components/channels/composer/`
+> and `app/src/components/ui/message-scroller.tsx`); the stubbed mirrors are gone instead of
+> ported.
 
 | Field | Content |
 |---|---|
@@ -155,4 +257,4 @@
 - `server/src/plugins/ws10-slice.ts`, `ws11-slice.ts` vs `store.ts` + `tools.ts`: headers name the mirrored shapes explicitly.
 - `server/src/work/tasks.ts` header disclaims leases/retries/fatigue (slice 2 on `queue.ts`); `server/src/routines/produce.ts` + `server/src/proactive/accept.ts` both import `TaskLedger` from it.
 - `server/src/monitors/check.ts` + `server/src/db/schema/monitors.ts` headers both cite 25 M4/R6 quiet fan-out; `server/src/db/schema/notifications.ts` + `threads.ts` cite W0 D1/D4/D9 additive-table rule.
-- `apps/app/app/**`: 65 placeholder screens verified via content search; `packages/ui/src/`: five menu/select shells + composer + scroller headers each enumerate divergences from `app/src`.
+- `apps/app/app/**`: 65 placeholder screens verified via content search; `packages/ui/src/`: five menu/select shells + composer + scroller headers each enumerate divergences from `app/src`. (Both trees were deleted 2026-10-28; this note is the on-disk evidence as it stood.)

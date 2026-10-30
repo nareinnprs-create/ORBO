@@ -1,10 +1,13 @@
 # Terms of Use (draft)
 
-> Status: draft for owner review. Every owner-specific fact is marked
-> `[OWNER TODO: ...]`. Do not publish until each placeholder is resolved.
+> Status: draft for owner review. Every owner-specific fact is a fill-in
+> slot: an `<!-- OWNER: ... -->` comment says what to fill in, and a visible
+> `[OWNER TO CONFIRM: ...]` marker marks the spot. Do not publish until each
+> placeholder is resolved.
 >
 > This is not legal advice.
-> `[OWNER TODO: have counsel review before first customer deployment]`.
+> <!-- OWNER: Have counsel review these terms before the first customer deployment; delete this comment and the confirm marker on sign-off. -->
+> `[OWNER TO CONFIRM: reviewed by counsel before first customer deployment]`.
 
 ## 1. License
 
@@ -15,7 +18,8 @@ permission or under a separate written agreement. Third-party components
 shipped with or required by ORBO remain under their own licenses; see
 `NOTICE.md`.
 
-`[OWNER TODO: name the commercial license / subscription agreement that grants the customer their rights, and how to request it]`.
+<!-- OWNER: Name the commercial license / subscription agreement that grants the customer their rights, and how to request it; delete this comment and the confirm marker once named. -->
+`[OWNER TO CONFIRM: name the commercial license / subscription agreement that grants the customer their rights, and how to request it]`.
 Interim default — confirm with counsel: unless and until such an
 agreement names different terms, use is governed solely by the
 proprietary license in `LICENSE` (© 2026 Opraiz Technology Pvt Ltd; no
@@ -59,7 +63,8 @@ to enter a binding agreement and comply with the laws that apply to you;
 operators disclose any additional age or regional limits for their own
 deployments. No specific age threshold, regional restriction, or
 safety-critical/surveillance use-case ban is stated here.
-`[OWNER TODO: add age requirements, regional restrictions, and any use-case restrictions (e.g. safety-critical, surveillance)]`.
+<!-- OWNER: Add the age requirements, regional restrictions, and use-case restrictions (e.g. safety-critical, surveillance) the owner decides on; delete this comment and the confirm marker once added. -->
+`[OWNER TO CONFIRM: age requirements, regional restrictions, and any use-case restrictions (e.g. safety-critical, surveillance)]`.
 
 ## 4. Third-party services
 
@@ -74,7 +79,8 @@ model provider, Parallel Search, Google and Notion connectors,
 Composio-brokered apps, sign-in identity providers) but states no
 third-party URLs here.
 
-`[OWNER TODO: link each provider's terms/DPA the deployment relies on]`.
+<!-- OWNER: Link each provider's terms/DPA the deployment relies on (Intelligence, the model providers, Parallel, Google, Notion, Composio, sign-in providers); delete this comment and the confirm marker once linked. -->
+`[OWNER TO CONFIRM: links to each provider's terms/DPA the deployment relies on]`.
 
 ## 5. Administrator responsibilities
 
@@ -97,7 +103,8 @@ particular purpose, and non-infringement; the authors and copyright holders
 are not liable for claims, damages, or other liability arising from or in
 connection with the software or its use.
 
-`[OWNER TODO: state any paid support/SLA separately — the license warranty disclaimer above does not create one — plus support URL and response targets]`.
+<!-- OWNER: State any paid support/SLA separately, with the support URL and response targets, or confirm the interim default below stands; delete this comment and the confirm marker once decided. The license warranty disclaimer above does not create one. -->
+`[OWNER TO CONFIRM: paid support/SLA — support URL and response targets, or confirmation that none is offered outside a separate written agreement]`.
 Interim default — confirm with counsel: these terms include no paid
 support and no SLA or response-time guarantee; any support or SLA is
 only as stated in a separate written agreement.
@@ -107,12 +114,17 @@ only as stated in a separate written agreement.
 - Changes (interim default — confirm with counsel): the owner may update
   these terms by publishing a revised copy with a new effective date;
   continued use after the effective date constitutes acceptance.
-  `[OWNER TODO: how these terms may change and how users are notified]`.
+  <!-- OWNER: Confirm how these terms may change and how users are notified; delete this comment and the confirm marker once decided. -->
+  `[OWNER TO CONFIRM: how these terms may change and how users are notified]`.
 - Suspension/termination (interim default — confirm with counsel): the
   operator may suspend or terminate access for violations of these terms
   (including §3) or for unlawful or abusive use of third-party services,
   with prior notice where practicable.
-  `[OWNER TODO: suspension/termination policy]`.
-- `[OWNER TODO: governing law and dispute venue]`.
-- `[OWNER TODO: contact email for licensing and legal inquiries]`.
-- `[OWNER TODO: effective date and version history]`.
+  <!-- OWNER: Confirm the suspension/termination policy; delete this comment and the confirm marker once decided. -->
+  `[OWNER TO CONFIRM: suspension/termination policy]`.
+- <!-- OWNER: State the governing law and dispute venue; delete this comment and the confirm marker once stated. -->
+  `[OWNER TO CONFIRM: governing law and dispute venue]`.
+- <!-- OWNER: Name the contact email for licensing and legal inquiries; delete this comment and the confirm marker once named. -->
+  `[OWNER TO CONFIRM: contact email for licensing and legal inquiries]`.
+- <!-- OWNER: State the effective date and keep a version history of these terms; delete this comment and the confirm marker once stated. -->
+  `[OWNER TO CONFIRM: effective date and version history]`.

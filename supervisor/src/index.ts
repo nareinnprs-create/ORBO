@@ -1,7 +1,8 @@
 import { serve } from "bun";
 import { Hono } from "hono";
 import { authorised } from "./authorisation";
-import { environmentFor } from "./environment";
+import { computerMemoryBytes } from "./computer-memory-bytes";
+import { refuseDevelopmentTokens } from "./development-tokens";
 import {
   ComputerNotAnsweringError,
   DockerUnavailableError,
@@ -12,10 +13,10 @@ import {
   reset,
   stop,
 } from "./docker";
+import { environmentFor } from "./environment";
 import { registerEntry } from "./identity";
-import { namesFor } from "./names";
-import { computerMemoryBytes } from "./computer-memory-bytes";
 import { listenPort } from "./listen-port";
+import { namesFor } from "./names";
 
 /**
  * The container supervisor: the only thing here that holds the Docker socket.
@@ -60,6 +61,11 @@ if (!token) {
   );
   process.exit(1);
 }
+// Before anything is created: the token guards the socket and the one forwarded into every
+// computer is a secret too, and neither may be the value printed in this repository once
+// something other than a laptop is running. Refused in production, warned about elsewhere —
+// see development-tokens.ts for where the line sits and why.
+refuseDevelopmentTokens();
 const image = process.env.ORBO_COMPUTER_IMAGE?.trim() || "orbo-computer:latest";
 const network = process.env.ORBO_COMPUTER_NETWORK?.trim() || undefined;
 const runtime = process.env.ORBO_COMPUTER_RUNTIME?.trim() || undefined;
@@ -73,6 +79,10 @@ if (!resolvedMemory.ok) {
 const memoryBytes = resolvedMemory.bytes;
 const spireSocketVolume =
   process.env.SPIRE_AGENT_SOCKET_VOLUME?.trim() || undefined;
+// The user computers run as. Undefined here means the pinned default in docker.ts applies; a
+// deployment carrying pre-upgrade volumes owned by root overrides it once, with the trade that
+// option documents.
+const computerUser = process.env.ORBO_COMPUTER_USER?.trim() || undefined;
 
 const app = new Hono();
 
@@ -106,6 +116,7 @@ app.post("/computers/:botId/ensure", async (context) => {
     const state = await ensure(parsed.names, {
       image,
       environment: environmentFor(parsed.names.botId),
+      ...(computerUser ? { user: computerUser } : {}),
       ...(network ? { network } : {}),
       ...(runtime ? { runtime } : {}),
       ...(memoryBytes ? { memoryBytes } : {}),

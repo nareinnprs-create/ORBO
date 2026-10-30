@@ -57,3 +57,15 @@ venv/
 # disk for whoever built it and is never committed - a 6 MB binary in the repository is dead
 # weight for every clone and goes stale on the next build anyway.
 artifacts/
+
+# Machine-local state written by the desktop app while it installs and drives a deployment.
+# preparation.rs reads the first three as its install checkpoints (`.orbo-deployment` names which
+# deployment a fingerprint was taken over), and container-images.json is a release asset it
+# downloads rather than anything this repository tracks. They describe THIS machine's install and
+# are meaningless to every other clone, so a `git add -A` after running the desktop app once must
+# not sweep them into a commit. `.secrets/` is the same story with credentials in it.
+.orbo-deployment
+.orbo-prepared.json
+.orbo-dependencies.json
+container-images.json
+.secrets/

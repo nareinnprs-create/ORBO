@@ -1,10 +1,10 @@
 import { afterAll, afterEach, beforeAll, expect, spyOn, test } from "bun:test";
+import * as ReactCoreV2 from "@copilotkit/react-core/v2";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render } from "@testing-library/react";
-import { useFrontendTool } from "@/lib/copilot/approval-tools";
 import { observeApprovalAgent } from "@/lib/copilot/approval-context";
-import * as ReactCoreV2 from "@copilotkit/react-core/v2";
+import { useFrontendTool } from "@/lib/copilot/approval-tools";
 
 /**
  * The handler the SDK keeps for a computer change.

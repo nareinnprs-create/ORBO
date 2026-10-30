@@ -162,6 +162,27 @@ export function mapEntraProfile(profile: Record<string, unknown>) {
   return { email };
 }
 
+/**
+ * How long a signed-in session lasts, in better-auth's own units.
+ *
+ * better-auth takes `session.expiresIn` and `session.updateAge` in SECONDS — verified against the
+ * installed version's declarations (`@better-auth/core` init-options: `expiresIn` default
+ * 60 * 60 * 24 * 7, `updateAge` default 60 * 60 * 24, where 0 renews the session on every use) and
+ * its `create-context.mjs`, which reads both directly. The deployment writes days; the translation
+ * happens here and only here, so the two unit systems never share a line elsewhere.
+ *
+ * `updateAgeSeconds` absent keeps the library's own 1-day cadence rather than naming a default here
+ * that could drift from the library's.
+ */
+export function sessionOptions(config: DeploymentConfig) {
+  return {
+    expiresIn: config.session.expiresInDays * 24 * 60 * 60,
+    ...(config.session.updateAgeSeconds !== undefined
+      ? { updateAge: config.session.updateAgeSeconds }
+      : {}),
+  };
+}
+
 export function createAuth(
   config: DeploymentConfig,
   database: Database,
@@ -262,6 +283,26 @@ export function createAuth(
   ];
 
   return betterAuth({
+    session: sessionOptions(config),
+    /*
+     * Stated, not inherited. The library ships a limiter already — enabled whenever it decides
+     * `NODE_ENV` looks like production, window 10 seconds, max 100 — but every part of that
+     * default is a decision this deployment should own and none of it is written anywhere an
+     * operator could read. So it is written here: on in every mode (a person signing in does not
+     * need a hundred requests a minute, and a laptop that exercises sign-in in development is
+     * owed the same proof the ceiling holds), one minute wide, one hundred requests deep. The
+     * library's own tighter rules stay on top of this for the paths where a request is a guess —
+     * sign-in, sign-up and password reset get their own smaller windows — which is exactly the
+     * shape wanted here and the reason the general numbers can stay generous.
+     *
+     * In memory, like everything else this library keeps per process: the server is one process,
+     * so there is nothing to share.
+     */
+    rateLimit: {
+      enabled: true,
+      window: 60,
+      max: 100,
+    },
     user: {
       additionalFields: {
         preferences: {

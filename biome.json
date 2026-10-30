@@ -14,7 +14,8 @@
       "!**/target",
       "!server/drizzle",
       "!.orbo-*",
-      "!container-images.json"
+      "!container-images.json",
+      "!**/.venv"
     ]
   },
   "formatter": {

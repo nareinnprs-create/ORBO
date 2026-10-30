@@ -304,6 +304,9 @@ jobs:
       # comes from the job env instead, which drizzle.config.ts already reads.
       - run: bunx drizzle-kit migrate --config=drizzle.config.ts
         working-directory: server
+      # The compose contract tests spawn the real LangGraph AG-UI harness, whose src imports the
+      # langchain stack; the pins are the same set the harness image installs.
+      - run: python -m pip install --requirement agent-orbo-langgraph-agui/requirements.txt
       # A passing job must include the expected test floor. Import-time failures can otherwise skip
       # files before their tests are registered.
       - run: bun run test:ci
@@ -519,24 +522,38 @@ jobs:
       - name: The image boots and serves
         run: |
           set -euo pipefail
-          # `ORBO_SINGLE_USER=true` because this boots a deployment with no identity provider, and
-          # the image sets NODE_ENV=production, where that combination refuses to start rather than
-          # serve an open deployment. Saying so is the point: the flag is how somebody declares they
-          # meant it. This was `ORBO_DEV_NO_AUTH=1` before, which the code never accepted at all,
-          # since it compares against the exact string "true"; it did nothing and nothing noticed.
+          # A complete but clearly dummy sign-in configuration, rather than ORBO_SINGLE_USER=true.
+          # The server now refuses the single-user flag outright under NODE_ENV=production, which
+          # the image sets: one administrator and no sign-in is a development convenience, and a
+          # production deployment is reachable by people who are not its administrator. One
+          # administrator with no sign-in is a thing you run where only you can reach it; this job
+          # boots what people deploy, so it configures sign-in instead. The Google client id and
+          # secret are place-holders named as such — better-auth contacts the provider at the first
+          # sign-in attempt, never at boot, so boot-school completeness is all they need to show —
+          # and nothing in this job signs in. The random session secret is still generated, because
+          # a placeholder one is what a bad deployment would ship.
           #
-          # Placeholders, not secrets. `loadConfig` refuses to start without Intelligence and a
-          # licence configured, but it only checks that they are present and well-formed; nothing is
-          # contacted at start-up and /api/capabilities reads config alone. So this proves the image
-          # boots and serves without needing a licence, which is the part CI cannot have: a licence
-          # is bound to the machine it was issued for. Whether Intelligence actually answers is what
-          # the smoke journey checks, on a real deployment.
+          # Placeholders, not secrets for the other values either. `loadConfig` refuses to start
+          # without Intelligence and a licence configured, but it only checks that they are present
+          # and well-formed; nothing is contacted at start-up and /api/capabilities reads config
+          # alone. So this proves the image boots and serves without needing a licence, which is
+          # the part CI cannot have: a licence is bound to the machine it was issued for. Whether
+          # Intelligence actually answers is what the smoke journey checks, on a real deployment.
+          #
+          # ORBO_SERVER_HOST=0.0.0.0 because the server's default bind is loopback, and this job
+          # reaches the server through a published port, which connects to the container's
+          # interface rather than to 127.0.0.1 inside it.
           docker run -d --name orbo-ci -p 3001:3001 \
             -e EMBEDDED_POSTGRES=on \
             -e KEY_ENCRYPTION_KEY="$(openssl rand -base64 32)" \
             -e TRUSTED_ORIGINS=http://localhost:3001 \
-             -e ORBO_SINGLE_USER=true \
-             -e INTELLIGENCE_API_URL=https://api.intelligence.copilotkit.ai \
+            -e ORBO_SERVER_HOST=0.0.0.0 \
+            -e BETTER_AUTH_URL=http://localhost:3001 \
+            -e BETTER_AUTH_SECRET="$(openssl rand -hex 32)" \
+            -e INITIAL_ADMIN_EMAILS=ci-admin@orbo.local \
+            -e GOOGLE_OAUTH_CLIENT_ID=ci-boot-placeholder-client-id \
+            -e GOOGLE_OAUTH_CLIENT_SECRET="$(openssl rand -hex 16)" \
+            -e INTELLIGENCE_API_URL=https://api.intelligence.copilotkit.ai \
             -e INTELLIGENCE_GATEWAY_WS_URL=wss://realtime.intelligence.copilotkit.ai \
             -e INTELLIGENCE_API_KEY=ci-not-a-real-key \
             orbo:ci

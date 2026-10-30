@@ -1,13 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Hono, type MiddlewareHandler } from "hono";
 import {
-  GROUP_TURN_KIND,
-  createGroupConversations,
-  type GroupMessage,
-  type GroupStore,
-  type GroupTurn,
-} from "../src/channels/group";
-import {
   collectDiyaResult,
   DIYA_AGENT_ID,
   DIYA_FIRST_SPECIALIST_ID,
@@ -30,8 +23,15 @@ import type {
   CreateAgentInput,
 } from "../src/agents/profile-types";
 import { createAgentRoutes } from "../src/agents/routes";
-import type { AppVariables } from "../src/auth/guards";
 import type { AuditStore } from "../src/audit";
+import type { AppVariables } from "../src/auth/guards";
+import {
+  createGroupConversations,
+  GROUP_TURN_KIND,
+  type GroupMessage,
+  type GroupStore,
+  type GroupTurn,
+} from "../src/channels/group";
 import type { TurnRunner } from "../src/routines/runner";
 import type { WorkItem, WorkQueue } from "../src/work/queue";
 

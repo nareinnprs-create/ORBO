@@ -14,6 +14,8 @@ would, once Starlette applies its latin-1 header decoding.
 
 import asyncio
 import importlib
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -73,3 +75,34 @@ def test_health_stays_exempt_regardless_of_token(app, headers):
 
     response = asyncio.run(send())
     assert response.status_code == 200
+
+
+def test_boot_refuses_without_the_server_token():
+    """No token at boot, no process - before even the credentials check runs.
+
+    The middleware keeps answering 401 per request, but Compose watches boot: a harness that
+    starts and then refuses every run reports healthy forever, and the shell restarts a dead
+    process, never a useless one. The token check precedes `_refuse_both_credentials` on purpose,
+    so an unconfigured container names the missing token, not the missing credential. Same
+    posture as `agent-orbo-bot/src/index.ts`.
+    """
+    environment = {
+        name: value
+        for name, value in os.environ.items()
+        if name != "ORBO_MANAGED_AGENT_TOKEN"
+    }
+    # The adapter's SDK chain loads a repository .env itself, so stripping the variable is not
+    # enough on a machine whose .env carries one. Pin it empty: python-dotenv never overrides an
+    # existing variable, and an empty one is exactly what the boot check refuses. A deployment
+    # container has no .env, so production sees true absence.
+    environment["ORBO_MANAGED_AGENT_TOKEN"] = ""
+    completed = subprocess.run(
+        [sys.executable, "-c", "import src.main"],
+        cwd=Path(__file__).resolve().parents[1],
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    assert completed.returncode != 0
+    assert "ORBO_MANAGED_AGENT_TOKEN is not set" in completed.stderr

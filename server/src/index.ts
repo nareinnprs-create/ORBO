@@ -183,6 +183,7 @@ import { createLearningSettingsStore } from "./learning/settings";
 import { createMemoryIngestion } from "./memory/ingestion";
 import { createMemoryStore } from "./memory/store";
 import { memoryTools } from "./memory/tools";
+import { runDueWatchChecks } from "./monitors/store";
 import { createNotificationStore } from "./notifications/routes";
 import { createSignInNotifier, createSignInResumer } from "./passwords/resume";
 import { createSignInService } from "./passwords/service";
@@ -193,6 +194,7 @@ import { createAccountModeSwitch } from "./plugins/account-mode";
 import { useRoutineTools } from "./plugins/builtin-routines";
 import { useComposioClient } from "./plugins/composio";
 import { createComposioClient } from "./plugins/composio-adapter";
+import { runTurnOrSkill } from "./plugins/invocation-turn";
 import { backfillComposioLogos } from "./plugins/logos";
 import { redirectUriFor } from "./plugins/oauth";
 import {
@@ -333,6 +335,9 @@ clearLearningRevisionFallback();
 // Read with the rest of the configuration, where an empty variable is an absent one. See
 // `serverPort` in config.ts for what `process.env.PORT ?? …` did with `PORT=` instead.
 const port = config.port;
+// What the socket actually binds to, no longer left to Bun's `0.0.0.0` default while the log below
+// claimed `127.0.0.1`. See `serverHost` in config.ts.
+const serverHost = config.serverHost;
 const database = createDatabase(config.databaseUrl);
 // Every dispatch point asks this database whether its person paused the Bot. See agents/lifecycle.ts.
 configureBotLifecycle({ database });
@@ -2222,20 +2227,33 @@ const deliveryRouter = createDeliveryRouter({
     );
     await channelStore.signalBusy(input.threadId, true);
     try {
-      const result = await approvalContinuationRunner({
-        ownerUserId: input.ownerUserId,
-        routineId: `delivery:${input.runId}`,
-        runId: input.runId,
-        agentId: input.agentId,
-        threadId: input.threadId,
-        instruction: input.text,
-        userMessage: {
-          id: `delivery:${input.runId}`,
-          role: "user",
-          content: input.text,
-        },
-        initiator: PERSON_INITIATOR,
-        signal: input.signal,
+      /*
+       * A message that names a skill (`/slug …`) is an invocation, not a topic (TD-02): it goes
+       * through the store's governed path — visibility, the Bot's grant, one audit row either way —
+       * with this very turn runner as the execution seam. Text that is not an invocation takes the
+       * ordinary turn, unchanged.
+       */
+      const result = await runTurnOrSkill({
+        text: input.text,
+        botId: input.agentId,
+        actorId: input.ownerUserId,
+        invokeSkill: (call) => pluginStore.invokeSkill(call),
+        runTurn: (instruction) =>
+          approvalContinuationRunner({
+            ownerUserId: input.ownerUserId,
+            routineId: `delivery:${input.runId}`,
+            runId: input.runId,
+            agentId: input.agentId,
+            threadId: input.threadId,
+            instruction,
+            userMessage: {
+              id: `delivery:${input.runId}`,
+              role: "user",
+              content: input.text,
+            },
+            initiator: PERSON_INITIATOR,
+            signal: input.signal,
+          }),
       });
       if (result.replyText)
         await channelStore.recordActivity(
@@ -2411,6 +2429,38 @@ const deliverySweeps = DELIVERY_WORK_KINDS.map((kind) =>
     }
   }, 2_000),
 );
+
+/*
+ * The watches (TD-06). The durable store answers the whole pass — claim what is due
+ * (`for update skip locked`, so replicas never check the same watch twice), check it, fan the
+ * firing out to a notification row, persist the new baseline — so this loop is only the clock:
+ * one call, its outcomes logged, the next pass a minute later. A failed pass is logged and the
+ * loop goes on; the due watch is still due on the next one, and the claim's own transaction has
+ * already spent its slot, so nothing double-alerts in between.
+ */
+const monitorSweep = repeatAfterEach(async () => {
+  try {
+    const outcomes = await runDueWatchChecks({ database });
+    if (outcomes.length > 0)
+      console.info(
+        JSON.stringify({
+          type: "watch-check",
+          checked: outcomes.length,
+          fired: outcomes.filter((outcome) => outcome.fired).length,
+          notified: outcomes.filter((outcome) => outcome.notified).length,
+          paused: outcomes.filter((outcome) => outcome.paused).length,
+        }),
+      );
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        type: "watch-check-error",
+        error: error instanceof Error ? error.name : "UnknownError",
+        timestamp: new Date().toISOString(),
+      }),
+    );
+  }
+}, 60_000);
 
 const personResponseOwner = workOwner("person-response");
 /**
@@ -3054,10 +3104,11 @@ const app = createApp(
  */
 const toStreamUrl = (baseUrl: string, botId: string) =>
   // The Bot travels in the query, because a websocket upgrade carries no custom header for the
-  // computer to read and every call it serves is per Bot. The secret travels the same way and for the
-  // same reason, this socket is the one a person can type into, so it is the last thing that should
-  // be reachable without it.
-  `${baseUrl.replace(/^http/, "ws").replace(/\/$/, "")}/stream?bot=${encodeURIComponent(botId)}&token=${encodeURIComponent(config.computer?.token ?? "")}`;
+  // computer to read and every call it serves is per Bot. The secret deliberately does NOT travel
+  // here: a token in a URL lands in access logs and proxy notes, where a websocket message does
+  // not. The inward socket's FIRST message is the token instead — the computer peeks it before it
+  // dispatches anything, and closes the socket without it.
+  `${baseUrl.replace(/^http/, "ws").replace(/\/$/, "")}/stream?bot=${encodeURIComponent(botId)}`;
 
 /** What each proxied socket carries: where to connect inward, and the socket once opened. */
 type StreamData = {
@@ -3086,6 +3137,7 @@ const asChannelSocket = (ws: { data: SocketData }) =>
 
 serve<SocketData>({
   port,
+  hostname: serverHost,
   async fetch(request, server) {
     const url = new URL(request.url);
     if (url.pathname === "/api/audio/transcriptions") {
@@ -3175,6 +3227,18 @@ serve<SocketData>({
       const stream = ws.data;
       const inward = new WebSocket(stream.upstream);
       stream.inward = inward;
+      /*
+       * The first thing this socket says is the credential (first-message auth). The computer
+       * refuses to dispatch anything on an inward socket that has not presented the token, so this
+       * frame is also an ordering guarantee: `onopen` runs before any message event can, and the
+       * browser's input is piped inward only from the proxy socket's own handler, which queues
+       * behind it.
+       */
+      inward.onopen = () => {
+        inward.send(
+          JSON.stringify({ type: "auth", token: config.computer?.token ?? "" }),
+        );
+      };
       // Frames outward, input inward. Buffered by neither side: a frame the browser is too slow for
       // should be dropped, not queued, because a stale frame is worse than a missing one.
       inward.onmessage = (event) => {
@@ -3284,6 +3348,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
     approvalSweep.stop();
     personResponseSweep.stop();
     groupSweep.stop();
+    monitorSweep.stop();
     for (const sweep of deliverySweeps) sweep.stop();
     void Promise.allSettled([
       channelActivityListener.stop(),
@@ -3295,4 +3360,13 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
   });
 }
 
-console.info(`ORBO server listening on http://127.0.0.1:${port}`);
+// The address the socket is bound to, not a claimed one: for all interfaces that is said, because
+// `http://0.0.0.0:3001` is not an address a browser opens.
+const boundDisplayHost = serverHost.includes(":")
+  ? `[${serverHost}]`
+  : serverHost;
+const bindsEveryInterface = serverHost === "0.0.0.0" || serverHost === "::";
+console.info(
+  `ORBO server listening on http://${boundDisplayHost}:${port}` +
+    (bindsEveryInterface ? " (all interfaces)" : ""),
+);

@@ -3,8 +3,10 @@
 FROM oven/bun:1.3-alpine
 
 WORKDIR /app
-COPY agent-orbo-mastra/package.json ./
-RUN bun install
+# The lockfile as well as the manifest: `--frozen-lockfile` with no lockfile present resolves afresh
+# and exits 0, so the file has to be here for the flag to mean anything.
+COPY agent-orbo-mastra/package.json agent-orbo-mastra/bun.lock ./
+RUN bun install --frozen-lockfile
 
 COPY shared/listen-port.ts /shared/listen-port.ts
 COPY shared/model-providers.ts /shared/model-providers.ts

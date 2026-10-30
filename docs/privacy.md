@@ -1,11 +1,14 @@
 # Privacy Notice (draft)
 
-> Status: draft for owner review. Every owner-specific fact is marked
-> `[OWNER TODO: ...]`. Do not publish until each placeholder is resolved.
+> Status: draft for owner review. Every owner-specific fact is a fill-in
+> slot: an `<!-- OWNER: ... -->` comment says what to fill in, and a visible
+> `[OWNER TO CONFIRM: ...]` marker marks the spot. Do not publish until each
+> placeholder is resolved.
 >
 > This notice describes what the ORBO software does with data, based on the
 > implementation. It is not legal advice.
-> `[OWNER TODO: have counsel review before first customer deployment]`.
+> <!-- OWNER: Have counsel review this notice before the first customer deployment; delete this comment and the confirm marker on sign-off. -->
+> `[OWNER TO CONFIRM: reviewed by counsel before first customer deployment]`.
 
 ## 1. What data ORBO handles
 
@@ -63,7 +66,8 @@ and granted them. Nothing is sold. There is no advertising.
   variable or `None` (`desktop/src-tauri/src/desktop_telemetry.rs`); with
   no endpoint set, events queue locally (at most 256, oldest dropped on
   overflow) and no delivery is attempted (`desktop/src-tauri/src/telemetry.rs`).
-  `[OWNER TODO: decide whether desktop telemetry stays opt-out or becomes opt-in for customer builds, and name the telemetry endpoint/processor in the published notice]`.
+  <!-- OWNER: Decide whether desktop telemetry stays opt-out or becomes opt-in for customer builds, and name the telemetry endpoint/processor for the published notice; delete this comment and the confirm marker once decided. -->
+  `[OWNER TO CONFIRM: whether desktop telemetry stays opt-out or becomes opt-in for customer builds, and the telemetry endpoint/processor named in the published notice]`.
 
 ## 4. Retention and deletion
 
@@ -74,7 +78,8 @@ and granted them. Nothing is sold. There is no advertising.
   Interim default — confirm with counsel: this notice states the software
   default (keep forever unless the operator sets `AUDIT_RETENTION_DAYS`);
   no fixed hosted/customer period is chosen here.
-  `[OWNER TODO: choose a fixed retention period in days for hosted/customer deployments and state it here]`.
+  <!-- OWNER: Choose a fixed retention period in days for hosted/customer deployments and state it here; delete this comment and the confirm marker once chosen. -->
+  `[OWNER TO CONFIRM: a fixed retention period in days for hosted/customer deployments]`.
 - Secrets in audit payloads are replaced with `[REDACTED]` before storage
   (token, secret, password, credential, prompt, content, result, tool
   arguments/results, and related key spellings in `server/src/audit.ts`).
@@ -97,12 +102,14 @@ and granted them. Nothing is sold. There is no advertising.
 - Backups: no automated backup ships with ORBO today (`docs/backup-restore.md`
   describes manual `pg_dump`/`pg_restore`); schedule, retention, off-site
   location, encryption, and recovery objectives are operator-defined.
-  `[OWNER TODO: state the backup schedule and retention for hosted/customer deployments]`.
+  <!-- OWNER: State the backup schedule and retention for hosted/customer deployments (see docs/backup-restore.md for the suggested starting point: daily dump, 7 days retained); delete this comment and the confirm marker once stated. -->
+  `[OWNER TO CONFIRM: the backup schedule and retention for hosted/customer deployments]`.
 - Account deletion: the operator handles deletion requests against the
   deployment database and forwards them to Intelligence, Composio, and
   provider grants (§5.5); no automatic account-deletion timeline ships in
   the repo.
-  `[OWNER TODO: state the account-deletion timeline for hosted/customer deployments]`.
+  <!-- OWNER: State the account-deletion timeline for hosted/customer deployments (suggested default to confirm: actioned within 30 days of a confirmed request, including the forwarding in §5.5); delete this comment and the confirm marker once stated. -->
+  `[OWNER TO CONFIRM: the account-deletion timeline for hosted/customer deployments]`.
 
 ## 5. Operator duties (self-hosted and customer deployments)
 
@@ -127,7 +134,8 @@ deployment processes. They must:
    ships, operators follow `docs/backup-restore.md` (backups/restore),
    `docs/configuration.md` (provider/retention notes), and the audit
    trail at `/admin/audit` for evidence.
-   `[OWNER TODO: provide the operator runbook and support contact for such requests]`.
+   <!-- OWNER: Provide the operator runbook and support contact for data-subject requests; delete this comment and the confirm marker once provided. -->
+   `[OWNER TO CONFIRM: the operator runbook and support contact for data-subject requests]`.
 
 ## 6. Self-host notes
 
@@ -136,18 +144,24 @@ deployment processes. They must:
   One `pg_dump` restores the deployment's own tables.
 - Intelligence self-hosting keeps threads/memory inside the operator's
   infrastructure; the managed default sends them to CopilotKit's service.
-  `[OWNER TODO: confirm the Intelligence DPA/subprocessor terms for the managed default and link them here]`.
+  <!-- OWNER: Confirm the Intelligence DPA/subprocessor terms for the managed default and link them here; delete this comment and the confirm marker once confirmed. -->
+  `[OWNER TO CONFIRM: the Intelligence DPA/subprocessor terms for the managed default, linked here]`.
 - Model traffic stays with the configured provider/endpoint; a
   self-hosted OpenAI-compatible endpoint keeps prompts in-house.
 
 ## 7. Contact and ownership
 
 - Company legal name: Opraiz Technology Pvt Ltd (`PLAN.md`, `LICENSE`).
-  `[OWNER TODO: registered address]`.
-- `[OWNER TODO: privacy contact email]`.
-- `[OWNER TODO: support URL and data-request procedure]`.
-- `[OWNER TODO: governing law / jurisdiction]`.
-- `[OWNER TODO: effective date and change history for this notice]`.
+  <!-- OWNER: Add the registered address; delete this comment and the confirm marker once added. -->
+  `[OWNER TO CONFIRM: registered address]`.
+- <!-- OWNER: Name the privacy contact email; delete this comment and the confirm marker once named. -->
+  `[OWNER TO CONFIRM: privacy contact email]`.
+- <!-- OWNER: Publish the support URL and data-request procedure; delete this comment and the confirm marker once published. -->
+  `[OWNER TO CONFIRM: support URL and data-request procedure]`.
+- <!-- OWNER: State the governing law / jurisdiction; delete this comment and the confirm marker once stated. -->
+  `[OWNER TO CONFIRM: governing law / jurisdiction]`.
+- <!-- OWNER: State the effective date and keep a change history of this notice; delete this comment and the confirm marker once stated. -->
+  `[OWNER TO CONFIRM: effective date and change history for this notice]`.
 
 ## Sources
 

@@ -238,8 +238,21 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     !searching && (channels.data?.length ?? 0) <= MAX_ANIMATED_ROWS;
 
   const handleSignOut = async () => {
-    await signOut.mutateAsync();
-    await navigate({ to: "/sign" });
+    /*
+     * A failed sign-out must not keep the person in an app they have just left: the browser drops
+     * the session's claims the moment they ask to go, and the server's copy expires behind it. The
+     * failure travels with them instead — the sign-in screen says what happened, non-blocking.
+     */
+    let failed = false;
+    try {
+      await signOut.mutateAsync();
+    } catch {
+      failed = true;
+    }
+    await navigate({
+      to: "/sign",
+      state: failed ? { signOutFailed: true } : undefined,
+    });
   };
 
   return (

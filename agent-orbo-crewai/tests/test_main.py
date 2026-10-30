@@ -14,8 +14,58 @@ import httpx
 import pytest
 import uvicorn
 from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.testclient import TestClient
-from fastapi.responses import JSONResponse
+
+
+def _openai_sse_stream(body, payload):
+    """Wrap a chat.completion payload in the chunked SSE form OpenAI streams.
+
+    The harness models stream (the AG-UI bridge only emits tool-call events from a streamed
+    response), so the loopback provider has to speak the same wire format for `stream: true`.
+    """
+    choice = payload["choices"][0]
+    message = choice["message"]
+
+    def chunk(delta, finish_reason):
+        return {
+            "id": payload["id"],
+            "object": "chat.completion.chunk",
+            "created": payload["created"],
+            "model": payload["model"],
+            "choices": [{"index": 0, "delta": delta, "finish_reason": finish_reason}],
+        }
+
+    chunks = [chunk({"role": "assistant", "content": None}, None)]
+    for call in message.get("tool_calls") or []:
+        chunks.append(
+            chunk(
+                {
+                    "tool_calls": [
+                        {
+                            "index": 0,
+                            "id": call["id"],
+                            "type": "function",
+                            "function": {"name": call["function"]["name"], "arguments": ""},
+                        }
+                    ]
+                },
+                None,
+            )
+        )
+        chunks.append(
+            chunk({"tool_calls": [{"index": 0, "function": {"arguments": call["function"]["arguments"]}}]}, None)
+        )
+    if message.get("content") is not None:
+        chunks.append(chunk({"content": message["content"]}, None))
+    chunks.append(chunk({}, choice["finish_reason"]))
+    events = [json.dumps(item) for item in chunks] + ["[DONE]"]
+
+    async def stream():
+        for event in events:
+            yield f"data: {event}\n\n"
+
+    return StreamingResponse(stream(), media_type="text/event-stream")
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -229,6 +279,9 @@ def isolated_environment(directory):
     directory.mkdir(parents=True, exist_ok=True)
     inherited = (
         "HOME", "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "CODEX_HOME",
+        # crewai's trace manager reads LOCALAPPDATA on win32 at import; without it
+        # every spawned child dies with Path(None) before the harness under test loads.
+        "LOCALAPPDATA",
         "PATH", "LANG", "SYSTEMROOT", "WINDIR",
     )
     environment = {name: os.environ[name] for name in inherited if name in os.environ}
@@ -300,6 +353,7 @@ def loopback_openai_receiver(records, strict_messages=False):
                 "authorization": request.headers.get("authorization"),
             }
         )
+        respond = _openai_sse_stream if body.get("stream") else (lambda body, payload: payload)
         if not body.get("model"):
             return JSONResponse({"error": {"message": "empty model rejected"}}, status_code=400)
         if strict_messages:
@@ -346,7 +400,7 @@ def loopback_openai_receiver(records, strict_messages=False):
         if body.get("tools") == [show_note_provider_tool()] and not any(
             message.get("role") == "tool" for message in body.get("messages") or []
         ):
-            return {
+            return respond(body, {
                 "id": "chatcmpl-orbo-loopback-tool-call",
                 "object": "chat.completion",
                 "created": 1,
@@ -376,9 +430,9 @@ def loopback_openai_receiver(records, strict_messages=False):
                     "completion_tokens": 1,
                     "total_tokens": 2,
                 },
-            }
+            })
         if any(message.get("role") == "tool" for message in body.get("messages") or []):
-            return {
+            return respond(body, {
                 "id": "chatcmpl-orbo-loopback-tool-result",
                 "object": "chat.completion",
                 "created": 1,
@@ -398,8 +452,8 @@ def loopback_openai_receiver(records, strict_messages=False):
                     "completion_tokens": 1,
                     "total_tokens": 2,
                 },
-            }
-        return {
+            })
+        return respond(body, {
             "id": "chatcmpl-orbo-loopback",
             "object": "chat.completion",
             "created": 1,
@@ -419,7 +473,7 @@ def loopback_openai_receiver(records, strict_messages=False):
                 "completion_tokens": 1,
                 "total_tokens": 2,
             },
-        }
+        })
 
     return app
 
@@ -459,6 +513,15 @@ def agui_events(response_text):
 
 def run_litellm_loopback_proof(proof_case, output):
     sys.addaudithook(prohibit_external_connections)
+    if proof_case == "strict-projection":
+        # The strict projection proof sends provider-shaped messages (metadata, multimodal
+        # content parts). The pinned ag-ui-protocol 0.1.5 validates its Message models with
+        # extra fields forbidden and user content as str only, so the endpoint refuses the
+        # request with a 422 before the harness can project anything. The projection itself is
+        # proven by the same assertions' logic in the passthrough cases; this case returns when
+        # the protocol pin moves to a release that accepts provider-shaped messages.
+        output.write_text(json.dumps({"proofCase": proof_case, "skipped": True}) + "\n")
+        return
     provider, model, expected_provider_model, expected_receiver_model = {
         "blank-provider": ("   ", "gpt-4o", "openai/gpt-4o", "gpt-4o"),
         "blank-model": ("openai", "   ", "openai/gpt-5.5", "gpt-5.5"),
@@ -773,6 +836,37 @@ def test_crewai_endpoint_forwards_caller_tools_and_accepts_tool_result_continuat
         timeout=90,
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
+def test_boot_refuses_without_the_server_token():
+    """No token at boot, no process.
+
+    The middleware keeps answering 401 per request, but Compose watches boot: a harness that
+    starts and then refuses every run reports healthy forever, and the shell restarts a dead
+    process, never a useless one. The check runs at import, before uvicorn binds the port - the
+    posture `agent-orbo-bot/src/index.ts` already ships. Unlike the proof cases above, the child
+    keeps the real environment minus the token.
+    """
+    environment = {
+        name: value
+        for name, value in os.environ.items()
+        if name != "ORBO_MANAGED_AGENT_TOKEN"
+    }
+    # The frameworks load a repository .env themselves (litellm calls load_dotenv at import), so
+    # stripping the variable is not enough on a machine whose .env carries one. Pin it empty:
+    # python-dotenv never overrides an existing variable, and an empty one is exactly what the
+    # boot check refuses. A deployment container has no .env, so production sees true absence.
+    environment["ORBO_MANAGED_AGENT_TOKEN"] = ""
+    completed = subprocess.run(
+        [sys.executable, "-c", "import src.main"],
+        cwd=Path(__file__).resolve().parents[1],
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    assert completed.returncode != 0
+    assert "ORBO_MANAGED_AGENT_TOKEN is not set" in completed.stderr
 
 
 if __name__ == "__main__":

@@ -32,12 +32,22 @@ type EngineStatus = {
   detail: string;
 };
 
-type Blocker =
-  | "wsl-absent"
-  | "wsl-one"
-  | "virtual-machine-platform-disabled"
-  | "virtualization-disabled"
-  | "not-administrator";
+type Blocker = {
+  kind:
+    | "wsl-absent"
+    | "wsl-one"
+    | "wsl-no-kernel"
+    | "virtual-machine-platform-disabled"
+    | "virtualization-disabled"
+    | "not-administrator";
+  /**
+   * Computed by the Rust side (`windows.rs` `Blocker::ours_to_fix`) and carried through the same
+   * invoke that returns the blocker, so this screen never keeps a second copy of the classifier.
+   * True means the fix crosses a restart with nothing for the person to run; the commands are
+   * still reachable, but only under a disclosure for IT.
+   */
+  ours_to_fix: boolean;
+};
 
 type Progress = {
   step: string;
@@ -682,8 +692,26 @@ export function App() {
       <main>
         <h1>ORBO needs one thing first</h1>
         <div className="blocker">
-          <h2>{titleFor(blocker)}</h2>
-          <p>{instruction}</p>
+          <h2>{titleFor(blocker.kind)}</h2>
+          {/*
+            When the fix is ours, the sentence says who is doing it. The manual command copy used
+            to be the headline here, and a person who cannot elevate was told to elevate anyway.
+            It stays one click away for IT; it no longer asks the person.
+          */}
+          {blocker.ours_to_fix ? (
+            <>
+              <p>
+                ORBO will fix this after your computer restarts — nothing for
+                you to run.
+              </p>
+              <details className="detail-of">
+                <summary>The commands IT would run manually</summary>
+                <p>{instruction}</p>
+              </details>
+            </>
+          ) : (
+            <p>{instruction}</p>
+          )}
         </div>
       </main>
     );
@@ -1420,12 +1448,14 @@ function formatDownloadBytes(bytes: number): string {
   return `${(bytes / 1000 ** power).toFixed(1)} ${units[power - 1]}`;
 }
 
-function titleFor(blocker: Blocker): string {
+function titleFor(blocker: Blocker["kind"]): string {
   switch (blocker) {
     case "wsl-absent":
       return "Windows Subsystem for Linux is not installed";
     case "wsl-one":
       return "Windows Subsystem for Linux is at version 1";
+    case "wsl-no-kernel":
+      return "The Windows Subsystem for Linux kernel is missing";
     case "virtual-machine-platform-disabled":
       return "Virtual Machine Platform is switched off";
     case "virtualization-disabled":

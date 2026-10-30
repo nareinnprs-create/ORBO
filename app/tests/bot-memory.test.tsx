@@ -155,6 +155,9 @@ test("an action setting called name is its own field, not the source name", asyn
   expect(setting).not.toBe(view.getByLabelText("Source name"));
 });
 
+// Full-suite contention has tripped Bun's default 5s timeout on this render-heavy test; the
+// budget it actually takes is under three seconds, so the interval is named rather than
+// inherited.
 test("reopening Add source after a failure keeps the draft but not the failure", async () => {
   serving();
   const view = draw(<MemorySources agentId="expenses" />);
@@ -171,7 +174,7 @@ test("reopening Add source after a failure keeps the draft but not the failure",
   const name = (await view.findByLabelText("Source name")) as HTMLInputElement;
   expect(name.value).toBe("Invoices");
   expect(view.queryByRole("alert")).toBeNull();
-});
+}, 15_000);
 
 test("reopening a research row after a failure starts without it", async () => {
   serving();

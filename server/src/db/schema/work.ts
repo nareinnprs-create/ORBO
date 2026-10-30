@@ -1,10 +1,13 @@
+import { sql } from "drizzle-orm";
 import {
+  check,
   index,
   integer,
   pgTable,
   primaryKey,
   text,
   timestamp,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { jsonb } from "./json";
 
@@ -94,5 +97,125 @@ export const workItems = pgTable(
     primaryKey({ columns: [table.kind, table.key] }),
     // The claim's own query: due, unclaimed or expired, not yet finished, oldest first.
     index("work_items_claimable_idx").on(table.kind, table.runAt),
+  ],
+);
+
+/**
+ * The unified task ledger (01 §5; TD-03), made durable.
+ *
+ * One row per piece of work any scheduler offers: a routine's due minute, an accepted
+ * suggestion, a spending import. The queue above owns leases and attempts — whether
+ * something is being handed out right now, and to whom; this table owns WHAT HAPPENED —
+ * the task, its one run, and the receipt a person reads. The two are kept apart on
+ * purpose: the queue is what still wants doing and is swept away on retention windows,
+ * the ledger is the record and is kept.
+ *
+ * IDEMPOTENCE LIVES IN THE KEY, the same place it lives in the queue. `key` is unique
+ * across the whole table and the value is the same string the queue's `(kind, key)`
+ * idempotence uses — `routine_standup:2026-08-26T09:00Z`, `suggestion:<id>` — so a
+ * replayed offer (a lease reclaimed mid-flight, a restart republishing, three replicas
+ * waking at 07:00) collides here exactly as it collides there, and one firing produces
+ * one task whether it is replayed by the queue or by a caller.
+ */
+export const tasks = pgTable(
+  "tasks",
+  {
+    id: text("id").primaryKey(),
+    /** The identity of the work, unique across every producer. See the header. */
+    key: text("key").notNull(),
+    /** What offered it: a cron routine, a proactive setting, a spending import. */
+    producerKind: text("producer_kind")
+      .$type<"routine" | "proactive" | "finance">()
+      .notNull(),
+    /** The producer's own id: the routine id, `proactive:<settingId>`, the importer. */
+    producerId: text("producer_id").notNull(),
+    /** The minute the work was due, as the producer named it. */
+    scheduledFor: timestamp("scheduled_for", { withTimezone: true }).notNull(),
+    status: text("status")
+      .$type<"open" | "running" | "succeeded" | "failed">()
+      .notNull()
+      .default("open"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    uniqueIndex("tasks_key_key").on(table.key),
+    index("tasks_producer_idx").on(table.producerKind, table.producerId),
+    check(
+      "tasks_status_check",
+      sql`${table.status} IN ('open', 'running', 'succeeded', 'failed')`,
+    ),
+    check(
+      "tasks_producer_kind_check",
+      sql`${table.producerKind} IN ('routine', 'proactive', 'finance')`,
+    ),
+  ],
+);
+
+/**
+ * One run of one task.
+ *
+ * A task runs once: `task_id` is unique, so a second `startRun` is an insert that
+ * collides rather than a second execution. The full error text lives here, where
+ * the run's own reader looks; the receipt beside it carries one line, never the
+ * transcript (see `task_events.detail`).
+ */
+export const taskRuns = pgTable(
+  "task_runs",
+  {
+    id: text("id").primaryKey(),
+    taskId: text("task_id")
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    status: text("status")
+      .$type<"running" | "succeeded" | "failed">()
+      .notNull()
+      .default("running"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    error: text("error"),
+  },
+  (table) => [
+    // One run per task, which is what makes startRun finish-once at the storage layer.
+    uniqueIndex("task_runs_task_id_key").on(table.taskId),
+    check(
+      "task_runs_status_check",
+      sql`${table.status} IN ('running', 'succeeded', 'failed')`,
+    ),
+  ],
+);
+
+/**
+ * What a finished run left behind, readable by pages and feeds the turn never saw.
+ *
+ * `kind` exists because the ledger will one day record more than receipts (01 §5's
+ * `task_events`); slice one records one thing, so the check pins the one kind and the
+ * column carries the name it will keep. One event per run: `run_id` is unique, so a
+ * replayed receipt lands on the row that is already there.
+ */
+export const taskEvents = pgTable(
+  "task_events",
+  {
+    id: text("id").primaryKey(),
+    taskId: text("task_id")
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    runId: text("run_id")
+      .notNull()
+      .references(() => taskRuns.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull().default("receipt"),
+    title: text("title").notNull(),
+    /**
+     * The outcome in one sentence — never the turn's content. Receipts are read by
+     * pages and feeds the turn never saw, so anything secret that reaches the reply
+     * must stop before this field.
+     */
+    detail: text("detail").notNull(),
+    at: timestamp("at", { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("task_events_run_id_key").on(table.runId),
+    index("task_events_task_idx").on(table.taskId),
+    check("task_events_kind_check", sql`${table.kind} IN ('receipt')`),
   ],
 );

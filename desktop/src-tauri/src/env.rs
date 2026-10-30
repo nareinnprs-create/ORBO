@@ -335,6 +335,34 @@ fn secret() -> String {
     BASE64.encode(bytes)
 }
 
+/**
+48 alphanumeric characters, from the same crypto generator.
+
+`POSTGRES_PASSWORD` ends up inside a `postgres://` URL — this shell's `DATABASE_URL` below and the
+interpolated default in `deploy/compose/docker-compose.yml`. Base64's `=`, `+` and `/` are legal in
+a URL only after percent-encoding, and a password that needs encoding is one missed encoding away
+from a credential that authenticates nowhere. Alphanumeric only, so neither place has to encode.
+*/
+fn secret_alphanumeric() -> String {
+    const ALPHABET: &[u8; 62] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    // 248 = 4 * 62. Bytes at or above it would tilt the alphabet's last buckets, so they are
+    // refused and drawn again instead.
+    const UNIFORM_FLOOR: u8 = 248;
+    let mut out = String::with_capacity(48);
+    while out.len() < 48 {
+        let mut bytes = [0u8; 48];
+        rand::rng().fill_bytes(&mut bytes);
+        out.extend(
+            bytes
+                .iter()
+                .filter(|byte| **byte < UNIFORM_FLOOR)
+                .map(|byte| ALPHABET[(*byte % 62) as usize] as char),
+        );
+    }
+    out.truncate(48);
+    out
+}
+
 /// The settings the shell owns, in the order a person reading the file would want them.
 ///
 /// Addresses use `127.0.0.1` rather than `localhost` deliberately. Compose publishes on both
@@ -559,6 +587,12 @@ pub fn compose(
      * a first run is.
      */
     for key in MINTED {
+        // The database password lives inside a URL, so it gets the URL-safe generator.
+        let mint = if key == "POSTGRES_PASSWORD" {
+            secret_alphanumeric
+        } else {
+            secret
+        };
         let value = kept
             .get(key)
             .map(|value| value.trim().to_string())
@@ -566,13 +600,16 @@ pub fn compose(
             // present, is published, and must still be replaced. It also holds
             // `KEY_ENCRYPTION_KEY` to the 32 bytes it has to decode to.
             .filter(|value| usable(key, value))
-            .unwrap_or_else(secret);
+            .unwrap_or_else(mint);
         env.insert(key.into(), value);
     }
 
     env.insert(
         "DATABASE_URL".into(),
-        format!("postgres://orbo:orbo@127.0.0.1:{}/orbo", ports.postgres),
+        format!(
+            "postgres://orbo:{}@127.0.0.1:{}/orbo",
+            env["POSTGRES_PASSWORD"], ports.postgres
+        ),
     );
     // Every address the app is actually reachable at, because it is reachable at more than one.
     //
@@ -881,20 +918,25 @@ pub const NO_KEY_NEEDED: &str = "no-key-needed";
 const BANNER: &str = "# Written by ORBO Desktop. Anything else in this file is left alone.";
 
 /// The secrets this deployment mints for itself, once.
-pub const MINTED: [&str; 6] = [
+pub const MINTED: [&str; 7] = [
     "ORBO_AGENT_TOOL_TOKEN",
     "ORBO_COMPUTER_TOKEN",
     "KEY_ENCRYPTION_KEY",
     "ORBO_MANAGED_AGENT_TOKEN",
     "SUPERVISOR_TOKEN",
     "WORKER_SHARED_SECRET",
+    // Same status as the rest: generated, never the `orbo` credential the compose file and the dev
+    // scripts publish. See `POSTGRES_PASSWORD` in `usable` and `secret_alphanumeric`.
+    "POSTGRES_PASSWORD",
 ];
 
 const PUBLISHED: [&str; 4] = [
     "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
     "orbo-dev-supervisor-token",
     "orbo-dev-computer-token",
-    "orbo-dev-worker-secret",
+    // 29 chars, not the old 22-char value: the worker now refuses WORKER_SHARED_SECRET
+    // under 24 characters, so a desktop-prepared .env must carry a floor-passing default.
+    "orbo-dev-worker-shared-secret",
 ];
 
 /// Whether an original installation key can be reused without replacement.
@@ -906,6 +948,12 @@ pub fn usable_encryption_key(value: &str) -> bool {
 fn usable(key: &str, value: &str) -> bool {
     if key == "KEY_ENCRYPTION_KEY" {
         return usable_encryption_key(value);
+    }
+    if key == "POSTGRES_PASSWORD" {
+        // `orbo` is the credential published in the compose file and the dev scripts, so a value
+        // left holding it is unprotected wherever it came from and must be replaced.
+        let trimmed = value.trim();
+        return !trimmed.is_empty() && trimmed != "orbo";
     }
     !value.is_empty() && !PUBLISHED.contains(&value)
 }
@@ -924,8 +972,47 @@ fn carried(existing: &str) -> BTreeMap<String, String> {
         if MINTED.contains(&key) && usable(key, value) {
             found.insert(key.to_string(), value.to_string());
         }
+        /*
+         * A DATABASE_URL an operator pointed away from the bundled postgres is theirs, and it
+         * wins. Every start composes its own local URL and would otherwise overwrite theirs,
+         * which is the wrong outcome for the self-hosted install that named a database of its
+         * own instead of running the bundled one.
+         */
+        if key == "DATABASE_URL" && !value.is_empty() && !own_database_url(value) {
+            found.insert(key.to_string(), value.to_string());
+        }
     }
     found
+}
+
+/**
+Whether a `DATABASE_URL` names the loopback-bound postgres this deployment itself runs.
+
+The shell refreshes its own URL on every start — a moved published port must not leave the server
+dialing the old one — so anything named on loopback stays owned here. `localhost` is deliberately
+not accepted as an operator name either: see the address note above `compose`.
+*/
+fn own_database_url(value: &str) -> bool {
+    let Some((_, rest)) = value.split_once("://") else {
+        return false;
+    };
+    let authority = match rest.split_once('/') {
+        Some((authority, _)) => authority,
+        None => rest,
+    };
+    let host = authority
+        .rsplit_once('@')
+        .map(|(_, host)| host)
+        .unwrap_or(authority);
+    let host = if let Some(after_bracket) = host.strip_prefix('[') {
+        match after_bracket.split_once(']') {
+            Some((inner, _)) => inner,
+            None => return false,
+        }
+    } else {
+        host.split(':').next().unwrap_or(host)
+    };
+    matches!(host, "127.0.0.1" | "::1")
 }
 
 /// Write the file, replacing only what this owns and keeping the secrets it has already minted.
@@ -1384,6 +1471,7 @@ HTTPS_PROXY=http://proxy:8080
             "SUPERVISOR_TOKEN",
             "WORKER_SHARED_SECRET",
             "KEY_ENCRYPTION_KEY",
+            "POSTGRES_PASSWORD",
         ] {
             let value = env.get(key).expect(key);
             assert!(!value.contains("orbo-dev"), "{key} kept a dev default");
@@ -1392,6 +1480,147 @@ HTTPS_PROXY=http://proxy:8080
                 "{key} is too short to be a generated secret"
             );
         }
+        assert_ne!(
+            env["POSTGRES_PASSWORD"], "orbo",
+            "the database kept the credential the compose file publishes"
+        );
+        // The server's own URL carries the minted password, never the published dev one.
+        assert!(
+            !env["DATABASE_URL"].contains("orbo:orbo"),
+            "{} answered with the published dev credential",
+            env["DATABASE_URL"]
+        );
+        assert!(
+            env["DATABASE_URL"].contains(env["POSTGRES_PASSWORD"].as_str()),
+            "DATABASE_URL does not carry the minted POSTGRES_PASSWORD"
+        );
+    }
+
+    /// The database password goes inside a `postgres://` URL, so it must be one neither this
+    /// shell nor the compose file ever has to percent-encode.
+    #[test]
+    fn the_minted_postgres_password_is_url_safe_without_encoding() {
+        for _ in 0..16 {
+            let password = secret_alphanumeric();
+            assert_eq!(password.len(), 48);
+            assert!(
+                password.chars().all(|c| c.is_ascii_alphanumeric()),
+                "{password} would need percent-encoding in a postgres URL"
+            );
+        }
+    }
+
+    /// Minted once per deployment and carried forward, exactly like `KEY_ENCRYPTION_KEY`: the
+    /// bundled postgres data volume was initialized under it, and rotating it strands every
+    /// connection, because POSTGRES_PASSWORD is only read when a volume is first created.
+    #[test]
+    fn a_kept_postgres_password_is_kept_and_flows_into_the_database_url() {
+        let kept = BTreeMap::from([(
+            "POSTGRES_PASSWORD".to_string(),
+            "KeptBasicSecret0123456789".to_string(),
+        )]);
+        let env = compose(
+            &intelligence(),
+            &Model::default(),
+            &engine_status(None),
+            &Ports::default(),
+            &pinned(),
+            None,
+            &kept,
+        );
+        assert_eq!(
+            env.get("POSTGRES_PASSWORD").map(String::as_str),
+            Some("KeptBasicSecret0123456789")
+        );
+        assert_eq!(
+            env["DATABASE_URL"],
+            "postgres://orbo:KeptBasicSecret0123456789@127.0.0.1:5432/orbo"
+        );
+    }
+
+    /// `orbo` is the credential the compose file used to ship, so a deployment holding it —
+    /// whatever wrote it there — is unprotected and it is replaced rather than carried.
+    #[test]
+    fn the_published_dev_postgres_password_is_replaced_in_saved_settings() {
+        let dir = tmp("published-postgres-password");
+        let path = env_at(&dir);
+        std::fs::write(&path, "POSTGRES_PASSWORD=orbo\n").unwrap();
+
+        write(&path, &fresh(), &BTreeMap::new()).unwrap();
+        let written = std::fs::read_to_string(&path).unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+
+        assert_ne!(value_of(&written, "POSTGRES_PASSWORD"), "orbo");
+        assert!(
+            !written.contains("orbo:orbo"),
+            "the saved DATABASE_URL kept the published dev credential"
+        );
+    }
+
+    /// A self-hosted deployment that named its own database keeps that URL, and the URL the shell
+    /// composes for the bundled postgres does not overwrite it.
+    #[test]
+    fn an_operator_database_url_pointed_away_from_the_bundled_postgres_wins() {
+        for theirs in [
+            "postgres://orbo:operator-secret@cloud.example:6432/orbo",
+            "postgres://operator:pw@localhost:6543/orbo",
+            "postgres://supervisor@10.0.0.9:5432/orbo",
+        ] {
+            let dir = tmp("operator-database-url");
+            let path = env_at(&dir);
+            std::fs::write(&path, format!("DATABASE_URL={theirs}\n")).unwrap();
+
+            write(&path, &fresh(), &BTreeMap::new()).unwrap();
+            let written = std::fs::read_to_string(&path).unwrap();
+            std::fs::remove_dir_all(&dir).ok();
+
+            assert_eq!(
+                value_of(&written, "DATABASE_URL"),
+                theirs,
+                "the shell overwrote the database an operator named"
+            );
+        }
+    }
+
+    /// The staleness guard the operator rule must not break: this shell's own loopback URL is
+    /// refreshed every start, including when a moved port changed the one in the file.
+    #[test]
+    fn the_shell_refreshes_its_own_local_database_url_rather_than_carrying_it() {
+        let dir = tmp("local-database-url");
+        let path = env_at(&dir);
+        std::fs::write(
+            &path,
+            "DATABASE_URL=postgres://orbo:orbo@127.0.0.1:5432/orbo\n",
+        )
+        .unwrap();
+
+        write(&path, &fresh(), &BTreeMap::new()).unwrap();
+        let written = std::fs::read_to_string(&path).unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+
+        assert_ne!(
+            value_of(&written, "DATABASE_URL"),
+            "postgres://orbo:orbo@127.0.0.1:5432/orbo"
+        );
+        assert!(value_of(&written, "DATABASE_URL").starts_with("postgres://orbo:"));
+    }
+
+    /// The password travels to the containers through Compose interpolation, so the file this
+    /// shell hands to Compose must name it with the same dev fallback the scripts rely on.
+    #[test]
+    fn the_compose_file_interpolates_the_minted_password_rather_than_shipping_one() {
+        let source = include_str!("../../../deploy/compose/docker-compose.yml");
+        assert!(
+            source.contains("POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-orbo}"),
+            "postgres would initialize on the published password"
+        );
+        assert!(source.contains(
+            "DATABASE_URL: postgres://orbo:${POSTGRES_PASSWORD:-orbo}@postgres:5432/orbo"
+        ));
+        assert!(
+            !source.contains("\n  POSTGRES_PASSWORD: orbo"),
+            "the compose file shipped a credential as a literal"
+        );
     }
 
     /**
@@ -1787,7 +2016,7 @@ HTTPS_PROXY=http://proxy:8080
             "KEY_ENCRYPTION_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\n\
              SUPERVISOR_TOKEN=orbo-dev-supervisor-token\n\
              ORBO_COMPUTER_TOKEN=orbo-dev-computer-token\n\
-             WORKER_SHARED_SECRET=orbo-dev-worker-secret\n",
+             WORKER_SHARED_SECRET=orbo-dev-worker-shared-secret\n",
         )
         .unwrap();
 

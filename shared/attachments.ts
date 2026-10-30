@@ -237,10 +237,17 @@ export function classifyAttachment(mimeType: string): AttachmentKind {
  *     take the second branch. Their IMAGE is attached and THEIR TEXT IS NOT TYPED — the same
  *     outcome "an image always wins" gave, arrived at by a different route.
  *
- * That second bullet is a known defect and is being kept for now rather than fixed, so this comment
- * says so instead of implying the spreadsheet case is covered. Fixing it means teaching this rule
- * or PromptArea's the difference between an image that IS the selection and an image that merely
- * accompanies it, which no clipboard flag reports.
+ * TODO(deferred defect): that second bullet. Google Sheets, Numbers and every other source that
+ * renders the selection to the clipboard without Microsoft Office markup get their IMAGE attached
+ * and their text silently dropped — the same outcome "an image always wins" produced, reached by a
+ * different route. It is kept rather than fixed because the missing piece is not code, it is a
+ * decision: telling an image that IS the selection from an image that merely accompanies it is
+ * beyond what any clipboard flag reports, so every candidate rule is a heuristic over untrusted
+ * `text/html` — sniff for table markup, always prefer text when both flavours exist — and each one
+ * changes which half of an ambiguous paste wins for sources this repository does not control. When
+ * that is decided, the change lands in PromptArea's html branch
+ * (`app/src/components/channels/composer/composer.tsx`), not here; this function already pins the
+ * half that IS decided, that clipboard text always wins, and its tests hold that line.
  *
  * The other trade-off, stated because it is also real: copying an image from a web page can put the
  * image's URL in `text/plain`, and that pastes the URL rather than attaching the image. Drag or the

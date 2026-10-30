@@ -301,6 +301,231 @@ fn postgres_volume_problem(detail: impl Into<String>) -> Problem {
     )
 }
 
+/**
+Which password this deployment's postgres volume was first initialized with.
+
+The database takes its `POSTGRES_PASSWORD` once, when the volume is initialized, and never again:
+`initdb` reads it and every later start ignores it. A volume left by an install of an earlier
+version — ones that ran the compose file with its published default — accepts `orbo`, while a
+volume this version initialized accepts what the shell minted. The record beside the other
+`.orbo-*` files says which, in the words the compose file itself publishes, and never carries the
+password bytes themselves. The volume's name is fixed (`orbo_postgres-data`), so the kind of its
+password is the whole record.
+
+While the file exists it wins: its answer is used unchanged, and nothing is probed again, even if
+the volume were replaced out from under a complete installation. It clears whenever the volume's
+database does — `reset_leftover_database` deletes the record with the reset, and a fresh volume is
+asked again rather than spoken to with a previous volume's answer.
+*/
+pub const POSTGRES_RECORD: &str = ".orbo-postgres.json";
+
+/// The published dev password the compose file and the dev scripts have always shipped.
+pub const LEGACY_POSTGRES_PASSWORD: &str = "orbo";
+
+/// What a start tells the window when this run is using the legacy password on a legacy volume.
+pub const LEGACY_POSTGRES_PASSWORD_WARNING: &str = "This database still uses the published development password. It keeps working, but reset it from the Install screen to have ORBO generate its own.";
+
+/// Something recorded that never reached the store before this version: existing desktop installs
+/// have a volume initialized with the published dev password, and this record is what lets the
+/// shell keep speaking it there while minting its own for every volume it initializes itself.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum PostgresPassword {
+    /// The published dev password an earlier version's volume was initialized with.
+    #[serde(rename = "orbo")]
+    Orbo,
+    /// The password this deployment minted and its own volume initialized with.
+    #[serde(rename = "minted")]
+    Minted,
+}
+
+#[derive(Serialize, Deserialize)]
+struct PostgresRecord {
+    volume_initialized_with: PostgresPassword,
+}
+
+/// What a start already knows about this deployment's volume, from the record on disk.
+pub fn postgres_volume_password(root: &Path) -> Option<PostgresPassword> {
+    let record: PostgresRecord =
+        serde_json::from_slice(&std::fs::read(root.join(POSTGRES_RECORD)).ok()?).ok()?;
+    Some(record.volume_initialized_with)
+}
+
+fn record_postgres_password(root: &Path, kind: PostgresPassword) -> Result<(), Problem> {
+    let bytes = serde_json::to_vec(&PostgresRecord {
+        volume_initialized_with: kind,
+    })
+    .map_err(|error| {
+        Problem::with(
+            "ORBO could not remember which password its database accepts.",
+            error.to_string(),
+        )
+    })?;
+    crate::env::write_private_file(&root.join(POSTGRES_RECORD), &bytes).map_err(|error| {
+        Problem::with(
+            "ORBO could not remember which password its database accepts.",
+            error.to_string(),
+        )
+    })
+}
+
+/// How one password attempt against the running database ended.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PostgresAttempt {
+    /// The database answered a connection opened with this password.
+    Accepted,
+    /// The database answered, and refused this password specifically.
+    Refused,
+    /// Nothing was answered: the engine will not run the probe, or the database is not up.
+    Unavailable,
+}
+
+/// A refused password is a specific sentence, and a slow or broken engine is not one. Distinguish
+/// them so only a real refusal moves on to trying the legacy password — a start whose postgres has
+/// not finished coming up must not be misread as "the minted password is wrong".
+fn classify_postgres_attempt(succeeded: bool, engine_said: &str) -> PostgresAttempt {
+    if succeeded {
+        PostgresAttempt::Accepted
+    } else if engine_said.contains("password authentication failed") {
+        PostgresAttempt::Refused
+    } else {
+        PostgresAttempt::Unavailable
+    }
+}
+
+/// The probe itself, once the stack is up. No container-exec helper exists here, so this follows
+/// the engine's own probing pattern: Compose reaches its services with `exec -T`. The password
+/// travels as a value the `env` command inside the container sets for `psql`, and nothing that
+/// carries it is ever shown to a person: a probe that says something other than a password refusal
+/// is an engine problem, and the output belongs in nothing surfaced.
+fn postgres_password_attempt(
+    engine: &Address,
+    root: &Path,
+    secrets: &Secrets,
+    password: &str,
+) -> PostgresAttempt {
+    let output = compose_command(engine, root, secrets)
+        /*
+         * Compose passes environment through `--env` only for interpolation, and a `docker exec`
+         * session gets nothing else for free, so the password arrives the way the engine's own
+         * fixtures and the compose services do: inside the container, as an environment value.
+         */
+        .args(["exec", "-T", "postgres", "env"])
+        .arg(format!("PGPASSWORD={password}"))
+        .args([
+            "psql",
+            "-U",
+            "orbo",
+            "-h",
+            "127.0.0.1",
+            "-d",
+            "orbo",
+            "-c",
+            "select 1",
+        ])
+        .output();
+    match output {
+        Ok(output) => classify_postgres_attempt(
+            output.status.success(),
+            &String::from_utf8_lossy(&output.stderr),
+        ),
+        Err(_) => PostgresAttempt::Unavailable,
+    }
+}
+
+/**
+Try the minted password first, then the published one, and record whichever the volume took.
+
+`Ok(None)` is "nothing was decided this start": the engine could not run the probe, postgres was
+not answering yet, or neither credential got a connection. Nothing is recorded then, because a
+start that Compose raised is entitled to continue and the question is asked again next start.
+*/
+fn postgres_password_after_probe(
+    root: &Path,
+    minted_name: &str,
+    attempt: &mut dyn FnMut(&str) -> PostgresAttempt,
+) -> Result<Option<PostgresPassword>, Problem> {
+    if attempt(minted_name) == PostgresAttempt::Accepted {
+        record_postgres_password(root, PostgresPassword::Minted)?;
+        return Ok(Some(PostgresPassword::Minted));
+    }
+    if attempt(LEGACY_POSTGRES_PASSWORD) == PostgresAttempt::Accepted {
+        record_postgres_password(root, PostgresPassword::Orbo)?;
+        return Ok(Some(PostgresPassword::Orbo));
+    }
+    Ok(None)
+}
+
+/**
+Which password this run hands to every spot that carries one, decided by the record when it
+exists and by one probe of the running database the first time.
+
+Called with the stack up. The record short-circuits every future start: minted uses its own
+minted password, and the legacy record keeps this run on `orbo` — see
+`use_legacy_postgres_password` for where the overrides land.
+*/
+pub fn adopt_postgres_password(
+    root: &Path,
+    engine: &Address,
+    secrets: &Secrets,
+) -> Result<Option<PostgresPassword>, Problem> {
+    adopt_postgres_password_with(root, secrets, |password| {
+        postgres_password_attempt(engine, root, secrets, password)
+    })
+}
+
+/// The same decision with the probe on a seam, which is how the decision matrix is tested.
+fn adopt_postgres_password_with(
+    root: &Path,
+    secrets: &Secrets,
+    attempt: impl FnMut(&str) -> PostgresAttempt,
+) -> Result<Option<PostgresPassword>, Problem> {
+    if let Some(kind) = postgres_volume_password(root) {
+        // The volume's name is fixed, so when it exists the record says all there is to say.
+        return Ok(Some(kind));
+    }
+    let Some(minted) = secrets
+        .get("POSTGRES_PASSWORD")
+        .map(String::as_str)
+        .filter(|minted| !minted.trim().is_empty())
+    else {
+        return Ok(None);
+    };
+    postgres_password_after_probe(root, minted, &mut { attempt })
+}
+
+/// The published dev password was accepted: point every password-carrying spot of this run at it.
+///
+/// The compose interpolation (`${POSTGRES_PASSWORD:-orbo}`) reads this run's `secrets`, and the
+/// server and migrations read the `DATABASE_URL` they were given, so both must agree with the
+/// volume for this start to work at all. Only a URL this shell composed — a loopback URL into the
+/// bundled postgres — is rewritten; a `DATABASE_URL` an operator pointed at their own database is
+/// none of this volume's business.
+pub fn use_legacy_postgres_password(
+    settings: &mut std::collections::BTreeMap<String, String>,
+    secrets: &mut Secrets,
+    postgres_port: u16,
+) {
+    let tail = format!("@127.0.0.1:{postgres_port}/orbo");
+    let own_database_url = settings
+        .get("DATABASE_URL")
+        .and_then(|url| url.strip_prefix("postgres://orbo:"))
+        .and_then(|rest| rest.strip_suffix(&tail))
+        .filter(|password| {
+            !password.is_empty() && password.bytes().all(|b| b.is_ascii_alphanumeric())
+        })
+        .is_some();
+    if own_database_url {
+        settings.insert(
+            "DATABASE_URL".into(),
+            format!("postgres://orbo:{LEGACY_POSTGRES_PASSWORD}@127.0.0.1:{postgres_port}/orbo"),
+        );
+    }
+    secrets.insert(
+        "POSTGRES_PASSWORD".into(),
+        LEGACY_POSTGRES_PASSWORD.to_string(),
+    );
+}
+
 /// A surviving database is recoverable only when Compose and the engine agree it is owned.
 pub fn leftover_database_volume(
     engine: &Address,
@@ -405,6 +630,27 @@ pub fn reset_leftover_database(
         })?;
     if !removed.status.success() {
         return Err(Problem::with("ORBO could not reset the leftover database. It may still be attached to a container. Nothing else was removed; stop the installation using it before trying again.", format!("Volume removal exited with {}. Output omitted because it can contain credentials.", removed.status)));
+    }
+    /*
+     * THE VOLUME'S PASSWORD RECORD GOES WITH THE VOLUME.
+     *
+     * This is the flow that resets the database, and `POSTGRES_RECORD` is the record of what the
+     * database accepted: when `initdb` runs again over an absent volume, whatever the record said
+     * describes a volume that no longer exists, so a surviving record would make the next start
+     * speak that password to a database that answered from scratch with this run's minted one.
+     * A reset therefore deletes the record, and its absence keeps the rule simple everywhere
+     * else: while the file exists it wins, until a reset (or the person) deletes it.
+     */
+    match std::fs::remove_file(root.join(POSTGRES_RECORD)) {
+        // A reset over a volume that was never probed has nothing recorded to clear.
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => {
+            return Err(Problem::with(
+                "The database was reset, but ORBO could not clear its note about which password it accepted. Delete .orbo-postgres.json from the installation folder before starting again.",
+                error.to_string(),
+            ));
+        }
     }
     Ok(())
 }
@@ -914,6 +1160,31 @@ pub fn down(engine: &Address, root: &Path) -> Result<(), String> {
 /// `vite: command not found`, and neither says the word `node_modules`. Always let Bun verify
 /// the frozen install: a failed download can leave the directory behind, while a complete
 /// installation can reuse Bun's cache without changing the lockfile.
+/// The npm registry the environment asks this installer to fetch from, or why it cannot be used.
+///
+/// `ORBO_NPM_REGISTRY` is the one acquisition-time knob the ambient process may name: a mirror the
+/// site routes installs through. A value of only whitespace counts as unset, because something
+/// that expands to nothing has named no registry. Anything that is not an http(s) URL is refused
+/// with the key named — the error this returns becomes a `Problem` at every installer call site —
+/// and Bun is not run at all for it, rather than silently ignoring the setting or handing Bun a
+/// value its flag would misread.
+pub fn npm_registry_override() -> Result<Option<String>, String> {
+    let raw = std::env::var("ORBO_NPM_REGISTRY").ok();
+    let Some(url) = raw.map(|value| value.trim().to_string()) else {
+        return Ok(None);
+    };
+    if url.is_empty() {
+        return Ok(None);
+    }
+    if !url.starts_with("https://") && !url.starts_with("http://") {
+        return Err(format!(
+            "ORBO_NPM_REGISTRY, set in the environment, is not an npm registry this install can \
+             use: {url}. Name an http or https registry, or unset ORBO_NPM_REGISTRY."
+        ));
+    }
+    Ok(Some(url))
+}
+
 pub fn install_dependencies(root: &Path, bun: &Path) -> Result<(), String> {
     // `--ignore-scripts`, for two reasons that point the same way.
     //
@@ -922,9 +1193,26 @@ pub fn install_dependencies(root: &Path, bun: &Path) -> Result<(), String> {
     // ask for. And they are not all portable: `@scarf/scarf` shells out to `node`, which a machine
     // that has bun need not have, so the install fails at "node: command not found" after the
     // containers are already up. Found on a Linux machine with bun and no node.
-    let output = command(bun)
-        .current_dir(root)
-        .args(["install", "--frozen-lockfile", "--ignore-scripts"])
+    let mut install = command(bun);
+    install.current_dir(root).arg("install");
+    match npm_registry_override() {
+        Ok(Some(registry)) => {
+            /*
+             * The one ambient knob this installer honors: an offline mirror, a proxy, a whole
+             * site's registry pin. It rides on the Bun command line as its own flag, whose value
+             * outranks the ambient `.npmrc`/`bunfig`/registry environment the same process would
+             * otherwise feed Bun — the command line is Bun's strongest binding. It is the first
+             * flag named, and it travels as two separate `Command` arguments handed to the process
+             * directly: no shell is involved, so nothing about the URL is quoted by us and
+             * nothing can fragment it into more arguments.
+             */
+            install.args(["--registry", &registry]);
+        }
+        Ok(None) => {}
+        Err(refusal) => return Err(refusal),
+    }
+    let output = install
+        .args(["--frozen-lockfile", "--ignore-scripts"])
         .output()
         .map_err(|error| format!("could not run bun install: {error}"))?;
 
@@ -3069,6 +3357,214 @@ mod tests {
     use super::*;
     use crate::test_support::temp_root;
 
+    /*
+     * THE VOLUME'S OWN PASSWORD.
+     *
+     * The decision matrix over the mocked probe: minted accepted, minted refused and the
+     * published `orbo` accepted, a database that answers nothing, and an engine that cannot ask.
+     * The probe itself is the seam here; the real one is `compose exec` reached only with a live
+     * engine, so every test below drives `postgres_password_after_probe` or `adopt_postgres_password`
+     * with a closure.
+     */
+
+    /// Minted accepted on the probe's first try: the record names `minted`, carries no password
+    /// bytes, and the next start — the same `adopt_postgres_password` entry point — never probes.
+    #[test]
+    fn the_volume_probe_records_minted_once_and_future_starts_never_probe_again() {
+        let root = temp_root("postgres-password-minted");
+        std::fs::create_dir_all(&root).unwrap();
+        let minted = "a-minted-password";
+
+        let mut probed = Vec::new();
+        let decided = postgres_password_after_probe(&root, minted, &mut |password| {
+            probed.push(password.to_string());
+            PostgresAttempt::Accepted
+        })
+        .unwrap();
+        assert_eq!(decided, Some(PostgresPassword::Minted));
+        assert_eq!(probed, [minted]);
+        assert_eq!(
+            std::fs::read_to_string(root.join(POSTGRES_RECORD)).unwrap(),
+            r#"{"volume_initialized_with":"minted"}"#,
+            "the record says which password the volume took, and nothing else"
+        );
+
+        // The record is the whole answer a later start needs: this probe would panic.
+        let adopt = adopt_postgres_password_with(&root, &Secrets::new(), |_| {
+            panic!("a recorded volume is never probed again")
+        })
+        .unwrap();
+        assert_eq!(adopt, Some(PostgresPassword::Minted));
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    /// Minted refused and `orbo` accepted: the record names the legacy volume, and every
+    /// password-carrying spot of the run is repointed at `orbo` — the compose interpolation's
+    /// secret, and the loopback DATABASE_URL this shell composed. An operator's own DATABASE_URL
+    /// stays theirs, and the probe's refusal is what a start without one would do nothing with.
+    #[test]
+    fn a_legacy_volume_is_recorded_and_this_run_carries_orbo_everywhere_it_counts() {
+        let root = temp_root("postgres-password-legacy");
+        std::fs::create_dir_all(&root).unwrap();
+        // Alphanumeric, like `secret_alphanumeric` mints them: a URL-safe database password.
+        let minted = "AnotherMinted5421";
+
+        let mut probed = Vec::new();
+        let decided = postgres_password_after_probe(root.as_path(), minted, &mut |password| {
+            probed.push(password.to_string());
+            if password == minted {
+                PostgresAttempt::Refused
+            } else {
+                PostgresAttempt::Accepted
+            }
+        })
+        .unwrap();
+        assert_eq!(decided, Some(PostgresPassword::Orbo));
+        assert_eq!(probed, [minted, LEGACY_POSTGRES_PASSWORD]);
+        let record = std::fs::read_to_string(root.join(POSTGRES_RECORD)).unwrap();
+        assert_eq!(record, r#"{"volume_initialized_with":"orbo"}"#);
+        assert!(
+            !record.contains(minted),
+            "the record never carries the password"
+        );
+
+        let postgres_port = 5433;
+        let mut settings = std::collections::BTreeMap::from([
+            (
+                "DATABASE_URL".to_string(),
+                format!("postgres://orbo:{minted}@127.0.0.1:{postgres_port}/orbo"),
+            ),
+            (
+                "ORBO_AGENT_COMPUTER_URL".to_string(),
+                "http://127.0.0.1:4200".to_string(),
+            ),
+        ]);
+        let mut secrets = Secrets::from([
+            ("POSTGRES_PASSWORD".to_string(), minted.to_string()),
+            ("SUPERVISOR_TOKEN".to_string(), "synthetic".to_string()),
+        ]);
+        use_legacy_postgres_password(&mut settings, &mut secrets, postgres_port);
+        assert_eq!(
+            settings["DATABASE_URL"],
+            format!("postgres://orbo:{LEGACY_POSTGRES_PASSWORD}@127.0.0.1:{postgres_port}/orbo")
+        );
+        assert_eq!(secrets["POSTGRES_PASSWORD"], LEGACY_POSTGRES_PASSWORD);
+        assert_eq!(
+            secrets["SUPERVISOR_TOKEN"], "synthetic",
+            "nothing else moves"
+        );
+
+        // A DATABASE_URL pointed away from the bundled postgres is an operator's, and stays.
+        let mut settings = std::collections::BTreeMap::from([(
+            "DATABASE_URL".to_string(),
+            "postgres://theirs:secret@db.their-host.example:5432/theirdb".to_string(),
+        )]);
+        let mut secrets = Secrets::new();
+        use_legacy_postgres_password(&mut settings, &mut secrets, postgres_port);
+        assert_eq!(
+            settings["DATABASE_URL"],
+            "postgres://theirs:secret@db.their-host.example:5432/theirdb"
+        );
+        assert_eq!(
+            secrets.get("POSTGRES_PASSWORD").map(String::as_str),
+            Some(LEGACY_POSTGRES_PASSWORD),
+            "the record is about the bundled volume; the secret still follows it"
+        );
+
+        // Having no DATABASE_URL built at all leaves only the secret to repoint.
+        let mut settings = std::collections::BTreeMap::new();
+        let mut secrets = Secrets::new();
+        use_legacy_postgres_password(&mut settings, &mut secrets, postgres_port);
+        assert!(!settings.contains_key("DATABASE_URL"));
+        assert_eq!(secrets["POSTGRES_PASSWORD"], LEGACY_POSTGRES_PASSWORD);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    /// A database that accepts neither password was not claiming anything about its password:
+    /// no record is written, so the next start asks again rather than guessing.
+    #[test]
+    fn a_volume_that_accepts_neither_password_decides_nothing_and_records_nothing() {
+        let root = temp_root("postgres-password-neither");
+        std::fs::create_dir_all(&root).unwrap();
+        let decided =
+            postgres_password_after_probe(&root, "minted", &mut |_| PostgresAttempt::Refused)
+                .unwrap();
+        assert_eq!(decided, None);
+        assert!(!root.join(POSTGRES_RECORD).is_file());
+
+        let decided =
+            postgres_password_after_probe(&root, "minted", &mut |password| match password {
+                "minted" => PostgresAttempt::Refused,
+                _ => PostgresAttempt::Unavailable,
+            })
+            .unwrap();
+        assert_eq!(decided, None);
+        assert!(!root.join(POSTGRES_RECORD).is_file());
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    /// An engine that cannot run the probe — or a postgres that has not finished coming up —
+    /// is not a password refusal: nothing decides, nothing records, and the probe asks again
+    /// next start.
+    #[test]
+    fn an_engine_that_could_not_ask_skips_the_probe_this_start() {
+        let root = temp_root("postgres-password-skip");
+        std::fs::create_dir_all(&root).unwrap();
+        for first in [PostgresAttempt::Unavailable, PostgresAttempt::Refused] {
+            let decided =
+                postgres_password_after_probe(&root, "minted", &mut |password| match password {
+                    "minted" => first,
+                    _ => PostgresAttempt::Unavailable,
+                })
+                .unwrap();
+            assert_eq!(decided, None, "{first:?}");
+            assert!(!root.join(POSTGRES_RECORD).is_file(), "{first:?}");
+        }
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    /// No record on disk and nothing to probe with decides nothing — including recording.
+    #[test]
+    fn a_start_with_no_minted_password_to_try_asks_nothing() {
+        let root = temp_root("postgres-password-no-secret");
+        std::fs::create_dir_all(&root).unwrap();
+        let adopt = adopt_postgres_password_with(&root, &Secrets::new(), |_| {
+            panic!("no minted password, nothing to probe with")
+        })
+        .unwrap();
+        assert_eq!(adopt, None);
+        assert!(!root.join(POSTGRES_RECORD).is_file());
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    /// The probe reading: a refusal is a specific sentence about the password, anything else
+    /// an engine up-to-something is not trusted to decide over.
+    #[test]
+    fn a_probe_read_distinguishes_a_refusal_from_an_engine_that_cannot_answer() {
+        assert_eq!(
+            classify_postgres_attempt(true, ""),
+            PostgresAttempt::Accepted
+        );
+        assert_eq!(
+            classify_postgres_attempt(
+                false,
+                "psql: error: FATAL:  password authentication failed for user \"orbo\""
+            ),
+            PostgresAttempt::Refused
+        );
+        for said in [
+            "",
+            "psql: error: connection to server at \"127.0.0.1\" (127.0.0.1), port 5432 failed: Connection refused",
+            "could not exec into container: file exists",
+        ] {
+            assert_eq!(
+                classify_postgres_attempt(false, said),
+                PostgresAttempt::Unavailable,
+                "{said}"
+            );
+        }
+    }
+
     #[test]
     fn startup_log_tail_retains_build_error_before_wrapper_without_loading_whole_log() {
         let root = temp_root("startup-build-diagnostic");
@@ -3271,12 +3767,19 @@ mod tests {
             assert!(!std::fs::read_to_string(&record)
                 .unwrap()
                 .contains("volume rm"));
+            /*
+             * A reset takes the volume's password record with it. A refusal leaves it standing —
+             * nothing was removed, so nothing about the volume changed — and a reset to the
+             * confirmed volume records nothing afterwards: the next database is asked fresh.
+             */
+            record_postgres_password(&root, PostgresPassword::Orbo).unwrap();
             reset_leftover_database(&address, &root, &Secrets::new(), "orbo_postgres-data")
                 .unwrap();
             assert_eq!(
                 std::fs::read_to_string(root.join(".fixture-volumes")).unwrap(),
                 "unrelated\n"
             );
+            assert!(!root.join(POSTGRES_RECORD).is_file());
             let log = std::fs::read_to_string(&record).unwrap();
             let removals: Vec<_> = log
                 .lines()
@@ -3292,6 +3795,12 @@ mod tests {
                     .1
                     .starts_with("--connection fixture-machine ")));
             }
+            // The volume returns (another volume the deployment owns), and a reset over it with
+            // no record recorded finds nothing to clear and still succeeds.
+            leftover_database_fixture(&root);
+            reset_leftover_database(&address, &root, &Secrets::new(), "orbo_postgres-data")
+                .unwrap();
+            assert!(!root.join(POSTGRES_RECORD).is_file());
         }
     }
 
@@ -4658,6 +5167,148 @@ fn main() {
             "retry and cached checks must invoke Bun"
         );
         assert_eq!(installed.unwrap(), "cached package contents");
+    }
+
+    /// A Bun stand-in for the registry-tagged install: it logs every invocation's argument
+    /// list verbatim to `args.log` in its working directory, one argument per line.
+    fn dependency_bun_fixture(root: &std::path::Path) -> std::path::PathBuf {
+        let source = root.join("fake_bun.rs");
+        std::fs::write(
+            &source,
+            r#"
+use std::io::Write;
+fn main() {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let mut log = std::fs::File::options().append(true).create(true).open("args.log").unwrap();
+    writeln!(log, "{}", args.join("\n")).unwrap();
+}
+"#,
+        )
+        .unwrap();
+        let bun = root.join(if cfg!(windows) {
+            "fake-bun.exe"
+        } else {
+            "fake-bun"
+        });
+        crate::test_support::compile_fixture(&source, &bun);
+        bun
+    }
+
+    /// An ambient ORBO_NPM_REGISTRY rides to Bun as the first flag after the subcommand, ahead of
+    /// the frozen-lockfile flags, and the value passes through as one argument — no shell in
+    /// between to quote or split it. These run isolated because the knob is process-wide.
+    #[test]
+    fn an_ambient_registry_reaches_bun_as_the_first_flag() {
+        if crate::test_support::isolated_process(
+            "stack::tests::an_ambient_registry_reaches_bun_as_the_first_flag",
+        ) {
+            return;
+        }
+        let root = temp_root("dependency-install-registry");
+        std::fs::create_dir_all(&root).unwrap();
+        // A URL of the shape a mirror really has: something a shell would need to quote, and
+        // nothing for `Command` to split on.
+        let registry = "https://registry.site.example:8443/artifactory/api/npm/npm-virtual/";
+        std::env::set_var("ORBO_NPM_REGISTRY", registry);
+        let bun = dependency_bun_fixture(&root);
+        install_dependencies(&root, &bun).unwrap_or_else(|error| panic!("install failed: {error}"));
+        std::env::remove_var("ORBO_NPM_REGISTRY");
+        assert_eq!(
+            std::fs::read_to_string(root.join("args.log")).unwrap(),
+            format!("install\n--registry\n{registry}\n--frozen-lockfile\n--ignore-scripts\n"),
+            "the registry flag is Bun's first option"
+        );
+    }
+
+    /// With the key unset, and with a value of only whitespace, the install is exactly what it
+    /// has always been.
+    #[test]
+    fn an_absent_or_blank_registry_leaves_the_install_untouched() {
+        if crate::test_support::isolated_process(
+            "stack::tests::an_absent_or_blank_registry_leaves_the_install_untouched",
+        ) {
+            return;
+        }
+        let root = temp_root("dependency-install-registry-absent");
+        std::fs::create_dir_all(&root).unwrap();
+        std::env::remove_var("ORBO_NPM_REGISTRY");
+        let bun = dependency_bun_fixture(&root);
+        install_dependencies(&root, &bun).unwrap();
+
+        std::env::set_var("ORBO_NPM_REGISTRY", "   \t ");
+        install_dependencies(&root, &bun).unwrap();
+        std::env::remove_var("ORBO_NPM_REGISTRY");
+        assert_eq!(
+            std::fs::read_to_string(root.join("args.log")).unwrap(),
+            "install\n--frozen-lockfile\n--ignore-scripts\ninstall\n--frozen-lockfile\n--ignore-scripts\n",
+        );
+    }
+
+    /// A value Bun's flag cannot carry — anything that is not an http(s) URL — is refused with
+    /// the key named, and Bun never runs for it.
+    #[test]
+    fn an_ambient_registry_that_is_not_an_http_url_is_refused_without_running_bun() {
+        if crate::test_support::isolated_process(
+            "stack::tests::an_ambient_registry_that_is_not_an_http_url_is_refused_without_running_bun",
+        ) {
+            return;
+        }
+        let root = temp_root("dependency-install-registry-refused");
+        std::fs::create_dir_all(&root).unwrap();
+        let bun = dependency_bun_fixture(&root);
+        for value in ["ftp://registry.example", "registry.local:4873"] {
+            std::env::set_var("ORBO_NPM_REGISTRY", value);
+            let refusal = install_dependencies(&root, &bun)
+                .expect_err("a non-http value cannot name a registry");
+            std::env::remove_var("ORBO_NPM_REGISTRY");
+            assert!(
+                refusal.contains("ORBO_NPM_REGISTRY") && refusal.contains(value),
+                "the refusal names the key and shows the value: {refusal}"
+            );
+            assert!(
+                !root.join("args.log").is_file(),
+                "bun must never run for a refused value"
+            );
+        }
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// The reading of the ambient value itself: trimmed, blank means unset, and an accepted
+    /// scheme is exactly http or https — checked without an install, because the refusal has
+    /// nothing to do with Bun.
+    #[test]
+    fn the_ambient_registry_reading_trims_blank_counts_as_unset_and_names_the_scheme() {
+        if crate::test_support::isolated_process(
+            "stack::tests::the_ambient_registry_reading_trims_blank_counts_as_unset_and_names_the_scheme",
+        ) {
+            return;
+        }
+        std::env::remove_var("ORBO_NPM_REGISTRY");
+        assert_eq!(npm_registry_override().unwrap(), None);
+        std::env::set_var("ORBO_NPM_REGISTRY", "   \t ");
+        assert_eq!(npm_registry_override().unwrap(), None);
+        std::env::set_var("ORBO_NPM_REGISTRY", "  https://registry.example/path  ");
+        assert_eq!(
+            npm_registry_override().unwrap(),
+            Some("https://registry.example/path".to_string()),
+            "whitespace around a real URL is not part of it"
+        );
+        std::env::set_var("ORBO_NPM_REGISTRY", "http://mirror.example:4873");
+        assert_eq!(
+            npm_registry_override().unwrap(),
+            Some("http://mirror.example:4873".to_string())
+        );
+        for value in [
+            "ftp://registry.example",
+            "registry.local:4873",
+            "shttps://no",
+        ] {
+            std::env::set_var("ORBO_NPM_REGISTRY", value);
+            let refusal = npm_registry_override().expect_err("only http(s) names a registry");
+            assert!(refusal.contains("ORBO_NPM_REGISTRY"), "{refusal}");
+            assert!(refusal.contains(value), "{refusal}");
+        }
+        std::env::remove_var("ORBO_NPM_REGISTRY");
     }
 
     fn host_command_line(name: &str) -> &'static str {

@@ -48,6 +48,16 @@ function loopback(value: string): URL {
 async function runtimeChild(endpoint: string) {
   loopback(endpoint);
   assert.equal(process.env.COPILOTKIT_TELEMETRY_URL, endpoint);
+  // The desktop shell bridges the ORBO-prefixed kill switch to the literal the pinned runtime
+  // reads. The runtime still honors its literal and DO_NOT_TRACK directly; wave 3 removes all of
+  // this with the runtime.
+  if (
+    !process.env.COPILOTKIT_TELEMETRY_DISABLED &&
+    process.env.ORBO_TELEMETRY_DISABLED
+  ) {
+    process.env.COPILOTKIT_TELEMETRY_DISABLED =
+      process.env.ORBO_TELEMETRY_DISABLED;
+  }
   const fetchHttp = globalThis.fetch;
   const sends: Promise<Response>[] = [];
   const blocked: string[] = [];
@@ -70,11 +80,8 @@ async function runtimeChild(endpoint: string) {
   globalThis.fetch = guardedFetch;
 
   const runtimePackage = fromServer("@copilotkit/runtime/package.json");
-  assert.equal(
-    runtimePackage.version,
-    "1.70.1",
-    "recheck the wire contract before changing the installed version",
-  );
+  // Pinned in server/package.json; recheck the wire contract before changing the installed version.
+  assert.equal(runtimePackage.version, "1.77.0");
   // Match production-entry.ts's preload and the server's public ESM imports. Requiring the
   // CJS runtime selects a different dependency graph and does not validate the shipped path.
   await import(Bun.resolveSync("eventsource", join(root, "server")));
@@ -125,8 +132,12 @@ async function validate(nativePath: string) {
       assert.equal(new URL(request.url).pathname, "/ingest");
       const raw = await request.text();
       assert.ok(Buffer.byteLength(raw) <= 16 * 1024);
+      // ORBO's native emitter names its own header; the pinned CopilotKit runtime keeps sending
+      // its literal X-CopilotKit-Telemetry-Id until it is removed (wave 3).
       received.push({
-        identity: request.headers.get("X-CopilotKit-Telemetry-Id"),
+        identity:
+          request.headers.get("X-Orbo-Telemetry-Id") ??
+          request.headers.get("X-CopilotKit-Telemetry-Id"),
         body: object(JSON.parse(raw)),
       });
       return Response.json({ ok: true }, { status: 202 });
@@ -227,7 +238,7 @@ async function validate(nativePath: string) {
     assert.equal(original.queue.length, 1);
     assert.equal(original.queue[0].event_name, "oss.desktop.step_viewed");
     assert.equal(nativeEnv.CPK_TELEMETRY_ID, original.install_id);
-    assert.equal(nativeEnv.COPILOTKIT_TELEMETRY_SAMPLE_RATE, "1");
+    assert.equal(nativeEnv.ORBO_TELEMETRY_SAMPLE_RATE, "1");
     const failed = await processRun(
       [nativePath, recoveredDir, offlineEndpoint, "flush"],
       {},
@@ -323,7 +334,7 @@ async function validate(nativePath: string) {
     assert.equal(runtimeRequest.body.event, "oss.runtime.instance_created");
     assert.deepEqual(runtimeRequest.body.package, {
       name: "@copilotkit/runtime",
-      version: "1.70.1",
+      version: "1.77.0",
     });
     assert.deepEqual(runtimeRequest.body.properties, {
       actionsAmount: 0,
@@ -349,7 +360,7 @@ async function validate(nativePath: string) {
       "installed runtime1.70.1 Hono boot event: same native UUID, closed metadata, full sampling",
     );
 
-    for (const variable of ["COPILOTKIT_TELEMETRY_DISABLED", "DO_NOT_TRACK"]) {
+    for (const variable of ["ORBO_TELEMETRY_DISABLED", "DO_NOT_TRACK"]) {
       for (const value of ["true", "1"]) {
         const before: number = received.length;
         const directory = join(scratch, `${variable}-${value}`);
@@ -384,6 +395,31 @@ async function validate(nativePath: string) {
       (await runtime({ COPILOTKIT_TELEMETRY_DISABLED: "1" })).requests,
       0,
     );
+    // The pre-rename native name is honored only in non-release builds (with a loud deprecation
+    // warning there; the drivers above ran a release probe over the wire contract), so a release
+    // emitter ignores it — the queue survives and delivery proceeds. The runtime still honors its
+    // own literal today.
+    for (const value of ["true", "1"]) {
+      const before: number = received.length;
+      const directory = join(scratch, `legacy-disabled-${value}`);
+      await native(directory, "record", {}, offlineEndpoint);
+      const legacyEnv = await native(directory, "quit", {
+        COPILOTKIT_TELEMETRY_DISABLED: value,
+      });
+      assert.deepEqual(legacyEnv, nativeEnv);
+      assert.equal(existsSync(join(directory, "telemetry-state.json")), true);
+      assert.equal((await state(directory)).queue.length, 0);
+      assert.equal(received.length, before + 2);
+      assert.equal(
+        (await runtime({ COPILOTKIT_TELEMETRY_DISABLED: value })).requests,
+        0,
+      );
+      assert.equal(received.length, before + 2);
+      checks.push(
+        `legacy COPILOTKIT_TELEMETRY_DISABLED=${value}: release emitter ignores it, runtime honors it`,
+      );
+    }
+    assert.equal((await runtime({ ORBO_TELEMETRY_DISABLED: "1" })).requests, 0);
     console.log(
       JSON.stringify(
         {
@@ -391,7 +427,7 @@ async function validate(nativePath: string) {
           checks,
           nativeRequests,
           runtimeRequests: 1,
-          runtimeVersion: "1.70.1",
+          runtimeVersion: "1.77.0",
           externalRequests: 0,
         },
         null,

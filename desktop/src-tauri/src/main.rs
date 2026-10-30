@@ -430,16 +430,6 @@ fn windows_blocker_instruction(blocker: win::Blocker) -> String {
     blocker.instruction().to_string()
 }
 
-/// Bring the engine up: create the machine if it is missing, start it, then prove it answers.
-///
-/// Reported step by step rather than as one result, because these take minutes and a window with
-/// nothing moving in it reads as a hang.
-#[tauri::command]
-async fn prepare_engine(app: tauri::AppHandle) -> Result<engine::EngineStatus, Problem> {
-    engine_ready(&app).await?;
-    Ok(engine::detect())
-}
-
 /// Complete all local software acquisition before either authentication screen is available.
 #[tauri::command]
 async fn prepare_installation(
@@ -1494,7 +1484,23 @@ async fn start_stack_inner<R: tauri::Runtime>(
          * store, and travel from there to the processes that need them as environment, which is where
          * a secret can live without being written down. See `vault` for what each platform gets.
          */
-        let (settings, mut secrets) = orbo_desktop_lib::vault::split(settings);
+        let (mut settings, mut secrets) = orbo_desktop_lib::vault::split(settings);
+        /*
+         * The record from the last start already says which password this deployment's volume
+         * took, so the run speaks it from here on: compose mail, the database URLs the server
+         * and migrations read, and the vault are all told by `use_legacy_postgres_password`.
+         * The probe that first wrote that record could only run with the stack up; see the
+         * `adopt_postgres_password` call below it, which is what writes it the first time.
+         */
+        if stack::postgres_volume_password(&root) == Some(stack::PostgresPassword::Orbo) {
+            stack::use_legacy_postgres_password(&mut settings, &mut secrets, ports.postgres);
+            report(
+                &app,
+                "postgres",
+                true,
+                stack::LEGACY_POSTGRES_PASSWORD_WARNING,
+            );
+        }
         /*
          * The credentials, plus any setting this answer dropped.
          *
@@ -1553,6 +1559,43 @@ async fn start_stack_inner<R: tauri::Runtime>(
         let requested_services =
             stack::up(&found, &root, installed_harness, bundled_bots, &secrets)?;
         report(&app, "services", true, "containers up");
+
+        /*
+         * THE FIRST START WITH THE STACK UP ASKS THE VOLUME ITSELF.
+         *
+         * A database takes its password only when the volume is first initialized, so a volume
+         * left by an install of an earlier version still answers the published `orbo` password
+         * whatever else changed since. The probe runs exactly where `migrate` runs from —
+         * `compose exec` into the postgres service — first with this run's minted password and
+         * then with the published one. Whichever answered is recorded beside the other `.orbo-*`
+         * records, which short-circuits every later start, never carries the password bytes, and
+         * is what `postgres_volume_password` above reads next time.
+         *
+         * A probe the engine will not run, or that postgres does not answer yet, decides
+         * nothing: nothing is recorded, nothing fails — the start Compose raised may continue —
+         * and the next start asks again. A legacy answer, though, must reach every
+         * password-carrying spot of this run BEFORE the migration asks the database for a
+         * connection, so this rewrites the run's settings, `.env` and secrets here, and says so
+         * loudly in the window: the lightest-fitting surfaced channel a nonfatal warning has.
+         */
+        if stack::adopt_postgres_password(&root, &found, &secrets)?
+            == Some(stack::PostgresPassword::Orbo)
+        {
+            stack::use_legacy_postgres_password(&mut settings, &mut secrets, ports.postgres);
+            orbo_desktop_lib::vault::write_env_after_remembering(
+                &root,
+                &root.join(".env"),
+                &settings,
+                &secrets,
+                &purge,
+            )?;
+            report(
+                &app,
+                "postgres",
+                true,
+                stack::LEGACY_POSTGRES_PASSWORD_WARNING,
+            );
+        }
 
         report_running(&app, "migrate", "applying migrations", None);
         stack::migrate(&found, &root, &secrets)?;
@@ -3763,7 +3806,6 @@ fn main() {
             detect_engine,
             windows_blocker,
             windows_blocker_instruction,
-            prepare_engine,
             prepare_installation,
             start_stack,
             reset_leftover_database,
@@ -4504,6 +4546,24 @@ mod tests {
 
     #[test]
     fn deployment_ready_preserves_the_installed_release() {
+        // Operator overrides read by release resolution must not leak in from an
+        // ambient shell; this test pins v0.1.5 and needs release lookup to stay
+        // exactly where the installed deployment recorded it.
+        for name in [
+            "ORBO_RELEASES_TOKEN",
+            "ORBO_RELEASES_TARBALL_TEMPLATE",
+            "ORBO_RELEASES_ASSETS_TEMPLATE",
+            "ORBO_IMAGE_PREFIX",
+            "ORBO_ENGINE_MIRROR",
+        ] {
+            std::env::remove_var(name);
+        }
+        // Hermetic: release lookup must stay offline, so direct it at a loopback
+        // port that answers nothing. The installed v0.1.5 record then stands.
+        std::env::set_var(
+            "ORBO_RELEASES_API_URL",
+            "http://127.0.0.1:9/repos/nareinnprs-create/ORBO/releases/latest",
+        );
         let root = temp_root("deployment-ready-pinned");
         write_installed_deployment(&root);
         deployment::record(&root, "v0.1.5").unwrap();

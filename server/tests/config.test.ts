@@ -1,5 +1,6 @@
 import { describe, expect, spyOn, test } from "bun:test";
 import { readFileSync } from "node:fs";
+import { sessionOptions } from "../src/auth";
 import { configuredAuthProviders, loadConfig } from "../src/config";
 
 // Intelligence is part of the MINIMUM contract, so it belongs in the base environment every other
@@ -523,15 +524,42 @@ describe("deployment configuration", () => {
   // One administrator and no sign-in is a thing you run where only you can reach it. NOT gated on
   // NODE_ENV: the image and the chart both set it to production for every deployment, the local
   // trial included, so it says nothing about who can reach this.
+  //
+  // The real key beside every case: the subject here is sign-in, and the example encryption key now
+  // refuses on any address beyond loopback — a refusal with its own tests above — which would
+  // otherwise throw before this question was reached.
+  const realKey = productionEnvironment.KEY_ENCRYPTION_KEY;
+
   test.each([
-    ["a public URL", { ORBO_PUBLIC_URL: "https://orbo.example.com" }],
-    ["an app URL", { ORBO_APP_URL: "https://orbo.example.com" }],
-    ["a trusted origin", { TRUSTED_ORIGINS: "https://orbo.example.com" }],
+    [
+      "a public URL",
+      {
+        KEY_ENCRYPTION_KEY: realKey,
+        ORBO_PUBLIC_URL: "https://orbo.example.com",
+      },
+    ],
+    [
+      "an app URL",
+      { KEY_ENCRYPTION_KEY: realKey, ORBO_APP_URL: "https://orbo.example.com" },
+    ],
+    [
+      "a trusted origin",
+      {
+        KEY_ENCRYPTION_KEY: realKey,
+        TRUSTED_ORIGINS: "https://orbo.example.com",
+      },
+    ],
     [
       "one published origin among loopback ones",
-      { TRUSTED_ORIGINS: "http://localhost:3010,https://orbo.example.com" },
+      {
+        KEY_ENCRYPTION_KEY: realKey,
+        TRUSTED_ORIGINS: "http://localhost:3010,https://orbo.example.com",
+      },
     ],
-    ["an address that is not a URL at all", { ORBO_PUBLIC_URL: "orbo" }],
+    [
+      "an address that is not a URL at all",
+      { KEY_ENCRYPTION_KEY: realKey, ORBO_PUBLIC_URL: "orbo" },
+    ],
   ])("refuses no sign-in combined with %s", (_label, published) => {
     expect(() =>
       loadConfig({ ...withoutSignIn, ...OPEN, ...published }),
@@ -543,25 +571,118 @@ describe("deployment configuration", () => {
    * address, an mDNS name: none of these is a stranger's to reach, and refusing them would refuse
    * this feature's own audience. They are allowed and warned about, not refused.
    */
+  // The same real key the refusals above carry: these are private addresses the single-user flag is
+  // allowed on, and the example encryption key now refuses on exactly these, so the subject has to
+  // be separated from the key question to stay about sign-in.
   test.each([
-    ["a home LAN address", { ORBO_PUBLIC_URL: "http://192.168.1.10:3001" }],
-    ["a 10/8 address", { ORBO_PUBLIC_URL: "http://10.0.0.5:3001" }],
-    ["a 172.16/12 address", { ORBO_PUBLIC_URL: "http://172.20.1.4:3001" }],
-    ["a Tailscale address", { ORBO_PUBLIC_URL: "http://100.101.102.103" }],
-    ["a unique-local IPv6 address", { ORBO_PUBLIC_URL: "http://[fd00::1]" }],
-    ["an mDNS name", { TRUSTED_ORIGINS: "http://orbo.local:3010" }],
-    ["a single-label LAN name", { TRUSTED_ORIGINS: "http://nas:3010" }],
+    [
+      "a home LAN address",
+      {
+        KEY_ENCRYPTION_KEY: realKey,
+        ORBO_PUBLIC_URL: "http://192.168.1.10:3001",
+      },
+    ],
+    [
+      "a 10/8 address",
+      { KEY_ENCRYPTION_KEY: realKey, ORBO_PUBLIC_URL: "http://10.0.0.5:3001" },
+    ],
+    [
+      "a 172.16/12 address",
+      {
+        KEY_ENCRYPTION_KEY: realKey,
+        ORBO_PUBLIC_URL: "http://172.20.1.4:3001",
+      },
+    ],
+    [
+      "a Tailscale address",
+      {
+        KEY_ENCRYPTION_KEY: realKey,
+        ORBO_PUBLIC_URL: "http://100.101.102.103",
+      },
+    ],
+    [
+      "a unique-local IPv6 address",
+      { KEY_ENCRYPTION_KEY: realKey, ORBO_PUBLIC_URL: "http://[fd00::1]" },
+    ],
+    [
+      "an mDNS name",
+      {
+        KEY_ENCRYPTION_KEY: realKey,
+        TRUSTED_ORIGINS: "http://orbo.local:3010",
+      },
+    ],
+    [
+      "a single-label LAN name",
+      { KEY_ENCRYPTION_KEY: realKey, TRUSTED_ORIGINS: "http://nas:3010" },
+    ],
   ])("still runs with no sign-in on %s", (_label, reachable) => {
     expect(() =>
       loadConfig({ ...withoutSignIn, ...OPEN, ...reachable }),
     ).not.toThrow();
   });
 
+  test("still runs with no sign-in on an all-interfaces bind, and says so", () => {
+    const consoleWarn = spyOn(console, "warn").mockImplementation(() => {});
+
+    try {
+      // The real key, because the example-key gate refuses this same bind first — the more
+      // damaging of the two, and the one whose refusal a person fixes before reading anything else.
+      const config = loadConfig({
+        ...withoutSignIn,
+        ...OPEN,
+        KEY_ENCRYPTION_KEY: realKey,
+        ORBO_SERVER_HOST: "0.0.0.0",
+      });
+
+      expect(config.singleUser).toBe(true);
+
+      const warning = consoleWarn.mock.calls
+        .map(([first]) => String(first))
+        .find(
+          (line) =>
+            line.includes("ORBO_SERVER_HOST=0.0.0.0") &&
+            line.includes("no sign-in"),
+        );
+
+      expect(warning).toBeDefined();
+      expect(warning).toContain(
+        "Anybody on that network is that administrator",
+      );
+    } finally {
+      consoleWarn.mockRestore();
+    }
+  });
+
+  test("refuses the example key before the single-user warn, on the same bind", () => {
+    expect(() =>
+      loadConfig({
+        ...withoutSignIn,
+        ...OPEN,
+        ORBO_SERVER_HOST: "0.0.0.0",
+      }),
+    ).toThrow("KEY_ENCRYPTION_KEY");
+  });
+
+  test("a loopback bind is not beyond this machine, whichever spelling names it", () => {
+    for (const host of ["localhost", "::1", "[::1]", "127.0.0.1"]) {
+      expect(
+        loadConfig({ ...withoutSignIn, ...OPEN, ORBO_SERVER_HOST: host })
+          .singleUser,
+      ).toBe(true);
+    }
+  });
+
   // 172.32 is outside 172.16/12, and 100.128 is outside 100.64/10. The near miss is the case a
   // hand-written range check gets wrong, so both are pinned as refused.
   test.each([
-    ["just outside 172.16/12", { ORBO_PUBLIC_URL: "http://172.32.0.1" }],
-    ["just outside 100.64/10", { ORBO_PUBLIC_URL: "http://100.128.0.1" }],
+    [
+      "just outside 172.16/12",
+      { KEY_ENCRYPTION_KEY: realKey, ORBO_PUBLIC_URL: "http://172.32.0.1" },
+    ],
+    [
+      "just outside 100.64/10",
+      { KEY_ENCRYPTION_KEY: realKey, ORBO_PUBLIC_URL: "http://100.128.0.1" },
+    ],
   ])("refuses no sign-in on %s", (_label, published) => {
     expect(() =>
       loadConfig({ ...withoutSignIn, ...OPEN, ...published }),
@@ -573,11 +694,17 @@ describe("deployment configuration", () => {
   test.each([
     [
       "a public name starting 127.",
-      { ORBO_PUBLIC_URL: "https://127.example.com" },
+      {
+        KEY_ENCRYPTION_KEY: realKey,
+        ORBO_PUBLIC_URL: "https://127.example.com",
+      },
     ],
     [
       "a wildcard DNS name that starts 127.",
-      { TRUSTED_ORIGINS: "https://127.0.0.1.nip.io" },
+      {
+        KEY_ENCRYPTION_KEY: realKey,
+        TRUSTED_ORIGINS: "https://127.0.0.1.nip.io",
+      },
     ],
   ])("refuses no sign-in on %s", (_label, published) => {
     expect(() =>
@@ -591,18 +718,27 @@ describe("deployment configuration", () => {
     { TRUSTED_ORIGINS: "http://localhost:3010" },
     { TRUSTED_ORIGINS: "http://127.0.0.1:3010,http://[::1]:3010" },
     { ORBO_PUBLIC_URL: "http://127.0.0.1:3001" },
-    // The chart and the image both set this for every install; it must decide nothing. A real key
-    // comes with it because the gate beside this one refuses the example key under production, and
-    // this case is about sign-in rather than about that.
-    {
-      NODE_ENV: "production",
-      KEY_ENCRYPTION_KEY: productionEnvironment.KEY_ENCRYPTION_KEY,
-      TRUSTED_ORIGINS: "http://localhost:3010",
-    },
   ])("still runs with no sign-in on loopback: %j", (loopback) => {
     expect(() =>
       loadConfig({ ...withoutSignIn, ...OPEN, ...loopback }),
     ).not.toThrow();
+  });
+
+  // The image sets NODE_ENV=production for every container, which used to mean this mode refused
+  // only what the address gate beside it caught. `singleUserEnabled` now refuses the ask outright
+  // under NODE_ENV=production (dev-actor.ts, the C20 gate): the example-key and address gates still
+  // apply first or beside this one, so a real key and a loopback-only address are given here rather
+  // than the refusal being about them.
+  test("refuses to honour the flag in production under NODE_ENV=production", () => {
+    expect(() =>
+      loadConfig({
+        ...withoutSignIn,
+        ...OPEN,
+        NODE_ENV: "production",
+        KEY_ENCRYPTION_KEY: productionEnvironment.KEY_ENCRYPTION_KEY,
+        TRUSTED_ORIGINS: "http://localhost:3010",
+      }),
+    ).toThrow(/means nothing in production/);
   });
 
   test("is off, and lists nothing, when no provider is configured", () => {
@@ -1112,4 +1248,384 @@ test("a Composio key is read when set and absent when not", () => {
     loadConfig({ ...baseEnvironment, COMPOSIO_API_KEY: "  ak_example  " })
       .composioApiKey,
   ).toBe("ak_example");
+});
+
+/**
+ * The interface the server's socket binds to.
+ *
+ * The old behaviour was Bun's silent `0.0.0.0` beside a log claiming `127.0.0.1`, so the default is
+ * pinned as loopback and the whole-interface spellings are pinned as EXPLICIT choices.
+ */
+describe("the interface the server binds to", () => {
+  test("binds loopback by default, as the boot log always claimed", () => {
+    expect(loadConfig(baseEnvironment).serverHost).toBe("127.0.0.1");
+  });
+
+  // An IP, IPv6 bare or bracketed (normalised for the bind), or a hostname. Lower-cased, because
+  // every comparison this ends up in is through a lower-cased spelling.
+  //
+  // The real key beside every case, as in the reachability tests: a non-loopback bind answers
+  // beyond this machine, and the keyEncryptionKey gate refuses the example key on exactly that.
+  // The subject here is the socket, so the key question is answered before it is asked.
+  test.each([
+    ["0.0.0.0", "0.0.0.0"],
+    ["::", "::"],
+    ["::1", "::1"],
+    ["[::1]", "::1"],
+    ["[FE80::1]", "fe80::1"],
+    ["localhost", "localhost"],
+    ["Work.Internal", "work.internal"],
+  ])("binds ORBO_SERVER_HOST=%p, as %p", (raw, expected) => {
+    expect(
+      loadConfig({
+        ...baseEnvironment,
+        KEY_ENCRYPTION_KEY: productionEnvironment.KEY_ENCRYPTION_KEY,
+        ORBO_SERVER_HOST: raw,
+      }).serverHost,
+    ).toBe(expected);
+  });
+
+  // A bind is not a URL and not a pattern: a scheme is somebody pointing at the wrong config line,
+  // and `0.0.0.0:3001` — which LOOKS like an address with a port — is not an address at all.
+  test.each([
+    "http://0.0.0.0:3001",
+    "0.0.0.0:3001",
+    "*.internal",
+    "0.0.0. 1",
+    "not a host",
+  ])("refuses to start on ORBO_SERVER_HOST=%p", (raw) => {
+    expect(() =>
+      loadConfig({ ...baseEnvironment, ORBO_SERVER_HOST: raw }),
+    ).toThrow("ORBO_SERVER_HOST must be a host this process can bind");
+  });
+
+  // Same emptiness reading as PORT: compose files declare variables and leave them empty, and an
+  // empty one is absent, which is the default.
+  test("reads an empty ORBO_SERVER_HOST as the absent one", () => {
+    expect(
+      loadConfig({ ...baseEnvironment, ORBO_SERVER_HOST: "" }).serverHost,
+    ).toBe("127.0.0.1");
+    expect(
+      loadConfig({ ...baseEnvironment, ORBO_SERVER_HOST: "  " }).serverHost,
+    ).toBe("127.0.0.1");
+  });
+});
+
+/**
+ * The example encryption key, refused on REACHABILITY rather than on `NODE_ENV` alone.
+ *
+ * The production cases above stay exactly as they were; these pin the second half, which is what a
+ * deployment running anywhere but regression suites actually meets.
+ */
+describe("the example key on a deployment beyond loopback", () => {
+  test("refuses the example key when the deployment answers on a private address", () => {
+    const attempt = () =>
+      loadConfig({
+        ...baseEnvironment,
+        ORBO_PUBLIC_URL: "http://10.0.0.5:3001",
+      });
+
+    expect(attempt).toThrow(
+      "KEY_ENCRYPTION_KEY is the example key from .env.example, which is public",
+    );
+    expect(attempt).toThrow("answers beyond this machine");
+    expect(attempt).toThrow("openssl rand -base64 32");
+  });
+
+  test("refuses the example key when the socket binds beyond loopback", () => {
+    const attempt = () =>
+      loadConfig({ ...baseEnvironment, ORBO_SERVER_HOST: "0.0.0.0" });
+
+    expect(attempt).toThrow("answers beyond this machine");
+    expect(attempt).toThrow("ORBO_SERVER_HOST=0.0.0.0");
+    expect(attempt).toThrow("openssl rand -base64 32");
+  });
+
+  // A specific interface and a hostname bind beyond this machine too, and the message quotes the
+  // line as it was written rather than the bind's normalised form.
+  test.each(["192.168.1.10", "Work.Internal", "::"])(
+    "refuses the example key on ORBO_SERVER_HOST=%p",
+    (host) => {
+      expect(() =>
+        loadConfig({ ...baseEnvironment, ORBO_SERVER_HOST: host }),
+      ).toThrow(/answers beyond this machine/);
+    },
+  );
+
+  // The warn the refusal replaced is still the whole story on loopback: the placeholder key exists
+  // for exactly these laptops, and refusing them would refuse the local trial.
+  test("warns on every loopback spelling of the bind", () => {
+    const consoleWarn = spyOn(console, "warn").mockImplementation(() => {});
+
+    try {
+      for (const host of ["localhost", "::1", "[::1]", "127.0.0.1"]) {
+        expect(() =>
+          loadConfig({ ...baseEnvironment, ORBO_SERVER_HOST: host }),
+        ).not.toThrow();
+      }
+
+      expect(
+        consoleWarn.mock.calls
+          .map(([first]) => String(first))
+          .some((line) => line.includes("Generate a real one")),
+      ).toBe(true);
+    } finally {
+      consoleWarn.mockRestore();
+    }
+  });
+
+  test("a real key runs on the default bind and on an all-interfaces one", () => {
+    expect(
+      loadConfig({
+        ...baseEnvironment,
+        KEY_ENCRYPTION_KEY: productionEnvironment.KEY_ENCRYPTION_KEY,
+        ORBO_SERVER_HOST: "::",
+      }).serverHost,
+    ).toBe("::");
+  });
+
+  test("refuses the example key when a trusted origin is public, under any NODE_ENV", () => {
+    expect(() =>
+      loadConfig({
+        ...baseEnvironment,
+        NODE_ENV: "development",
+        TRUSTED_ORIGINS: "https://orbo.example.com",
+      }),
+    ).toThrow("answers beyond this machine");
+  });
+
+  // The refusal is one gate among several, and the encryption key must be the one that catches this
+  // first: it is the more damaging of the two refusals to slip.
+  test("refuses the example key before the single-user question, on the same address", () => {
+    expect(() =>
+      loadConfig({
+        ...withoutSignIn,
+        ORBO_SINGLE_USER: "true",
+        ORBO_PUBLIC_URL: "http://10.0.0.5:3001",
+      }),
+    ).toThrow("KEY_ENCRYPTION_KEY");
+  });
+
+  // The deployment the example key exists for: genuinely loopback-only, warned and running.
+  test("warns and keeps running when every configured address is loopback", () => {
+    const consoleWarn = spyOn(console, "warn").mockImplementation(() => {});
+
+    try {
+      expect(() =>
+        loadConfig({
+          ...baseEnvironment,
+          ORBO_PUBLIC_URL: "http://127.0.0.1:3001",
+        }),
+      ).not.toThrow();
+
+      expect(
+        consoleWarn.mock.calls
+          .map(([first]) => String(first))
+          .some((line) => line.includes("Generate a real one")),
+      ).toBe(true);
+    } finally {
+      consoleWarn.mockRestore();
+    }
+  });
+
+  test("a real key runs everywhere, loopback and beyond alike", () => {
+    expect(() =>
+      loadConfig({
+        ...baseEnvironment,
+        KEY_ENCRYPTION_KEY: productionEnvironment.KEY_ENCRYPTION_KEY,
+        ORBO_PUBLIC_URL: "http://192.168.1.10:3001",
+      }),
+    ).not.toThrow();
+  });
+});
+
+/**
+ * How long a signed-in session lasts.
+ *
+ * The refusal cases are the usual boundary bar; the wiring case exists because the unit the
+ * deployment writes (days) is not the unit the library takes (seconds), and a translation like that
+ * only deserves one place, which is what `sessionOptions` is.
+ */
+describe("how long a signed-in session lasts", () => {
+  test("seven days, on the library's own renewal cadence, when nothing is set", () => {
+    expect(loadConfig(baseEnvironment).session).toEqual({ expiresInDays: 7 });
+  });
+
+  test("reads days, and an optional renewal cadence in seconds", () => {
+    expect(
+      loadConfig({
+        ...baseEnvironment,
+        ORBO_SESSION_TTL_DAYS: "30",
+        ORBO_SESSION_UPDATE_AGE_SECONDS: "43200",
+      }).session,
+    ).toEqual({ expiresInDays: 30, updateAgeSeconds: 43_200 });
+  });
+
+  // 0 renews the session on every use, which the library documents as legitimate — so the floor is
+  // zero, not one, and a deployment asking for it gets it.
+  test("takes 0 as renewing on every use", () => {
+    expect(
+      loadConfig({ ...baseEnvironment, ORBO_SESSION_UPDATE_AGE_SECONDS: "0" })
+        .session,
+    ).toEqual({ expiresInDays: 7, updateAgeSeconds: 0 });
+  });
+
+  test("refuses a TTL that is not a whole number of days, at least 1", () => {
+    for (const raw of ["0", "-1", "1.5", "two weeks"]) {
+      expect(() =>
+        loadConfig({ ...baseEnvironment, ORBO_SESSION_TTL_DAYS: raw }),
+      ).toThrow("ORBO_SESSION_TTL_DAYS must be a whole number of days");
+    }
+  });
+
+  test("refuses a renewal cadence that is not a whole number of seconds", () => {
+    for (const raw of ["-1", "1.5", "hourly"]) {
+      expect(() =>
+        loadConfig({
+          ...baseEnvironment,
+          ORBO_SESSION_UPDATE_AGE_SECONDS: raw,
+        }),
+      ).toThrow(
+        "ORBO_SESSION_UPDATE_AGE_SECONDS must be a whole number of seconds",
+      );
+    }
+  });
+
+  // Same emptiness reading as every other setting here.
+  test("reads an empty value as absent, for either key", () => {
+    expect(
+      loadConfig({
+        ...baseEnvironment,
+        ORBO_SESSION_TTL_DAYS: "",
+        ORBO_SESSION_UPDATE_AGE_SECONDS: "",
+      }).session,
+    ).toEqual({ expiresInDays: 7 });
+  });
+
+  test("reaches better-auth as the seconds its own options ask for", () => {
+    expect(
+      sessionOptions({
+        session: { expiresInDays: 30, updateAgeSeconds: 90 },
+      } as never),
+    ).toEqual({ expiresIn: 30 * 24 * 60 * 60, updateAge: 90 });
+
+    // No updateAge named, none given: the library's own cadence stays the library's.
+    expect(sessionOptions({ session: { expiresInDays: 7 } } as never)).toEqual({
+      expiresIn: 7 * 24 * 60 * 60,
+    });
+  });
+});
+
+/**
+ * Where sign-in assumes the app is served from, when `TRUSTED_ORIGINS` says nothing.
+ *
+ * The 3010 trio is a guess about a deployment this file cannot see, so the guess is pinned and the
+ * loud warning naming it is pinned with it. `APP_PORT` is the one variable the app already answers
+ * to, so a deployment that moved the app in the one place it can say so gets origins that track it.
+ */
+describe("assumed trusted origins", () => {
+  test("the 3010 trio is honoured and stated out loud when nothing is configured", () => {
+    const consoleWarn = spyOn(console, "warn").mockImplementation(() => {});
+
+    try {
+      expect(loadConfig(baseEnvironment).auth?.trustedOrigins).toEqual([
+        "http://127.0.0.1:3010",
+        "http://[::1]:3010",
+        "http://localhost:3010",
+      ]);
+
+      const warning = consoleWarn.mock.calls
+        .map(([first]) => String(first))
+        .find((line) => line.includes("TRUSTED_ORIGINS is unset"));
+
+      expect(warning).toBeDefined();
+      for (const origin of [
+        "http://127.0.0.1:3010",
+        "http://[::1]:3010",
+        "http://localhost:3010",
+      ]) {
+        expect(warning).toContain(origin);
+      }
+    } finally {
+      consoleWarn.mockRestore();
+    }
+  });
+
+  test("tracks APP_PORT when the app named a port there, without an assumption warning", () => {
+    const consoleWarn = spyOn(console, "warn").mockImplementation(() => {});
+
+    try {
+      expect(
+        loadConfig({ ...baseEnvironment, APP_PORT: "4200" }).auth
+          ?.trustedOrigins,
+      ).toEqual([
+        "http://127.0.0.1:4200",
+        "http://[::1]:4200",
+        "http://localhost:4200",
+      ]);
+
+      expect(
+        consoleWarn.mock.calls
+          .map(([first]) => String(first))
+          .some((line) => line.includes("TRUSTED_ORIGINS is unset")),
+      ).toBe(false);
+    } finally {
+      consoleWarn.mockRestore();
+    }
+  });
+
+  // Named as the default it is, rather than treated as an assumption needing a warn: the deployment
+  // said 3010, so nothing is being guessed.
+  test("stays quiet when APP_PORT sets the default port explicitly", () => {
+    const consoleWarn = spyOn(console, "warn").mockImplementation(() => {});
+
+    try {
+      expect(
+        loadConfig({ ...baseEnvironment, APP_PORT: "3010" }).auth
+          ?.trustedOrigins,
+      ).toEqual([
+        "http://127.0.0.1:3010",
+        "http://[::1]:3010",
+        "http://localhost:3010",
+      ]);
+
+      expect(
+        consoleWarn.mock.calls
+          .map(([first]) => String(first))
+          .some((line) => line.includes("TRUSTED_ORIGINS is unset")),
+      ).toBe(false);
+    } finally {
+      consoleWarn.mockRestore();
+    }
+  });
+
+  test("APP_PORT is validated like any other port", () => {
+    expect(() => loadConfig({ ...baseEnvironment, APP_PORT: "30o1" })).toThrow(
+      "APP_PORT must be a whole number between 1 and 65535",
+    );
+  });
+
+  test("a set TRUSTED_ORIGINS is honoured as it is, and nothing is assumed", () => {
+    const consoleWarn = spyOn(console, "warn").mockImplementation(() => {});
+
+    try {
+      // The real key, for the same reason the single-user cases above carry one: this origin is
+      // public, and the example key refuses on exactly that rather than reaching this question.
+      expect(
+        loadConfig({
+          ...baseEnvironment,
+          KEY_ENCRYPTION_KEY: productionEnvironment.KEY_ENCRYPTION_KEY,
+          TRUSTED_ORIGINS: "https://app.orbo.example",
+        }).auth?.trustedOrigins,
+      ).toEqual(["https://app.orbo.example"]);
+
+      expect(
+        consoleWarn.mock.calls
+          .map(([first]) => String(first))
+          .some((line) => line.includes("TRUSTED_ORIGINS is unset")),
+      ).toBe(false);
+    } finally {
+      consoleWarn.mockRestore();
+    }
+  });
 });

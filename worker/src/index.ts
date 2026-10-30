@@ -20,9 +20,9 @@
 import { createDatabase } from "../../server/src/db/client";
 import { createRoutineStore } from "../../server/src/routines/store";
 import {
-  ROUTINE_FIRE_KIND,
   dispatchClaimedRoutines,
   offerDueRoutines,
+  ROUTINE_FIRE_KIND,
   type RoutineSweepOptions,
 } from "../../server/src/routines/sweep";
 import { createWorkQueue } from "../../server/src/work/queue";
@@ -32,7 +32,7 @@ import { workerStatus } from "./status";
 console.info(`ORBO worker status: ${workerStatus().status}`);
 
 /*
- * The worker's three settings, parsed and validated in one place (`./env`).
+ * The worker's settings, parsed and validated in one place (`./env`).
  *
  * Refused up front, for the reason `fire-routines.ts` refuses up front: a loop that
  * started anyway would open a run row for every routine it offers itself and collect
@@ -43,17 +43,61 @@ console.info(`ORBO worker status: ${workerStatus().status}`);
  * Read from the environment rather than from `DeploymentConfig`/`loadConfig`, and
  * deliberately so. `loadConfig` demands the whole server deployment's configuration —
  * Intelligence credentials, key encryption, auth — because it answers "what can this
- * deployment do". This process is handed exactly three settings by `scripts/start.sh`
+ * deployment do". This process is handed a handful of settings by `scripts/start.sh`
  * (`DATABASE_URL`, `SERVER_INTERNAL_URL`, `WORKER_SHARED_SECRET`); calling
  * `loadConfig(process.env)` here would refuse to start over settings this loop has no
  * opinion about and does not need.
  */
-const { workerSharedSecret, serverInternalUrl, databaseUrl, owner } =
-  loadWorkerEnv();
+const {
+  workerSharedSecret,
+  serverInternalUrl,
+  databaseUrl,
+  owner,
+  livenessPort,
+} = loadWorkerEnv();
 
 const database = createDatabase(databaseUrl);
 const queue = createWorkQueue(database);
 const routineStore = createRoutineStore(database);
+
+/*
+ * Liveness, for whoever runs this process.
+ *
+ * The loop below has no restart policy around it — it is somebody's laptop or a bare
+ * container — and a worker that stopped ticking looks from the outside exactly like one
+ * that is working through a long tick. `/live` is the distinction: the process answers
+ * while it can answer, and a probe that keeps timing out is the signal to restart it.
+ * Deliberately only liveness — it names no port the server would call, carries no secret,
+ * and says nothing but that the process is up.
+ *
+ * A bind that fails is a warning, not a crash: on a host where the port is taken, the
+ * routines still matter more than the probe does, and dying over the probe would be the
+ * one way this file turns a port collision into a routines outage.
+ */
+if (livenessPort > 0) {
+  try {
+    Bun.serve({
+      port: livenessPort,
+      fetch: (request) =>
+        new URL(request.url).pathname === "/live"
+          ? new Response("ok\n", {
+              headers: { "content-type": "text/plain; charset=utf-8" },
+            })
+          : new Response("not found\n", { status: 404 }),
+    });
+    console.info(
+      JSON.stringify({ type: "worker-liveness", port: livenessPort }),
+    );
+  } catch (error) {
+    console.warn(
+      JSON.stringify({
+        type: "worker-liveness-unavailable",
+        port: livenessPort,
+        reason: error instanceof Error ? error.message : String(error),
+      }),
+    );
+  }
+}
 
 /**
  * Hand one opened run to the server, which owns everything about running it.
@@ -101,11 +145,42 @@ const TICK_MS = 30_000;
 const PURGE_EVERY_N_TICKS = 120;
 const PURGE_OLDER_THAN_MS = 24 * 60 * 60 * 1000;
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+/*
+ * Draining, the worker's side of SIGINT/SIGTERM.
+ *
+ * The same shape as the server's shutdown: the signal stops the NEXT tick from being
+ * scheduled and lets the one in flight finish, because a tick killed mid-dispatch leaves
+ * a run row opened with no hand-off, which is exactly the half-done work the loop exists
+ * to avoid. The sleeping half of the wait is what the signal interrupts — a worker asked
+ * to stop between ticks should not sit out the full 30 seconds first — so the sleep is
+ * made wakeable and the signal wakes it.
+ */
+let draining = false;
+let wakeSleep: (() => void) | undefined;
+let tick = 0;
+
+function sleepUntilNextTick(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      wakeSleep = undefined;
+      resolve();
+    }, ms);
+    wakeSleep = () => {
+      clearTimeout(timer);
+      wakeSleep = undefined;
+      resolve();
+    };
+  });
 }
 
-let tick = 0;
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  process.on(signal, () => {
+    if (draining) return;
+    draining = true;
+    console.info(JSON.stringify({ type: "worker-drain", signal, tick }));
+    wakeSleep?.();
+  });
+}
 
 async function runOneTick(): Promise<void> {
   tick += 1;
@@ -161,12 +236,17 @@ async function runOneTick(): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  // Loop for ever, one tick every TICK_MS, awaiting each tick fully before scheduling the next so two
-  // ticks are never in flight at once.
+  // Loop until drained, one tick every TICK_MS, awaiting each tick fully before scheduling the next
+  // so two ticks are never in flight at once. A signal breaks the loop AFTER the current tick — see
+  // the drain note above — so the last thing this process does is a completed piece of work.
   for (;;) {
     await runOneTick();
-    await sleep(TICK_MS);
+    if (draining) break;
+    await sleepUntilNextTick(TICK_MS);
+    if (draining) break;
   }
+  await database.$client.close().catch(() => undefined);
+  console.info(JSON.stringify({ type: "worker-stopped", tick }));
 }
 
 void main();

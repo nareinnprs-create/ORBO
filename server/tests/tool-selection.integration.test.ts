@@ -500,7 +500,12 @@ describe("a built-in Bot", () => {
         }
       )?.messages ?? []
     )
-      .filter((message) => message.role === "system")
+      // The prompt role is `system` or `developer` — the same instructions either way. Which one
+      // depends on the model adapter's Chat Completions dialect, not on anything this run decided,
+      // and the guidance assertion below is about the content that reached the model.
+      .filter(
+        (message) => message.role === "system" || message.role === "developer",
+      )
       .map((message) => String(message.content))
       .join("\n");
     /*

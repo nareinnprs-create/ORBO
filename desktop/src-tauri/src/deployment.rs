@@ -16,6 +16,30 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+// The operator map: seven keys move this install off a public github.com (see
+// docs/planning/40-owner-roadmap.md, wave 2). Six are read here and in `install.rs` /
+// `deployment_release.rs`; the seventh, ORBO_NPM_REGISTRY (the bun install registry for an
+// offline mirror), is owned elsewhere — stack.rs reads it and documents it.
+// Read at fetch time with std::env::var;
+// every value is trimmed and an empty value counts as unset.
+// - ORBO_RELEASES_API_URL
+//   default https://api.github.com/repos/nareinnprs-create/ORBO/releases/latest
+// - ORBO_RELEASES_TARBALL_TEMPLATE
+//   default https://codeload.github.com/nareinnprs-create/ORBO/tar.gz/refs/tags/{version}
+// - ORBO_RELEASES_ASSETS_TEMPLATE
+//   default https://github.com/nareinnprs-create/ORBO/releases/download/{version}/{asset}
+// - ORBO_RELEASES_TOKEN
+//   default unset: the published release is public, so nothing is authenticated
+// - ORBO_ENGINE_MIRROR
+//   default unset: the engine installers (install.rs) come from github.com
+// - ORBO_IMAGE_PREFIX
+//   default unset: images are pulled from ghcr.io/nareinnprs-create/orbo as released
+// - ORBO_NPM_REGISTRY
+//   related but owned elsewhere: stack.rs reads it (bun install registry); see that file
+// A value that cannot be used (no scheme, no {version} placeholder) refuses with an error
+// naming the key, so a mistyped override fails loudly while it is being set up rather than
+// quietly downloading from the wrong place.
+
 /// Written beside the deployment so the app can tell what it already put there.
 const STAMP: &str = ".orbo-deployment";
 
@@ -41,13 +65,126 @@ pub struct Installed {
 /// `codeload.github.com` rather than `github.com/.../archive/...`: the archive endpoint answers
 /// 404 to any request carrying an `Authorization` header, while codeload serves the same tarball
 /// with one (needed for a private repository) and without one (a public repository).
-pub fn tarball_url(version: &str) -> String {
-    format!("https://codeload.github.com/nareinnprs-create/ORBO/tar.gz/refs/tags/{version}")
+pub fn tarball_url(version: &str) -> Result<String, String> {
+    tarball_url_with(
+        version,
+        env_override("ORBO_RELEASES_TARBALL_TEMPLATE").as_deref(),
+    )
+}
+
+/// [`tarball_url`] with the operator override (`ORBO_RELEASES_TARBALL_TEMPLATE`) passed in, so the
+/// template substitution is testable without touching the process environment.
+fn tarball_url_with(version: &str, template: Option<&str>) -> Result<String, String> {
+    match template {
+        None => Ok(format!(
+            "https://codeload.github.com/nareinnprs-create/ORBO/tar.gz/refs/tags/{version}"
+        )),
+        Some(template) => {
+            let tag = url_encode(version);
+            render_endpoint(
+                "ORBO_RELEASES_TARBALL_TEMPLATE",
+                template,
+                &[("{version}", &tag)],
+            )
+        }
+    }
 }
 
 /// Where the release publishes its image manifest.
-pub fn images_url(version: &str) -> String {
-    format!("https://github.com/nareinnprs-create/ORBO/releases/download/{version}/{IMAGES}")
+pub fn images_url(version: &str) -> Result<String, String> {
+    images_url_with(
+        version,
+        IMAGES,
+        env_override("ORBO_RELEASES_ASSETS_TEMPLATE").as_deref(),
+    )
+}
+
+/// [`images_url`] with the operator override (`ORBO_RELEASES_ASSETS_TEMPLATE`) passed in.
+fn images_url_with(version: &str, asset: &str, template: Option<&str>) -> Result<String, String> {
+    match template {
+        None => Ok(format!(
+            "https://github.com/nareinnprs-create/ORBO/releases/download/{version}/{asset}"
+        )),
+        Some(template) => {
+            let tag = url_encode(version);
+            let asset = url_encode(asset);
+            render_endpoint(
+                "ORBO_RELEASES_ASSETS_TEMPLATE",
+                template,
+                &[("{version}", &tag), ("{asset}", &asset)],
+            )
+        }
+    }
+}
+
+/// One release endpoint URL from an operator template: every placeholder replaced, and the
+/// result checked to be a URL the fetcher can actually reach.
+///
+/// A template missing a placeholder cannot name this release's URL, and a template that does
+/// not render into an absolute URL cannot be fetched; both refuse naming the key rather than
+/// falling back to the public endpoint, which an internal mirror would not have.
+/// Shared with `deployment_release.rs`, which resolves the "releases/latest" endpoint the
+/// same way.
+pub(crate) fn render_endpoint(
+    key: &str,
+    template: &str,
+    substitutions: &[(&str, &str)],
+) -> Result<String, String> {
+    for (placeholder, _) in substitutions {
+        if !template.contains(placeholder) {
+            return Err(format!(
+                "{key} is set, but it has no {placeholder} placeholder, so this release URL \
+                 cannot be rendered"
+            ));
+        }
+    }
+    let mut rendered = template.to_string();
+    for (placeholder, value) in substitutions {
+        rendered = rendered.replace(placeholder, value);
+    }
+    let parsed = reqwest::Url::parse(&rendered)
+        .map_err(|error| format!("{key} is set, but {rendered} is not a usable URL: {error}"))?;
+    match parsed.host_str() {
+        Some(_host) if !_host.is_empty() => Ok(rendered),
+        _ => Err(format!(
+            "{key} is set, but {rendered} has no host to fetch it from"
+        )),
+    }
+}
+
+/// Percent-encode outside the unreserved set.
+///
+/// What is substituted is a release tag (`vX.Y.Z`) and an asset name, neither of which
+/// carries a character the set misses, but encoding is harmless there and keeps a path
+/// segment a path segment if a tag ever does carry one.
+fn url_encode(value: &str) -> String {
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
+    let mut encoded = String::with_capacity(value.len());
+    for byte in value.as_bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                encoded.push(*byte as char)
+            }
+            _ => {
+                encoded.push('%');
+                encoded.push(HEX[(byte >> 4) as usize] as char);
+                encoded.push(HEX[(byte & 0x0f) as usize] as char);
+            }
+        }
+    }
+    encoded
+}
+
+/// An operator-set value: trimmed, with an empty value counted as unset.
+pub(crate) fn env_override(name: &str) -> Option<String> {
+    override_value(std::env::var(name).ok())
+}
+
+/// [`env_override`] with the raw value passed in, so the trim is testable without touching
+/// the process environment.
+fn override_value(raw: Option<String>) -> Option<String> {
+    raw.map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
 }
 
 pub fn images_path(root: &Path) -> PathBuf {
@@ -104,6 +241,20 @@ pub fn image_variables(root: &Path) -> Result<Vec<(String, String)>, String> {
 /// actionable one: the alternative is somebody debugging registry permissions for an image that
 /// was never pushed.
 pub fn reference(root: &Path, published: &str) -> Result<String, String> {
+    reference_with(
+        root,
+        published,
+        env_override("ORBO_IMAGE_PREFIX").as_deref(),
+    )
+}
+
+/// [`reference`] with the operator's `ORBO_IMAGE_PREFIX` passed in, so the rewrite is testable
+/// without touching the process environment.
+fn reference_with(
+    root: &Path,
+    published: &str,
+    image_prefix: Option<&str>,
+) -> Result<String, String> {
     let text = std::fs::read_to_string(images_path(root))
         .map_err(|error| format!("could not read {}: {error}", images_path(root).display()))?;
     let manifest: Images = serde_json::from_str(&text)
@@ -111,7 +262,7 @@ pub fn reference(root: &Path, published: &str) -> Result<String, String> {
     manifest
         .images
         .get(published)
-        .map(|image| image.reference.clone())
+        .map(|image| image_reference(&image.reference, image_prefix))
         .ok_or_else(|| format!("ORBO {} does not include {published}.", manifest.version))
 }
 
@@ -121,6 +272,15 @@ pub fn reference(root: &Path, published: &str) -> Result<String, String> {
 /// runs four published images and one local build is neither the released version nor a build, and
 /// the difference would only show up as behaviour nobody can reproduce.
 pub fn pin(manifest: &Images) -> Result<Vec<(String, String)>, String> {
+    pin_with(manifest, env_override("ORBO_IMAGE_PREFIX").as_deref())
+}
+
+/// [`pin`] with the operator's `ORBO_IMAGE_PREFIX` passed in, so the rewrite is testable
+/// without touching the process environment.
+pub(crate) fn pin_with(
+    manifest: &Images,
+    image_prefix: Option<&str>,
+) -> Result<Vec<(String, String)>, String> {
     let mut pinned = Vec::new();
     for (published, variable) in IMAGE_VARIABLES {
         let image = manifest.images.get(published).ok_or_else(|| {
@@ -129,9 +289,33 @@ pub fn pin(manifest: &Images) -> Result<Vec<(String, String)>, String> {
                 manifest.version
             )
         })?;
-        pinned.push((variable.to_string(), image.reference.clone()));
+        pinned.push((
+            variable.to_string(),
+            image_reference(&image.reference, image_prefix),
+        ));
     }
     Ok(pinned)
+}
+
+/// The reference prefix this release's images are published under, before any override.
+const IMAGE_REFERENCE_PREFIX: &str = "ghcr.io/nareinnprs-create/orbo";
+
+/// One image reference as the stack should pull it.
+///
+/// An `ORBO_IMAGE_PREFIX` that is set replaces the published `ghcr.io/nareinnprs-create/orbo`
+/// prefix — the host and repository prefix this release's images are published under — with
+/// the operator's value, keeping the rest, so the `-published` suffix and the `@sha256:`
+/// digest survive unchanged: the digest is still the image that was tested, behind whatever
+/// mirror now serves it. A reference that does not carry that prefix is not one of this
+/// release's published images and is left alone. Compose's `${X_IMAGE:-...}` defaults remain
+/// the way to override a single image outright; this rewrite is for the manifest-pinned path.
+fn image_reference(reference: &str, image_prefix: Option<&str>) -> String {
+    match image_prefix.map(|prefix| prefix.trim_end_matches('/')) {
+        Some(prefix) if !prefix.is_empty() && reference.starts_with(IMAGE_REFERENCE_PREFIX) => {
+            format!("{prefix}{}", &reference[IMAGE_REFERENCE_PREFIX.len()..])
+        }
+        _ => reference.to_string(),
+    }
 }
 
 pub fn stamp_path(root: &Path) -> PathBuf {
@@ -208,7 +392,9 @@ pub const ALSO_COPIED: [&str; 7] = [
 /// The stamp is written last. Anything that fails before that leaves a directory without one, which
 /// `needs_fetch` treats as absent, so an interrupted download is retried rather than half-run.
 pub fn fetch(root: &Path, version: &str) -> Result<(), String> {
-    let body = get(&tarball_url(version)).map_err(|error| {
+    let url =
+        tarball_url(version).map_err(|error| format!("could not fetch {version}: {error}"))?;
+    let body = get(&url).map_err(|error| {
         format!("could not fetch {version}: {error}. Is that a released version?")
     })?;
 
@@ -307,18 +493,19 @@ pub fn unpack(root: &Path, body: &[u8]) -> Result<(), String> {
 /// Parsed here rather than at start-up so a release missing an image fails while the person is
 /// still looking at a screen that says what is being fetched, not later inside Compose's output.
 fn fetch_images(root: &Path, version: &str) -> Result<(), String> {
-    let direct = images_url(version);
-    let body = if releases_token(&direct).is_some() {
-        // A private repository: `github.com/.../releases/download` answers 404 to a request
-        // carrying `Authorization`, the same way the archive endpoint does, so the fetch goes
-        // through the API — asset id first, then the octet-stream endpoint whose redirect to the
-        // signed object URL needs no credential of its own.
-        release_asset(version, IMAGES)
-            .map_err(|error| format!("could not fetch the image list for {version}: {error}"))?
-    } else {
+    // An operator-configured asset endpoint (`ORBO_RELEASES_ASSETS_TEMPLATE`) is release
+    // furniture by construction: fetch it directly, with the release credential attached if
+    // its host is part of the configuration, rather than through GitHub's by-id lookup — a
+    // mirror need not implement that API.
+    let assets_override = env_override("ORBO_RELEASES_ASSETS_TEMPLATE");
+    let direct = images_url(version)
+        .map_err(|error| format!("could not fetch the image list for {version}: {error}"))?;
+    let body = if assets_override.is_some() || releases_token(&direct).is_none() {
         get(&direct)
-            .map_err(|error| format!("could not fetch the image list for {version}: {error}"))?
-    };
+    } else {
+        release_asset(version, IMAGES)
+    }
+    .map_err(|error| format!("could not fetch the image list for {version}: {error}"))?;
     let manifest: Images = serde_json::from_slice(&body)
         .map_err(|error| format!("the image list for {version} is not readable: {error}"))?;
     pin(&manifest)?;
@@ -331,7 +518,7 @@ fn fetch_images(root: &Path, version: &str) -> Result<(), String> {
 /// Used where a credential is in play, because the direct download URL rejects authenticated
 /// requests outright rather than redirecting them.
 fn release_asset(version: &str, name: &str) -> Result<Vec<u8>, String> {
-    let base = "https://api.github.com/repos/nareinnprs-create/ORBO/releases";
+    let base = release_asset_base_with(env_override("ORBO_RELEASES_API_URL").as_deref());
     let release = get_request(
         &format!("{base}/tags/{version}"),
         &[("Accept", "application/vnd.github+json")],
@@ -351,6 +538,29 @@ fn release_asset(version: &str, name: &str) -> Result<Vec<u8>, String> {
         &format!("{base}/assets/{id}"),
         &[("Accept", "application/octet-stream")],
     )
+}
+
+/// The releases API the by-id asset lookup talks to.
+///
+/// `ORBO_RELEASES_API_URL` names the "releases/latest" endpoint; the tag and asset endpoints
+/// this lookup needs sit one path step below it on the same server, so the base they share is
+/// that common prefix. The same credential applies to both because they are endpoints this
+/// code constructed from the operator's own value. With no override this stays the public
+/// repository's API, exactly as before.
+fn release_asset_base_with(api: Option<&str>) -> String {
+    match api {
+        None => "https://api.github.com/repos/nareinnprs-create/ORBO/releases".into(),
+        Some(api) => {
+            let api = api.trim_end_matches('/');
+            if let Some(at) = api.find("/releases/latest") {
+                api[..at + "/releases".len()].to_string()
+            } else if api.ends_with("/releases") {
+                api.to_string()
+            } else {
+                format!("{api}/releases")
+            }
+        }
+    }
 }
 
 /// Fetch a URL into memory.
@@ -392,15 +602,37 @@ fn get_request(url: &str, headers: &[(&str, &str)]) -> Result<Vec<u8>, String> {
 
 /// The release credential for this URL, when one is wanted.
 ///
-/// Only URLs under this repository's own name carry the token; every other host gets an
-/// unauthenticated request.
+/// Without any release-endpoint override this stays scoped to URLs under
+/// `nareinnprs-create/ORBO` on GitHub's hosts, exactly as before, so the credential never
+/// reaches third-party hosts (the engine installers in `install.rs`).
+///
+/// When any of the three release-endpoint overrides (`ORBO_RELEASES_API_URL`,
+/// `ORBO_RELEASES_TARBALL_TEMPLATE`, `ORBO_RELEASES_ASSETS_TEMPLATE`) is set, the credential
+/// also travels to the host of every configured endpoint, whichever endpoint it was. That is
+/// safe because those are release endpoints this code constructed from the value the
+/// operator set — there is no third party in the set — and attaching is what configuring
+/// them means. The GitHub scoping above is kept alongside it, so a partially overridden
+/// install still authenticates the endpoints that remain on github.com.
 fn releases_token(url: &str) -> Option<String> {
-    releases_token_for(url, std::env::var("ORBO_RELEASES_TOKEN").ok().as_deref())
+    releases_token_for(
+        url,
+        env_override("ORBO_RELEASES_TOKEN").as_deref(),
+        env_override("ORBO_RELEASES_API_URL").as_deref(),
+        env_override("ORBO_RELEASES_TARBALL_TEMPLATE").as_deref(),
+        env_override("ORBO_RELEASES_ASSETS_TEMPLATE").as_deref(),
+    )
 }
 
-/// [`releases_token`] with the credential passed in, so the host filter is testable without
-/// touching the process environment.
-fn releases_token_for(url: &str, token: Option<&str>) -> Option<String> {
+/// [`releases_token`] with the credential and the operator's endpoint overrides passed in, so
+/// the host filter is testable without touching the process environment.
+fn releases_token_for(
+    url: &str,
+    token: Option<&str>,
+    api_url: Option<&str>,
+    tarball_template: Option<&str>,
+    assets_template: Option<&str>,
+) -> Option<String> {
+    let token = token.map(str::trim).filter(|token| !token.is_empty())?;
     let Ok(parsed) = reqwest::Url::parse(url) else {
         return None;
     };
@@ -409,13 +641,24 @@ fn releases_token_for(url: &str, token: Option<&str>) -> Option<String> {
         host,
         "github.com" | "api.github.com" | "codeload.github.com"
     );
-    if !on_github || !parsed.path().contains("nareinnprs-create/ORBO") {
+    let on_ours = on_github && parsed.path().contains("nareinnprs-create/ORBO");
+    let on_configured = [api_url, tarball_template, assets_template]
+        .iter()
+        .filter_map(|endpoint| *endpoint)
+        .any(|endpoint| {
+            reqwest::Url::parse(endpoint)
+                .ok()
+                .and_then(|configured| {
+                    configured
+                        .host_str()
+                        .map(|configured_host| configured_host.eq_ignore_ascii_case(host))
+                })
+                .unwrap_or(false)
+        });
+    if !on_ours && !on_configured {
         return None;
     }
-    token
-        .map(str::trim)
-        .filter(|token| !token.is_empty())
-        .map(str::to_owned)
+    Some(token.to_owned())
 }
 
 #[cfg(test)]
@@ -483,22 +726,178 @@ mod tests {
         assert!(error.contains("orbo-langgraph"), "{error}");
     }
 
+    /// The rewrite trades the published host and repository prefix for the operator's, and
+    /// keeps everything after it — the `-published` suffix and, pinned, the digest.
+    #[test]
+    fn the_image_prefix_rewrite_succeeds_the_ghcr_prefix_and_keeps_the_digest() {
+        assert_eq!(
+            image_reference(
+                "ghcr.io/nareinnprs-create/orbo-langgraph@sha256:abc",
+                Some("registry.internal:5000/orbo")
+            ),
+            "registry.internal:5000/orbo-langgraph@sha256:abc"
+        );
+        assert_eq!(
+            image_reference(
+                "ghcr.io/nareinnprs-create/orbo-bot@sha256:0123456789abcdef",
+                Some("mirror.example.com/orbo/")
+            ),
+            "mirror.example.com/orbo-bot@sha256:0123456789abcdef"
+        );
+    }
+
+    /// Without the override the manifest's references land exactly as the release published
+    /// them, digest included.
+    #[test]
+    fn without_an_image_prefix_the_references_are_pulled_as_released() {
+        let published = "ghcr.io/nareinnprs-create/orbo-server@sha256:abc";
+        assert_eq!(image_reference(published, None), published);
+        assert_eq!(image_reference(published, Some("")), published.to_string());
+    }
+
+    /// A reference not under the published prefix is not one of this release's images, and a
+    /// blank prefix is no prefix at all.
+    #[test]
+    fn a_reference_without_the_published_ghcr_prefix_is_left_alone() {
+        for reference in [
+            "docker.io/library/orbo-server@sha256:abc",
+            "ghcr.io/other-owner/orbo-server@sha256:abc",
+            "ghcr.io/nareinnprs-create/server@sha256:abc",
+        ] {
+            assert_eq!(
+                image_reference(reference, Some("mirror.example.com/orbo")),
+                reference,
+                "{reference} is not a published ORBO image"
+            );
+        }
+    }
+
+    #[test]
+    fn the_manifest_is_pinned_behind_the_operator_prefix_digest_intact() {
+        let pinned = pin_with(
+            &manifest(
+                &IMAGE_VARIABLES
+                    .iter()
+                    .map(|(name, _)| *name)
+                    .collect::<Vec<_>>(),
+            ),
+            Some("registry.internal:5000/orbo"),
+        )
+        .expect("a complete manifest pins");
+        assert_eq!(pinned.len(), IMAGE_VARIABLES.len());
+        for (variable, reference) in &pinned {
+            assert!(
+                reference.starts_with("registry.internal:5000/orbo"),
+                "{variable} did not follow the prefix: {reference}"
+            );
+            assert!(
+                reference.contains("@sha256:"),
+                "the digest is kept: {reference}"
+            );
+        }
+        assert_eq!(pinned[0].1, "registry.internal:5000/orbo-server@sha256:abc");
+    }
+
+    /// Every read of the manifest goes through the same rewrite, whether Compose reads the
+    /// reference (via `image_variables`) or the shell runs it directly (via `reference`).
+    #[test]
+    fn a_single_image_reference_is_rewritten_the_same_way_the_manifest_is() {
+        let dir = scratch("image-prefix");
+        std::fs::write(
+            images_path(&dir),
+            serde_json::to_string(&manifest(&["server"])).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            reference_with(&dir, "server", Some("mirror.example.com/orbo")).unwrap(),
+            "mirror.example.com/orbo-server@sha256:abc"
+        );
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
     #[test]
     fn the_image_manifest_is_fetched_from_the_same_version_as_the_tree() {
-        let url = images_url("v0.0.7");
+        let url = images_url("v0.0.7").expect("the default asset endpoint renders");
         assert!(url.contains("/download/v0.0.7/"), "{url}");
         assert!(url.ends_with("container-images.json"), "{url}");
     }
 
     #[test]
     fn the_tarball_is_a_tag_rather_than_a_branch() {
-        let url = tarball_url("v0.0.7");
+        let url = tarball_url("v0.0.7").expect("the default tarball endpoint renders");
         assert!(url.contains("/refs/tags/v0.0.7"), "{url}");
         assert!(!url.contains("/heads/"), "a branch is not a version: {url}");
         assert!(
             url.starts_with("https://"),
             "must not need a git client: {url}"
         );
+    }
+
+    #[test]
+    fn the_release_templates_follow_the_operator_overrides() {
+        let tarball = tarball_url_with(
+            "v0.1.0",
+            Some("https://mirror.example.org/orbo/tar.gz/{version}"),
+        )
+        .expect("a tarball template with {version} renders");
+        assert_eq!(tarball, "https://mirror.example.org/orbo/tar.gz/v0.1.0");
+        let assets = images_url_with(
+            "v0.1.0",
+            IMAGES,
+            Some("https://mirror.example.org/assets/{version}/{asset}"),
+        )
+        .expect("an asset template with both placeholders renders");
+        assert_eq!(
+            assets,
+            "https://mirror.example.org/assets/v0.1.0/container-images.json"
+        );
+    }
+
+    /// Tags are `vX.Y.Z`, so the encoding changes nothing there; it is still what keeps a
+    /// template's path a path if a tag ever carries a character that does not belong in one.
+    #[test]
+    fn the_tag_is_url_encoded_before_it_names_the_template() {
+        assert_eq!(url_encode("v0.1.6"), "v0.1.6");
+        assert_eq!(url_encode("v1.0.0+bare"), "v1.0.0%2Bbare");
+        assert_eq!(
+            tarball_url_with("v1.0.0+bare", Some("https://mirror.example.org/{version}"))
+                .expect("the encoded tag renders"),
+            "https://mirror.example.org/v1.0.0%2Bbare"
+        );
+    }
+
+    #[test]
+    fn a_template_missing_a_placeholder_is_refused_naming_the_key() {
+        let refused = tarball_url_with("v0.1.0", Some("https://mirror.example.org/orbo/tar.gz"))
+            .expect_err("a tarball template without {version} cannot name the release");
+        assert!(
+            refused.contains("ORBO_RELEASES_TARBALL_TEMPLATE"),
+            "{refused}"
+        );
+        assert!(refused.contains("{version}"), "{refused}");
+        for template in [
+            "https://mirror.example.org/{version}",
+            "https://mirror.example.org/{asset}",
+        ] {
+            let refused = images_url_with("v0.1.0", IMAGES, Some(template))
+                .expect_err("an asset template missing a placeholder is refused");
+            assert!(
+                refused.contains("ORBO_RELEASES_ASSETS_TEMPLATE"),
+                "{refused}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_template_that_is_not_a_usable_url_is_refused_naming_the_key() {
+        for template in ["not a url", "{version}", "http://"] {
+            let refused = tarball_url_with("v0.1.0", Some(template))
+                .expect_err("a template that is not an absolute URL is refused");
+            assert!(
+                refused.contains("ORBO_RELEASES_TARBALL_TEMPLATE"),
+                "{refused}"
+            );
+        }
     }
 
     #[test]
@@ -767,9 +1166,9 @@ mod tests {
 
     #[test]
     fn the_release_token_only_travels_to_this_repositorys_urls() {
-        let ours = images_url("v0.1.0");
+        let ours = images_url("v0.1.0").expect("the default asset endpoint renders");
         assert_eq!(
-            releases_token_for(&ours, Some("ghp_test")).as_deref(),
+            releases_token_for(&ours, Some("ghp_test"), None, None, None).as_deref(),
             Some("ghp_test"),
             "a private repository's own assets carry the credential"
         );
@@ -780,7 +1179,53 @@ mod tests {
             "https://github.com.attacker.example/nareinnprs-create/ORBO",
         ] {
             assert_eq!(
-                releases_token_for(foreign, Some("ghp_test")),
+                releases_token_for(foreign, Some("ghp_test"), None, None, None),
+                None,
+                "{foreign} must never receive the release credential"
+            );
+        }
+    }
+
+    /// Every endpoint the operator configures is a release endpoint this code constructed,
+    /// so its host is safe to attach the credential to — without any configuration the
+    /// filter above still refuses everything else.
+    #[test]
+    fn a_release_token_also_travels_to_the_hosts_of_the_configured_endpoints() {
+        let api = "https://ghe.example.com/api/v3/repos/acme/ORBO/releases/latest";
+        for (url, api_url, tarball, assets) in [
+            (api, Some(api), None, None),
+            (
+                "https://mirror.example.org/orbo/tar.gz/v0.1.0",
+                None,
+                Some("https://mirror.example.org/orbo/tar.gz/{version}"),
+                None,
+            ),
+            (
+                "https://mirror.example.org/assets/v0.1.0/container-images.json",
+                None,
+                None,
+                Some("https://mirror.example.org/assets/{version}/{asset}"),
+            ),
+        ] {
+            assert_eq!(
+                releases_token_for(url, Some("ghp_test"), api_url, tarball, assets).as_deref(),
+                Some("ghp_test"),
+                "{url} sits on a configured release host"
+            );
+        }
+    }
+
+    /// A configured host does not widen the filter to other repositories on GitHub: the
+    /// engine installers ride on github.com too, and never see the credential.
+    #[test]
+    fn a_configured_endpoint_host_covers_the_mirror_not_a_strangers_github_urls() {
+        let api = "https://ghe.example.com/api/v3/repos/acme/ORBO/releases/latest";
+        for foreign in [
+            "https://github.com/oven-sh/bun/releases/download/bun-v1/bun.zip",
+            "https://example.com/whatever",
+        ] {
+            assert_eq!(
+                releases_token_for(foreign, Some("ghp_test"), Some(api), None, None),
                 None,
                 "{foreign} must never receive the release credential"
             );
@@ -789,9 +1234,46 @@ mod tests {
 
     #[test]
     fn an_absent_or_blank_release_token_is_the_same_as_none() {
-        let ours = tarball_url("v0.1.0");
-        assert_eq!(releases_token_for(&ours, None), None);
-        assert_eq!(releases_token_for(&ours, Some("")), None);
-        assert_eq!(releases_token_for(&ours, Some("   ")), None);
+        let ours = tarball_url("v0.1.0").expect("the default tarball endpoint renders");
+        assert_eq!(releases_token_for(&ours, None, None, None, None), None);
+        assert_eq!(releases_token_for(&ours, Some(""), None, None, None), None);
+        assert_eq!(
+            releases_token_for(&ours, Some("   "), None, None, None),
+            None
+        );
+    }
+
+    #[test]
+    fn an_override_value_is_trimmed_and_blank_counts_as_unset() {
+        assert_eq!(
+            override_value(Some(" https://mirror.example.org ".into())),
+            Some("https://mirror.example.org".into())
+        );
+        assert_eq!(override_value(Some("   ".into())), None);
+        assert_eq!(override_value(None), None);
+    }
+
+    #[test]
+    fn the_asset_by_id_lookup_follows_the_api_override() {
+        assert_eq!(
+            release_asset_base_with(None),
+            "https://api.github.com/repos/nareinnprs-create/ORBO/releases"
+        );
+        assert_eq!(
+            release_asset_base_with(Some(
+                "https://ghe.example.com/api/v3/repos/acme/ORBO/releases/latest"
+            )),
+            "https://ghe.example.com/api/v3/repos/acme/ORBO/releases"
+        );
+        assert_eq!(
+            release_asset_base_with(Some(
+                "https://ghe.example.com/api/v3/repos/acme/ORBO/releases/"
+            )),
+            "https://ghe.example.com/api/v3/repos/acme/ORBO/releases"
+        );
+        assert_eq!(
+            release_asset_base_with(Some("https://ghe.example.com/acme/ORBO")),
+            "https://ghe.example.com/acme/ORBO/releases"
+        );
     }
 }

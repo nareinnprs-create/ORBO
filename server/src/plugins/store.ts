@@ -786,6 +786,35 @@ type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 export const toolNameFor = (ref: string) => `mcp__${ref.replace("/", "__")}`;
 
 /**
+ * The slug rule, the same one the skill-save route enforces: lowercase letters,
+ * digits and hyphens, 2 to 40 characters, starting and ending with a letter or
+ * digit. One rule in one place — the route validates what is saved with it and
+ * {@link parseSkillInvocation} accepts only what it would have saved.
+ */
+const SKILL_SLUG = "[a-z0-9][a-z0-9-]{0,38}[a-z0-9]";
+
+/**
+ * What `/` invoked, or null when the text is not a skill invocation at all.
+ *
+ * Only a leading `/slug` counts: plain chat, a bare `/`, and a `//` path all read
+ * as null rather than as a skill named nothing. The slug match is case sensitive,
+ * because slugs are lowercase and `/Standup` names no skill. This used to live in
+ * the WS-11 slice (TD-02); it is the canonical parser now, and the route's own
+ * slug validation is the same rule: the route refuses what this would never parse.
+ */
+export function parseSkillInvocation(
+  text: string,
+): { slug: string; args: string } | null {
+  const leading = text.replace(/^\s+/, "");
+  if (!leading.startsWith("/")) return null;
+  const rest = leading.slice(1);
+  if (rest === "" || rest.startsWith("/")) return null;
+  const match = new RegExp(`^(${SKILL_SLUG})(?:\\s+(.*))?$`).exec(rest);
+  if (!match?.[1]) return null;
+  return { slug: match[1], args: (match[2] ?? "").trim() };
+}
+
+/**
  * Advertised tool names this deployment's write list does not name, where that list is the whole
  * barrier.
  *
@@ -4804,6 +4833,146 @@ export function createPluginStore(options: PluginStoreOptions) {
         targetId: slug,
         payload: { actor: by, change: "skill_uninstalled", skill: slug },
       });
+    },
+
+    /**
+     * Run one `/`-invoked skill end to end: parse the text, resolve the skill
+     * against visibility and the grant, execute through the injected `run` — the
+     * turn runner, in production — and return its answer with the audit row beside
+     * it. This is the canonical `/` path; the WS-11 slice (TD-02) that proved the
+     * shape in memory is gone, and its second registry with it.
+     *
+     * DECIDE, RECORD, THEN ACT, the same order `callTool` keeps and for the same
+     * reason: a skill the person may not see, or a Bot that was never given it,
+     * must not reach the model, and the refusal has to be in the trail before the
+     * throw, because every way out of that branch is the throw. A name nobody
+     * installed is refused WITHOUT an audit row claiming a decision about it —
+     * there is no skill to decide on.
+     *
+     * The refusal shape is {@link PluginRefusedError} with `rule: null`, which is
+     * what the slice's own error class mirrored in anticipation: no policy rule
+     * refused this, the registry or the grant simply has no row.
+     */
+    async invokeSkill(input: {
+      text: string;
+      botId: string;
+      actorId: string;
+      /** An administrator may invoke a skill they do not own; the grant still applies. */
+      isAdmin?: boolean;
+      /** The execution seam. Production hands the turn runner; tests hand a recording stub. */
+      run: (context: {
+        skill: SkillRecord;
+        botId: string;
+        actorId: string;
+        userText: string;
+      }) => Promise<string>;
+    }): Promise<{
+      slug: string;
+      instructions: string;
+      userText: string;
+      output: string;
+    }> {
+      const parsed = parseSkillInvocation(input.text);
+      if (!parsed) {
+        throw new PluginRefusedError(
+          "That is not a skill invocation. Start with / and the skill name.",
+          null,
+        );
+      }
+      const [row] = await database
+        .select()
+        .from(skills)
+        .where(eq(skills.slug, parsed.slug))
+        .limit(1);
+      if (!row) {
+        throw new PluginRefusedError(
+          `There is no skill called ${parsed.slug}.`,
+          null,
+        );
+      }
+      const actor = input.actorId || UNATTRIBUTED_ACTOR;
+      const refused = async (
+        refusal: "not_visible" | "not_granted",
+        reason: string,
+      ) => {
+        await recordAuditEvent(auditStore, {
+          eventType: "skill.invoke_rejected",
+          targetType: "skill",
+          targetId: parsed.slug,
+          payload: {
+            actor,
+            bot: input.botId,
+            skill: parsed.slug,
+            refusal,
+            reason,
+          },
+        });
+        return new PluginRefusedError(reason, null);
+      };
+      if (
+        row.ownerUserId !== null &&
+        row.ownerUserId !== input.actorId &&
+        !input.isAdmin
+      ) {
+        throw await refused(
+          "not_visible",
+          `${parsed.slug} is somebody else's skill.`,
+        );
+      }
+      const [grant] = await database
+        .select({ ref: pluginGrants.ref })
+        .from(pluginGrants)
+        .where(
+          and(
+            eq(pluginGrants.kind, "skill"),
+            eq(pluginGrants.ref, parsed.slug),
+            eq(pluginGrants.agentId, input.botId),
+          ),
+        )
+        .limit(1);
+      if (!grant) {
+        throw await refused(
+          "not_granted",
+          `This Bot has not been given the skill ${parsed.slug}.`,
+        );
+      }
+      const skill: SkillRecord = {
+        id: row.id,
+        slug: row.slug,
+        ownerUserId: row.ownerUserId,
+        title: row.title,
+        summary: row.summary,
+        instructions: row.instructions,
+        origin: row.origin,
+        installedBy: row.installedBy,
+        grantedTo: [input.botId],
+        tools: await toolsDeclaredBy([row.id]).then(
+          (declared) => declared.get(row.id) ?? [],
+        ),
+      };
+      const output = await input.run({
+        skill,
+        botId: input.botId,
+        actorId: input.actorId,
+        userText: parsed.args,
+      });
+      await recordAuditEvent(auditStore, {
+        eventType: "skill.invoked",
+        targetType: "skill",
+        targetId: skill.slug,
+        payload: {
+          actor,
+          bot: input.botId,
+          skill: skill.slug,
+          userText: parsed.args,
+        },
+      });
+      return {
+        slug: skill.slug,
+        instructions: skill.instructions,
+        userText: parsed.args,
+        output,
+      };
     },
 
     /**

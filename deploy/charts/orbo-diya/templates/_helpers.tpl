@@ -246,8 +246,23 @@ and in whatever holds the release, which is not where `KEY_ENCRYPTION_KEY` belon
 {{- define "orbo.commonEnv" -}}
 - name: PORT
   value: {{ .Values.server.service.port | quote }}
+{{- /*
+  NODE_ENV=production is what every real install runs, and under it the server refuses
+  ORBO_SINGLE_USER outright: one administrator and no sign-in is a development convenience, and
+  `config.singleUser` is exactly that convenience (server/src/auth/dev-actor.ts). Rendering the
+  flag beside production would be a render the pod crash-loops from, so the ask is rendered as
+  what it says it is. Whether the ask is ENOUGH — what the deployment answers on — is decided by
+  the reachability gates the server applies to this mode at boot, mirrored at template time in
+  validation.yaml, which refuses `config.singleUser` combined with a public URL or with a
+  LoadBalancer carrying no source ranges.
+*/}}
+{{- if ((.Values.config).singleUser) }}
+- name: NODE_ENV
+  value: development
+{{- else }}
 - name: NODE_ENV
   value: production
+{{- end }}
 - name: EMBEDDED_POSTGRES
   value: "off"
 {{- /* The switch that makes a replica a replica: no browser in an API pod. */}}

@@ -1,35 +1,35 @@
 import { expect, spyOn, test } from "bun:test";
 import {
-  type OrboMcpApproval,
   type ActionProposal,
-  MCP_APPROVAL_TTL_MS,
   actionProposalToCandidate,
   approvalKindOf,
   assertProposalUnchanged,
   defaultMcpRequiresApproval,
   isMcpApprovalExpired,
   isProposalExpired,
+  MCP_APPROVAL_TTL_MS,
   mapActionProposalStatus,
   mcpApprovalToCandidate,
   mcpReceiptKey,
+  type OrboMcpApproval,
   proposalDigest,
 } from "../src/approvals/interop";
 import { decideAction } from "../src/approvals/policy";
 import {
-  DECLINED_BY_PERSON,
   createApprovalService,
+  DECLINED_BY_PERSON,
 } from "../src/approvals/service";
 import {
   type ApprovalAction,
+  ApprovalNotFoundError,
   type ApprovalPolicyOutcome,
   type ApprovalPreferences,
   type ApprovalRecord,
+  ApprovalRefusedError,
   type ApprovalRule,
   type ApprovalStore,
   type ApprovalTeamRule,
   type ApprovalTeamSettings,
-  ApprovalNotFoundError,
-  ApprovalRefusedError,
   approvalAction,
 } from "../src/approvals/types";
 

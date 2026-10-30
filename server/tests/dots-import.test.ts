@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
+  type DotsDotInput,
   DotsImportRefusedError,
   importDots,
-  type DotsDotInput,
 } from "../src/agents/dots-import";
 
 const OWNER = "bootstrap-user-1";

@@ -1,7 +1,40 @@
 {
-  "cli": { "version": ">= 16.0.0" },
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
+  },
   "build": {
-    "development": { "developmentClient": true, "distribution": "internal" },
-    "production": {}
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": { "buildType": "apk" }
+    },
+    "preview": {
+      "distribution": "internal",
+      "ios": { "simulator": true },
+      "android": { "buildType": "apk" }
+    },
+    "production": {
+      "autoIncrement": true,
+      "ios": { "credentialsSource": "remote" },
+      "android": {
+        "buildType": "app-bundle",
+        "credentialsSource": "remote"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId": "[OWNER: Apple ID email for App Store Connect, e.g. you@example.com]",
+        "ascAppId": "[OWNER: App Store Connect app ID (10-digit numeric, from App Store Connect after the app record exists)]",
+        "appleTeamId": "[OWNER: Apple Developer team ID (10-character)]"
+      },
+      "android": {
+        "serviceAccountKeyPath": "[OWNER: absolute path to the Google Play service-account JSON key]",
+        "track": "internal",
+        "androidPackage": "ai.orbo.mobile"
+      }
+    }
   }
 }

@@ -1,8 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { MiddlewareHandler } from "hono";
 import type { AuditEventInput, AuditStore } from "../src/audit";
-import type { AuthenticatedActor } from "../src/auth/guards";
-import type { AppVariables } from "../src/auth/guards";
+import type { AppVariables, AuthenticatedActor } from "../src/auth/guards";
 import {
   ActionRefusedError,
   createComputerGateway,

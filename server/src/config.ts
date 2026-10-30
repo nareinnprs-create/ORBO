@@ -166,11 +166,27 @@ export type HandoffCaps = {
 export type DeploymentConfig = {
   /** Optional environment default. A saved Admin setting takes precedence. */
   learning?: LearningTarget;
+  /**
+   * How fast one caller may use the API, when the deployment has not switched the limiter off.
+   *
+   * Absent only under `ORBO_RATE_LIMIT=off`, which is an operator's decision to run with no
+   * ceiling rather than a deployment that never chose one: every other boot gets the defaults.
+   */
+  rateLimit?: RateLimitSettings;
   /** Audio configuration is independent of agent model providers. */
   transcription?: TranscriptionConfig;
   voice?: VoiceConfig;
   /** The port the API listens on. Named `PORT` or `SERVER_PORT`; see `serverPort`. */
   port: number;
+  /**
+   * The interface the server's socket binds to.
+   *
+   * Named `ORBO_SERVER_HOST`, defaulting to `127.0.0.1` — loopback, which is what the boot log always
+   * claimed and what `Bun.serve` did NOT default to (it binds `0.0.0.0`). Setting `0.0.0.0` or `::`
+   * opens the deployment onto its network, which is a decision about reachability and belongs beside
+   * the gates that read addresses; see `keyEncryptionKey` and `singleUserAllowed`.
+   */
+  serverHost: string;
   databaseUrl: string;
   keyEncryptionKey: string;
   /**
@@ -275,6 +291,21 @@ export type DeploymentConfig = {
    * reaching somewhere other people can get to.
    */
   singleUser: boolean;
+  /**
+   * How long a signed-in session lasts, and how often its activity is re-written.
+   *
+   * Named `ORBO_SESSION_TTL_DAYS` with a default of 7 — better-auth's own `expiresIn`, which it
+   * takes in SECONDS and defaults to exactly those 7 days — and the optional
+   * `ORBO_SESSION_UPDATE_AGE_SECONDS`, better-auth's `updateAge`, where 0 renews the session on
+   * every use and unset keeps the library's 1-day cadence. Both are refused unless whole numbers of
+   * the unit the name says, because an expiry that silently became the default is a boundary a
+   * deployment believes it set and did not.
+   */
+  session: {
+    expiresInDays: number;
+    /** Unset keeps better-auth's own cadence; 0 is legitimate and renews on every use. */
+    updateAgeSeconds?: number;
+  };
   /** Names ORBO on the analytics the runtime already sends. Off with ORBO_ACCESSIBILITY_DISABLED. */
   accessibility: boolean;
   /**
@@ -414,13 +445,34 @@ function keyEncryptionKey(environment: Environment): string {
   }
 
   /**
-   * Refused in production, warned everywhere else. The placeholder is convenient locally and public
-   * in any deployment.
+   * Refused where somebody else could be on the receiving end, warned on a loopback laptop.
+   *
+   * The placeholder is convenient locally and public in any deployment, so the question is
+   * REACHABILITY rather than `NODE_ENV` alone. `NODE_ENV=production` still refuses, because the image
+   * and the chart set it for every deployment and the honest deployment that kept the example key
+   * while genuinely loopback-only is not owed a pass. But a deployment whose addresses reach beyond
+   * this machine — a home server, a Tailnet, a public URL — refuses too, under any `NODE_ENV`,
+   * because the vault it is encrypting is readable by whoever holds the key printed in this
+   * repository. See `reachableAddresses`, the one list both this gate and the single-user gate read,
+   * and `bindBeyondLoopback` beside it: a URL can name loopback while the socket answers the LAN, so
+   * the gates that ask about reachability ask about both.
    */
   if (value === PLACEHOLDER_KEY) {
     if (isProduction(environment)) {
       throw new Error(
         "KEY_ENCRYPTION_KEY is still the example key from .env.example, which is public. Generate one with: openssl rand -base64 32",
+      );
+    }
+    const bind = bindBeyondLoopback(environment);
+    const beyondLoopback = [
+      ...reachableAddresses(environment)
+        .filter((address) => address.reach !== "loopback")
+        .map((address) => address.value),
+      ...(bind ? [`ORBO_SERVER_HOST=${bind}`] : []),
+    ];
+    if (beyondLoopback.length > 0) {
+      throw new Error(
+        `KEY_ENCRYPTION_KEY is the example key from .env.example, which is public, and this deployment answers beyond this machine at ${beyondLoopback.join(", ")}. Generate one with: openssl rand -base64 32`,
       );
     }
     console.warn(
@@ -462,13 +514,11 @@ function singleUserAllowed(
 ): boolean {
   if (!singleUserEnabled(environment, hasProvider)) return false;
 
-  const reachable = [
-    optional(environment, "ORBO_PUBLIC_URL"),
-    optional(environment, "ORBO_APP_URL"),
-    ...commaSeparated(environment, "TRUSTED_ORIGINS"),
-  ].filter((value): value is string => value !== undefined);
+  const reachable = reachableAddresses(environment);
 
-  const published = reachable.filter((value) => reachOf(value) === "public");
+  const published = reachable
+    .filter((address) => address.reach === "public")
+    .map((address) => address.value);
   if (published.length > 0) {
     throw new Error(
       `ORBO_SINGLE_USER admits every request as one administrator with no sign-in, so it cannot be combined with an address the public internet reaches: ${published.join(", ")}. Configure GOOGLE_OAUTH_*, MICROSOFT_OAUTH_* or OKTA_OAUTH_* with BETTER_AUTH_SECRET and BETTER_AUTH_URL, or serve it somewhere only you reach.`,
@@ -476,11 +526,18 @@ function singleUserAllowed(
   }
 
   /*
-   * A private address is allowed and said out loud. index.ts already warns every boot that there is
-   * no sign-in; what it cannot say, because it never reads an address, is that this one is carried
-   * beyond the machine. Whoever is on that network is an administrator here.
+   * A private address — configured as a URL, or as the interface the socket binds to — is allowed
+   * and said out loud. index.ts already warns every boot that there is no sign-in; what it cannot
+   * say, because it never reads an address, is that this one is carried beyond the machine. Whoever
+   * is on that network is an administrator here.
    */
-  const shared = reachable.filter((value) => reachOf(value) === "private");
+  const bind = bindBeyondLoopback(environment);
+  const shared = [
+    ...reachable
+      .filter((address) => address.reach === "private")
+      .map((address) => address.value),
+    ...(bind ? [`ORBO_SERVER_HOST=${bind}`] : []),
+  ];
   if (shared.length > 0) {
     console.warn(
       `ORBO_SINGLE_USER admits every request as one administrator with no sign-in, and this deployment answers on an address beyond this machine: ${shared.join(", ")}. Anybody on that network is that administrator. Configure a sign-in provider before anybody else is on it.`,
@@ -488,6 +545,50 @@ function singleUserAllowed(
   }
 
   return true;
+}
+
+/**
+ * The addresses this deployment has configured that somebody could arrive at, with how far each
+ * reaches — and this is the one place that question is assembled.
+ *
+ * Two gates read it, the single-user flag above and the refusal of the example encryption key
+ * above that, and both had agreed on every environment either had ever seen; that agreement was
+ * accidental, each hand-rolling its own copy of the same list, and a third gate arriving would have
+ * started from three lists to keep in step. One list, because the question is one question — can
+ * anybody other than this machine reach it? — and because the same three variables answer it
+ * everywhere.
+ */
+type ReachableAddress = { value: string; reach: Reach };
+
+function reachableAddresses(environment: Environment): ReachableAddress[] {
+  return [
+    optional(environment, "ORBO_PUBLIC_URL"),
+    optional(environment, "ORBO_APP_URL"),
+    ...commaSeparated(environment, "TRUSTED_ORIGINS"),
+  ]
+    .filter((value): value is string => value !== undefined)
+    .map((value) => ({ value, reach: reachOf(value) }));
+}
+
+/**
+ * The interface the server binds to, when the deployment named one that is not loopback, spelled as
+ * the deployment spelled it so the boot message quotes the line it is asking about. Undefined for
+ * the default and for every loopback spelling, which reach nobody else.
+ *
+ * The variables above name an address a BROWSER is pointed at, and the socket bind is the other half
+ * of the same question: `ORBO_SERVER_HOST=0.0.0.0` or `::` answers every interface, and a specific
+ * address or hostname answers one that is on the machine's network. Neither pair can see the other —
+ * a URL can name a loopback origin while the socket answers the LAN — so the gates that ask about
+ * reachability ask about both, by way of this one helper.
+ *
+ * `localhost` is loopback even where the resolver prefers `::1`, which is still loopback.
+ */
+function bindBeyondLoopback(environment: Environment): string | undefined {
+  const raw = optional(environment, "ORBO_SERVER_HOST");
+  if (raw === undefined) return undefined;
+  const bound = serverHost(environment);
+  if (["127.0.0.1", "::1", "localhost"].includes(bound)) return undefined;
+  return raw;
 }
 
 /**
@@ -808,20 +909,64 @@ function authConfig(
   return {
     baseUrl,
     secret,
-    trustedOrigins: commaSeparated(environment, "TRUSTED_ORIGINS").length
-      ? commaSeparated(environment, "TRUSTED_ORIGINS")
-      : /*
-         * All three spellings of the same place, because this is an allowlist of what a browser
-         * sends and not an address anything dials. `localhost` alone refused a browser pointed at
-         * `127.0.0.1:3010`, which is the address the rest of this deployment hands out.
-         */
-        ["http://127.0.0.1:3010", "http://[::1]:3010", "http://localhost:3010"],
+    trustedOrigins: resolvedTrustedOrigins(environment),
     initialAdminEmails,
     allowedEmailDomains,
     ...(google ? { google } : {}),
     ...(microsoft ? { microsoft } : {}),
     ...(okta ? { okta } : {}),
   };
+}
+
+/**
+ * The port the app is actually served on, from the one variable that already names it.
+ *
+ * `APP_PORT` is what the Vite dev server and the desktop's preview both read (`app/vite.config.ts`,
+ * `app/serve.ts`), defaulting to 3010 exactly as they do, so a deployment that moved the app and
+ * moved it in the one place those tools share ends up with trusted origins that agree with it rather
+ * than with the port 3010 outlived. Read through `optional` and refused unless a whole port number,
+ * the way `PORT` is: a typo cannot silently become an allowlist entry.
+ */
+const DEFAULT_APP_PORT = 3010;
+
+function appPort(environment: Environment): number {
+  const raw = optional(environment, "APP_PORT");
+  if (raw === undefined) return DEFAULT_APP_PORT;
+  const port = Number(raw);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error("APP_PORT must be a whole number between 1 and 65535");
+  }
+  return port;
+}
+
+/**
+ * Where the app is assumed to be served from, when `TRUSTED_ORIGINS` says nothing.
+ *
+ * An allowlist of what a browser sends and not an address anything dials, and the three local
+ * spellings of the same place catch the difference between them: `localhost` alone refused a browser
+ * pointed at `127.0.0.1:3010`, which was how the 3010 default got all three lines.
+ *
+ * The port is the app's own (`APP_PORT`) when it says so, so the fallback tracks it. When even that
+ * is unset, 3010 is stated as the assumption it is, in a warning loud enough to reach whoever is
+ * reading boot output: a trusted origin that silently names a port nothing listens on costs a person
+ * an afternoon before they think to look here.
+ */
+function resolvedTrustedOrigins(environment: Environment): string[] {
+  const origins = commaSeparated(environment, "TRUSTED_ORIGINS");
+  if (origins.length > 0) return origins;
+
+  const port = appPort(environment);
+  const assumed = [
+    `http://127.0.0.1:${port}`,
+    `http://[::1]:${port}`,
+    `http://localhost:${port}`,
+  ];
+  if (optional(environment, "APP_PORT") === undefined) {
+    console.warn(
+      `TRUSTED_ORIGINS is unset, so sign-in will trust only ${assumed.join(", ")}. A browser arriving at any other origin will be refused. Set TRUSTED_ORIGINS to the origin the app is actually served from, or APP_PORT if the app runs on a non-default port.`,
+    );
+  }
+  return assumed;
 }
 
 /**
@@ -1044,6 +1189,158 @@ export function durationMs(value: string): number {
   }
 }
 
+/**
+ * How fast one caller may use the API, and who decides it.
+ *
+ * A number a deployment chooses, not a constant, because the right answer is a fact about the
+ * deployment: a single person on a laptop and a company behind a shared ingress sit at very
+ * different points on the same curve, and the browser's own polling is part of the traffic being
+ * counted. See `server/src/rate-limit.ts` for what is counted and what the buckets are.
+ *
+ * Everything here refuses to boot on a malformed value rather than falling back to the default,
+ * for the reason the caps above state: an operator who wrote `ORBO_RATE_LIMIT_MAX=30O` (letter O)
+ * would otherwise get a running deployment that quietly means 300, and no indication that the
+ * number they chose was never read.
+ */
+export type RateLimitSettings = {
+  /** Requests one identity may make across the API in one window. */
+  max: number;
+  /** How long a window stays open, in milliseconds. */
+  windowMs: number;
+  /** The tighter ceiling on the sign-in routes, where a request may be a guess. */
+  authMax: number;
+};
+
+/** Three hundred a minute: a person's browser polling several surfaces at once sits under half of it. */
+const DEFAULT_RATE_LIMIT_MAX = 300;
+const DEFAULT_RATE_LIMIT_WINDOW = "1m";
+/** Where a request can be an attempt at somebody's account, the ceiling drops to one every two seconds. */
+const DEFAULT_RATE_LIMIT_AUTH_MAX = 30;
+
+function rateLimitConfig(
+  environment: Environment,
+): RateLimitSettings | undefined {
+  if (optional(environment, "ORBO_RATE_LIMIT") === "off") return undefined;
+
+  const wholeNumber = (name: string, fallback: number): number => {
+    const raw = optional(environment, name);
+    if (raw === undefined) return fallback;
+    const value = Number(raw);
+    if (!Number.isInteger(value) || value < 1) {
+      throw new Error(`${name} must be a whole number of 1 or more`);
+    }
+    return value;
+  };
+
+  const windowRaw = optional(environment, "ORBO_RATE_LIMIT_WINDOW");
+  const windowMs = windowRaw
+    ? durationMs(windowRaw)
+    : durationMs(DEFAULT_RATE_LIMIT_WINDOW);
+  if (windowMs < 1_000) {
+    throw new Error(
+      "ORBO_RATE_LIMIT_WINDOW must be at least one second; anything shorter is a threshold nobody chose on purpose",
+    );
+  }
+
+  return {
+    max: wholeNumber("ORBO_RATE_LIMIT_MAX", DEFAULT_RATE_LIMIT_MAX),
+    windowMs,
+    authMax: wholeNumber(
+      "ORBO_RATE_LIMIT_AUTH_MAX",
+      DEFAULT_RATE_LIMIT_AUTH_MAX,
+    ),
+  };
+}
+
+/**
+ * The tokens the install scripts mint when a deployment leaves the secrets blank, which are
+ * printed in this repository and therefore not secrets at all.
+ *
+ * They were never refused: `scripts/install.sh` and `scripts/start.sh` (and the PowerShell twins)
+ * generate exactly these when `.env` carries nothing, and the server accepted them under any
+ * `NODE_ENV` at any address. A deployment that kept the defaults and put a URL on the deployment
+ * was running its browser, its computer network and its worker channel on three passwords anybody
+ * who can read this repository already has — indistinguishable from the outside from one that
+ * generated real values, which is the property that makes the example encryption key above worth
+ * refusing.
+ *
+ * The same reachability question that gate asks, because the answer is the same answer: the
+ * tokens are convenient locally and public in any deployment somebody else can reach.
+ * `NODE_ENV=production` refuses on its own, because the image and the chart set it and the honest
+ * loopback deployment that kept them is not owed a pass. A token is only judged when this server
+ * would actually use it — a stray `SUPERVISOR_TOKEN` in an environment with no supervisor
+ * configured authenticates nothing and is nobody's business.
+ */
+const DEVELOPMENT_TOKENS = {
+  SUPERVISOR_TOKEN: "orbo-dev-supervisor-token",
+  ORBO_COMPUTER_TOKEN: "orbo-dev-computer-token",
+  WORKER_SHARED_SECRET: "orbo-dev-worker-shared-secret",
+} as const;
+
+function refuseDevelopmentTokens(environment: Environment): void {
+  const production = isProduction(environment);
+  const bind = bindBeyondLoopback(environment);
+  const beyondLoopback = [
+    ...reachableAddresses(environment)
+      .filter((address) => address.reach !== "loopback")
+      .map((address) => address.value),
+    ...(bind ? [`ORBO_SERVER_HOST=${bind}`] : []),
+  ];
+
+  /*
+   * Whether each token is in a position where this server would send or check it, read the same
+   * way `computerConfig` and `loadConfig` read them. Kept here rather than plumbed through those
+   * functions, so one gate answers one question and the wiring cannot drift out of agreement.
+   */
+  const supervisorAddress = optional(
+    environment,
+    "ORBO_COMPUTER_SUPERVISOR_URL",
+  );
+  const sharedAddress = optional(environment, "ORBO_AGENT_COMPUTER_URL");
+  const sandboxNamespace = optional(
+    environment,
+    "ORBO_COMPUTER_SANDBOX_NAMESPACE",
+  );
+  const computerConfigured = Boolean(
+    supervisorAddress || sharedAddress || sandboxNamespace,
+  );
+
+  const inUse: Array<[string, boolean]> = [
+    // Checked before SUPERVISOR_TOKEN, because a deployment pointing at a supervisor is the only
+    // one the supervisor token means anything to.
+    ["ORBO_COMPUTER_TOKEN", computerConfigured],
+    ["SUPERVISOR_TOKEN", Boolean(supervisorAddress)],
+    [
+      "WORKER_SHARED_SECRET",
+      Boolean(optional(environment, "WORKER_SHARED_SECRET")),
+    ],
+  ];
+
+  for (const [name, used] of inUse) {
+    const value = optional(environment, name);
+    if (
+      !used ||
+      value !== DEVELOPMENT_TOKENS[name as keyof typeof DEVELOPMENT_TOKENS]
+    ) {
+      continue;
+    }
+
+    if (production) {
+      throw new Error(
+        `${name} is still the development token printed in this repository, which is public. Generate a real one before running in production.`,
+      );
+    }
+    if (beyondLoopback.length > 0) {
+      throw new Error(
+        `${name} is the development token printed in this repository, which is public, and this deployment answers beyond this machine at ${beyondLoopback.join(", ")}. Generate a real one.`,
+      );
+    }
+    console.warn(
+      `${name} is the development token printed in this repository. Fine on a loopback laptop. Generate a real one before deploying.`,
+    );
+  }
+}
+
 function computerConfig(environment: Environment): ComputerConfig | undefined {
   const supervisorAddress = optional(
     environment,
@@ -1214,8 +1511,112 @@ function agentStallTimeoutMs(environment: Environment): number {
   return milliseconds;
 }
 
-/** Where the API listens when nothing says otherwise: what `.env.example` and the image ship. */
+/**
+ * How long a signed-in session lasts, from either of its two names.
+ *
+ * `ORBO_SESSION_TTL_DAYS`, a whole number of days at least 1, defaulting to 7 — better-auth's own
+ * default, so the number here describes the deployment rather than the library. The library takes
+ * `expiresIn` in SECONDS; the translation happens in auth's own `sessionOptions`, and the days unit
+ * lives here because a week is what a person would write.
+ *
+ * `ORBO_SESSION_UPDATE_AGE_SECONDS`, optional, is the library's `updateAge`: how often a session in
+ * use has its expiry re-written. 0 is legitimate and renews on every use, which is why the floor is
+ * zero rather than one, and unset keeps the library's own cadence rather than a default here.
+ *
+ * Refused rather than coerced, like every other boundary here: a typo that silently became
+ * "remember me for a week" when the deployment said two would rather fail at boot.
+ */
+function sessionTtl(environment: Environment): DeploymentConfig["session"] {
+  const rawDays = optional(environment, "ORBO_SESSION_TTL_DAYS");
+  let expiresInDays = 7;
+  if (rawDays !== undefined) {
+    const days = Number(rawDays);
+    if (!Number.isInteger(days) || days < 1) {
+      throw new Error(
+        "ORBO_SESSION_TTL_DAYS must be a whole number of days, at least 1. Leave it unset for the default of 7.",
+      );
+    }
+    expiresInDays = days;
+  }
+
+  const rawUpdateAge = optional(environment, "ORBO_SESSION_UPDATE_AGE_SECONDS");
+  let updateAge: DeploymentConfig["session"];
+  if (rawUpdateAge === undefined) {
+    updateAge = { expiresInDays };
+  } else {
+    const seconds = Number(rawUpdateAge);
+    if (!Number.isInteger(seconds) || seconds < 0) {
+      throw new Error(
+        "ORBO_SESSION_UPDATE_AGE_SECONDS must be a whole number of seconds, at least 0. Leave it unset to keep better-auth's own cadence.",
+      );
+    }
+    updateAge = { expiresInDays, updateAgeSeconds: seconds };
+  }
+  return updateAge;
+}
+
+/**
+ * Where the API listens when nothing says otherwise: what `.env.example` and the image ship.
+ */
 const DEFAULT_PORT = 3001;
+
+/**
+ * The interface the socket binds to when nothing says otherwise.
+ *
+ * `Bun.serve` answers an unset `hostname` with `0.0.0.0` — every interface — while the boot log next
+ * to that call claimed the server was listening on `127.0.0.1`, which was worse than a lie: a
+ * deployment that believed it was loopback-only carried the example encryption key past a refusal
+ * built on the same misunderstanding. Naming the default makes the two agree, and `0.0.0.0` stays
+ * available to anybody who actually wants every interface, said in one place with the port.
+ */
+const DEFAULT_SERVER_HOST = "127.0.0.1";
+
+/**
+ * The interface the server's socket binds to, spelled as `Bun.serve` reads it.
+ *
+ * An IP address, a bracketed or bare IPv6 address, or a hostname, and — because this names a bind,
+ * not a browser's address bar — not a URL, a pattern, or anything containing whitespace. A bracketed
+ * IPv6 address is accepted the way it appears in an origin and handed to Bun stripped, which is the
+ * form a bind wants; the boot log re-brackets it for display.
+ *
+ * Refused rather than coerced: binding to some interface other than the one believed is not a
+ * degradation, it is a deployment answering where nobody looked.
+ */
+function serverHost(environment: Environment): string {
+  const raw = optional(environment, "ORBO_SERVER_HOST");
+  if (raw === undefined) return DEFAULT_SERVER_HOST;
+
+  const refusal = () =>
+    new Error(
+      "ORBO_SERVER_HOST must be a host this process can bind: an IP address such as 127.0.0.1, 0.0.0.0, :: or ::1, a [bracketed] IPv6 address, or a hostname — not a URL and not a pattern.",
+    );
+  if (
+    /\s/.test(raw) ||
+    raw.includes("://") ||
+    raw.includes("/") ||
+    raw.includes("*")
+  ) {
+    throw refusal();
+  }
+  if (raw.includes(":")) {
+    // An IPv6 address, bare or bracketed. Neither side of the bind cares for brackets, so they are
+    // stripped here once rather than by whoever logs it: the URL parser is the arbiter, as it is
+    // for `[::1]` in every origin this deployment compares against, and its hostname keeps the
+    // brackets in Bun the same way `reachOf` already accounts for below.
+    const address =
+      raw.startsWith("[") && raw.endsWith("]") ? raw.slice(1, -1) : raw;
+    try {
+      const hostname = new URL(`http://[${address}]`).hostname.toLowerCase();
+      return hostname.replace(/^\[|\]$/g, "");
+    } catch {
+      throw refusal();
+    }
+  }
+  if (/^[a-zA-Z0-9]([a-zA-Z0-9._-]*[a-zA-Z0-9_-])?$/.test(raw)) {
+    return raw.toLowerCase();
+  }
+  throw refusal();
+}
 
 /**
  * The port the API listens on, from either of its two names.
@@ -1266,9 +1667,15 @@ export function loadConfig(
     : undefined;
   const managedAgent = managedAgentConfig(environment);
   const workerSharedSecret = optional(environment, "WORKER_SHARED_SECRET");
+  // Before anything below builds on these values: a deployment carrying the tokens the install
+  // scripts mint refuses here rather than at the first use, where it would instead be one working
+  // request away from being exploited.
+  refuseDevelopmentTokens(environment);
+  const rateLimit = rateLimitConfig(environment);
 
   return {
     port: serverPort(environment),
+    serverHost: serverHost(environment),
     transcription: transcriptionConfig(environment),
     voice: voiceConfig(environment),
     databaseUrl: required(environment, "DATABASE_URL"),
@@ -1305,11 +1712,13 @@ export function loadConfig(
       singleUserAllowed(environment, configuredAuthProviders(auth).length > 0),
     accessibility: accessibilityEnabled(environment),
     generativeUi: generativeUiEnabled(environment),
+    session: sessionTtl(environment),
     ...(optional(environment, "APP_DIST_DIR")
       ? { appDistDir: optional(environment, "APP_DIST_DIR") as string }
       : {}),
     computer: computerConfig(environment),
     handoff: handoffCaps(environment),
+    ...(rateLimit ? { rateLimit } : {}),
     ...(optional(environment, "ORBO_AGENT_TOOL_TOKEN")
       ? {
           agentToolToken: optional(

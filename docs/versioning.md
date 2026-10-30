@@ -19,8 +19,13 @@ See [releasing.md](releasing.md#desktop-build-versions) for the local build comm
 
 Versions are `major.minor.patch`. The person cutting the release chooses `patch`, `minor`, or
 `major` when running the **Create release PR** workflow. The repo states no further rule for
-which bump a given change deserves — [OWNER TODO: bump guidance, e.g. what counts as breaking
-for an ORBO deployment].
+which bump a given change deserves. Proposed guidance, for owner sign-off: **major** when an
+upgrade needs operator action that does not resolve itself (a migration that cannot roll back, a
+removed setting someone must replace by hand); **minor** when a deployment behaves differently
+but the upgrade needs only what the release workflow already does; **patch** when it does not.
+<!-- OWNER: Confirm this bump guidance or replace it; delete this comment and the confirm marker once decided. -->
+[OWNER TO CONFIRM: bump guidance — the major/minor/patch proposal above, including what counts
+as breaking for an ORBO deployment].
 
 ## Changelog policy
 
@@ -59,4 +64,12 @@ smoke journey in `tests/smoke` cannot run in CI and is a manual pre-merge step o
 PR (real Intelligence credentials plus a signed-in session cookie) — see
 [releasing.md](releasing.md#the-one-thing-ci-cannot-do).
 
-Support window, backport policy, and who may cut a release are [OWNER TODO].
+Proposed policy, for owner sign-off: the latest release line receives fixes; the previous line
+receives backported security and data-loss fixes for six months after its successor ships; and
+only the owners cut a release (the release workflows already refuse anybody else — see
+[releasing.md](releasing.md)). This matches `SECURITY.md`, which says only the current line
+receives fixes until the owner decides otherwise.
+<!-- OWNER: Confirm the support window, the backport scope, and who may cut a release, or replace them; delete this comment and the confirm marker once decided, and align SECURITY.md with the decision. -->
+[OWNER TO CONFIRM: support window, backport policy, and who may cut a release — proposal:
+latest line plus one line of security/data-loss backports for six months, releases cut by the
+owners].

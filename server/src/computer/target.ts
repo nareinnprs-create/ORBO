@@ -296,3 +296,92 @@ export function checkNavigationTarget(
 
   return { allowed: true, url: url.toString() };
 }
+
+/**
+ * Decide whether an address the resolver handed back may be dialed.
+ *
+ * The string checks above judge what a URL SAYS. A name can say one thing and resolve to another,
+ * which is the whole mechanics of DNS rebinding: `agent.example.com` passes every list, its answer
+ * rotates to `169.254.169.254` or `10.0.0.5`, and the fetch that follows is a check that approved
+ * one address arriving at another. This is the other half of the check, run on the answer rather
+ * than the question — every address the resolver offers, because a multi-answer name is only as
+ * private as its most private answer.
+ *
+ * The same floor as {@link checkNavigationTarget}, applied to addresses rather than URLs: the
+ * metadata list is refused whatever anything says, and the private ranges are refused unless the
+ * deployment opted in — or, at the call sites, unless the NAME was one the deployment named, in
+ * which case its own answers belong to it. `INTERNAL_HOSTNAMES` needs no re-check here: the
+ * resolver answers with addresses, and loopback arrives as `127.0.0.1` or `::1`, both of which the
+ * private ranges above already refuse.
+ */
+export function checkResolvedAddress(
+  address: string,
+  options: { allowPrivateHosts?: boolean } = {},
+): TargetVerdict {
+  /*
+   * Through the same canonicalisation the literal spellings above go through, so the answers a
+   * resolver actually produces — `::ffff:10.0.0.5` from a dual-stack stack, a compressed IPv6
+   * name — are judged as the destination they reach and not as the spelling they arrived in. The
+   * embedded-IPv4 unwrapping is the load-bearing part: `::ffff:10.0.0.5` reads as a public global
+   * unicast address to the range checks and as 10.0.0.5 to the socket.
+   */
+  const canonical = canonicalResolvedAddress(address);
+
+  if (isNeverAllowedHostname(canonical)) {
+    return {
+      allowed: false,
+      reason: `it holds this deployment's own cloud credentials`,
+    };
+  }
+
+  if (options.allowPrivateHosts) {
+    return { allowed: true, url: canonical };
+  }
+
+  if (isPrivateIpv4(canonical) || isPrivateIpv6(canonical)) {
+    return {
+      allowed: false,
+      reason: "it is inside this deployment's own network",
+    };
+  }
+
+  return { allowed: true, url: canonical };
+}
+
+/**
+ * A resolver's answer, reduced to the one form the checks above are written in.
+ *
+ * Brackets a caller added are stripped, and an IPv6 answer — compressed, or carrying an IPv4
+ * address in dotted form — is put through the WHATWG URL parser, which is the same canonicaliser
+ * that turned the URL spellings the string checks were written against into their hex forms. Its
+ * output is the one shape {@link expandIpv6} can read, so the mapped and NAT64 answers reach
+ * {@link embeddedIpv4} and are judged as the IPv4 addresses they dial rather than slipping the
+ * range checks as exotic spellings. `::` and `::1` come back as themselves, which is what
+ * `isPrivateIpv6` recognises.
+ */
+function canonicalResolvedAddress(address: string): string {
+  const bare = address.replace(/^\[|\]$/g, "").toLowerCase();
+  if (!bare.includes(":")) return bare;
+
+  let parsed = bare;
+  try {
+    // The same parser that canonicalises the URL spellings the string checks were written
+    // against: a bracketed or dotted answer goes in, and the one hex form comes out.
+    parsed = new URL(`http://[${bare}]`).hostname.replace(/^\[|\]$/g, "");
+  } catch {
+    // Not an address the parser recognises. Handed back unchanged, for the range checks to
+    // decline or pass on whatever they can read of it — the same failure direction the string
+    // checks take for a name they cannot read.
+  }
+
+  /*
+   * And then the unwrapping `canonicalHostname` does for URLs, done here because this is where a
+   * resolver's answers arrive: `::ffff:a00:5` is 10.0.0.5 to the socket, and the range checks
+   * below only see the RFC1918 address once the mapped form has been reduced to it. `::` and
+   * `::1` are deliberately left alone — their low bits are not addresses anybody routes to, and
+   * `isPrivateIpv6` recognises them as the IPv6 addresses they are.
+   */
+  const groups = expandIpv6(parsed);
+  if (!groups) return parsed;
+  return embeddedIpv4(groups) ?? parsed;
+}

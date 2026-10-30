@@ -53,15 +53,17 @@ WORKDIR /src
 COPY package.json bun.lock ./
 COPY tsconfig.base.json bunfig.toml ./
 COPY app/package.json app/package.json
-COPY apps/app/package.json apps/app/package.json
-COPY packages/ui/package.json packages/ui/package.json
 COPY server/package.json server/package.json
 COPY worker/package.json worker/package.json
-# Only the workspaces this image builds. `@orbo/app` is the Expo mobile client: nothing the app
-# build or the server imports, but hundreds of packages that every full install downloads and keeps
-# in this layer. That bloat is what left the `image` job with no disk for the Chromium download
-# above. The manifests above still include it, so `--frozen-lockfile` keeps pinning the whole tree.
-RUN bun install --frozen-lockfile --filter app --filter server --filter worker --filter '@orbo/ui' \
+# Only the workspaces this image builds: app, server and worker, the three directories `workspaces`
+# in the root package.json names. Two manifests used to be copied here besides these — the Expo
+# client (apps/app) and packages/ui — but both stopped being workspaces in v0.1.5, so the
+# `--filter '@orbo/ui'` that justified copying them matched nothing: bun scopes installs to the
+# workspaces the root manifest declares, and those two are not in it. The copies were dead weight in
+# every layer since. `--frozen-lockfile` still pins the whole filtered tree: bun checks what it
+# resolves against the committed lockfile, so the versions in the image are the ones this
+# repository resolved.
+RUN bun install --frozen-lockfile --filter app --filter server --filter worker \
   && rm -rf /root/.bun/install/cache /root/.cache /tmp/*
 
 # The lockfile travels with the manifest, because `--frozen-lockfile` with no lockfile in the context
@@ -83,14 +85,13 @@ RUN mkdir -p /prod-computer && cp agent-orbo-computer/package.json agent-orbo-co
 # Scoped to the one workspace that runs here. The runtime serves the prebuilt `app/dist` statically
 # and executes `server/` (plus `agent-orbo-computer/`, which is a separate install root below, and the one
 # composio script, which only imports `server/`): every bare import in those files is declared in
-# `server/package.json`, so the app frontend, the Expo client, worker and ui trees buy resolution
-# nothing and ship hundreds of megabytes. They stay out of this install the same way the Expo tree
-# stays out of the build install above.
+# `server/package.json`, so the app frontend and the worker tree buy resolution nothing and ship
+# hundreds of megabytes. They stay out of this install the same way the Expo client stays out of
+# the build install above — it and packages/ui are not workspaces at all since v0.1.5, which is why
+# their manifests are no longer even copied into /prod.
 RUN mkdir -p /prod && cp package.json bun.lock /prod/ \
-  && cd /prod && mkdir -p app server worker apps/app packages/ui \
+  && cd /prod && mkdir -p app server worker \
   && cp /src/app/package.json app/package.json \
-  && cp /src/apps/app/package.json apps/app/package.json \
-  && cp /src/packages/ui/package.json packages/ui/package.json \
   && cp /src/server/package.json server/package.json \
   && cp /src/worker/package.json worker/package.json \
   && bun install --frozen-lockfile --production --filter server \
@@ -269,6 +270,10 @@ ENV EMBEDDED_POSTGRES=off
 ENV DATABASE_URL=postgres://orbo@127.0.0.1:5432/orbo
 
 ENV NODE_ENV=production
+# The published port is the only way in, and Docker's publisher dials the container's bridge
+# address, which the server's 127.0.0.1 default never answers. Loopback remains the story on a
+# laptop: scripts/start.sh runs the server on the host, where the default already applies.
+ENV ORBO_SERVER_HOST=0.0.0.0
 ENV PORT=3001
 EXPOSE 3001
 

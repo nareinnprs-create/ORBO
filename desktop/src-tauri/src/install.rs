@@ -41,6 +41,20 @@ use crate::problem::Problem;
 ///
 /// Pinned for the reason the deployment pins image digests: a version is what somebody hopes is
 /// there, a digest is what was run. Moving these means re-recording the digests below.
+///
+/// The operator map — seven keys move this install off a public github.com; the release endpoint
+/// and image overrides are read in `deployment.rs` and `deployment_release.rs` (defaults listed
+/// there), and the seventh, ORBO_NPM_REGISTRY (the bun install registry for an offline mirror),
+/// is owned elsewhere — stack.rs reads it and documents it. This file's site:
+/// - `ORBO_ENGINE_MIRROR` — when set, every installer below downloads from
+///   `{mirror}/{path-after-github.com}`, e.g. `https://mirror.internal:9000/oven-sh/bun/...`
+///   (default unset: the installers come from github.com).
+///
+/// The digest pins are unchanged and still enforced wherever the bytes come from — a mirror
+/// serving different bytes fails here, because the mirror is a transport, not a version of
+/// its own.
+/// (Related but owned elsewhere: ORBO_NPM_REGISTRY, the bun install registry, is read in
+/// stack.rs; see that file.)
 pub const PODMAN: &str = "6.1.1";
 pub const COMPOSE: &str = "5.5.1";
 /// Keep aligned with the repository's packageManager and container runtime.
@@ -54,6 +68,65 @@ pub struct Download {
     /// What to call it on disk. Named rather than taken from the URL so a redirect cannot choose
     /// the filename.
     pub file: &'static str,
+}
+
+/// One pinned installer, with the operator's `ORBO_ENGINE_MIRROR` applied to its URL.
+fn download_with(
+    url: String,
+    sha256: &'static str,
+    file: &'static str,
+) -> Result<Download, Problem> {
+    download_from(
+        url,
+        sha256,
+        file,
+        crate::deployment::env_override("ORBO_ENGINE_MIRROR").as_deref(),
+    )
+}
+
+/// [`download_with`] with the mirror passed in, so the composition is testable without touching
+/// the process environment.
+fn download_from(
+    url: String,
+    sha256: &'static str,
+    file: &'static str,
+    mirror: Option<&str>,
+) -> Result<Download, Problem> {
+    Ok(Download {
+        file,
+        sha256,
+        url: mirrored_url_with(&url, mirror)?,
+    })
+}
+
+/// `{mirror}/{path-after-github.com}`.
+///
+/// The defaults below all point at github.com, and a mirror is expected to keep that path
+/// underneath its own root, so the rewrite keeps everything after `github.com/` and re-roots
+/// it: `https://github.com/oven-sh/bun/...` becomes
+/// `https://mirror.internal:9000/oven-sh/bun/...`. The mirror must be an absolute URL — it
+/// may carry a scheme and a base path — and one that is not refuses naming the key, because
+/// a mirror that let one install onto the public endpoint would defeat the reason it was
+/// set. A default that is not a github.com URL is left alone; there is none today.
+fn mirrored_url_with(default_url: &str, mirror: Option<&str>) -> Result<String, Problem> {
+    let Some(mirror) = mirror else {
+        return Ok(default_url.to_string());
+    };
+    let usable = reqwest::Url::parse(mirror)
+        .ok()
+        .filter(|parsed| parsed.host_str().is_some_and(|host| !host.is_empty()));
+    if usable.is_none() {
+        return Err(Problem::with(
+            "ORBO is set to fetch its installers from a mirror that cannot be used. Fix the \
+             mirror setting, then try again.",
+            format!("ORBO_ENGINE_MIRROR is set, but {mirror} is not an absolute URL"),
+        ));
+    }
+    let after_github = default_url
+        .split_once("github.com/")
+        .map(|(_, rest)| rest)
+        .unwrap_or(default_url);
+    Ok(format!("{}/{after_github}", mirror.trim_end_matches('/')))
 }
 
 /// The Podman installer for this machine, or why there is not one.
@@ -93,13 +166,13 @@ pub fn podman_download() -> Result<Download, Problem> {
             ))
         }
     };
-    Ok(Download {
-        url: format!(
+    download_with(
+        format!(
             "https://github.com/podman-container-tools/podman/releases/download/v{PODMAN}/{file}"
         ),
         sha256,
         file,
-    })
+    )
 }
 
 /// The Compose provider for this machine.
@@ -140,11 +213,11 @@ pub fn compose_download() -> Result<Download, Problem> {
             ))
         }
     };
-    Ok(Download {
-        url: format!("https://github.com/docker/compose/releases/download/v{COMPOSE}/{file}"),
+    download_with(
+        format!("https://github.com/docker/compose/releases/download/v{COMPOSE}/{file}"),
         sha256,
         file,
-    })
+    )
 }
 
 /// Fetch to `into`, refusing anything whose digest is not the pinned one.
@@ -254,11 +327,11 @@ fn bun_download(os: &str, arch: &str) -> Result<Download, Problem> {
             ))
         }
     };
-    Ok(Download {
-        url: format!("https://github.com/oven-sh/bun/releases/download/bun-v{BUN}/{file}"),
+    download_with(
+        format!("https://github.com/oven-sh/bun/releases/download/bun-v{BUN}/{file}"),
         sha256,
         file,
-    })
+    )
 }
 
 fn install_bun(cache: &Path) -> Result<PathBuf, Problem> {
@@ -731,6 +804,89 @@ mod tests {
     fn this_platform_has_a_compose_build() {
         let download = compose_download().expect("every supported platform has a Compose build");
         assert!(download.url.ends_with(download.file), "{download:?}");
+    }
+
+    /// The mirror re-roots what follows `github.com/` under its own base; scheme and base
+    /// path, and a trailing slash, are all accepted.
+    #[test]
+    fn an_engine_mirror_composes_its_own_root_under_the_github_path() {
+        let mirrored = mirrored_url_with(
+            "https://github.com/oven-sh/bun/releases/download/bun-v1.3.14/bun-linux-x64-baseline.zip",
+            Some("https://mirror.internal:9000/bin/"),
+        )
+        .expect("a usable mirror composes");
+        assert_eq!(
+            mirrored,
+            "https://mirror.internal:9000/bin/oven-sh/bun/releases/download/bun-v1.3.14/bun-linux-x64-baseline.zip"
+        );
+        assert_eq!(
+            mirrored_url_with(
+                "https://github.com/docker/compose/releases/download/v5.5.1/compose",
+                Some("https://mirror.internal:9000")
+            )
+            .expect("a mirror without a base path still composes"),
+            "https://mirror.internal:9000/docker/compose/releases/download/v5.5.1/compose"
+        );
+    }
+
+    /// The mirror points at the same host as the release overrides in a typical setup; the
+    /// installer URL keeps its full github path because that is what the mirror implements.
+    #[test]
+    fn an_engine_mirror_that_is_not_an_absolute_url_is_refused_naming_the_key() {
+        for mirror in [
+            "not a url",
+            "mirror.internal/mirror",
+            "mirror.internal:9000",
+            "http://",
+        ] {
+            let refused = mirrored_url_with(
+                "https://github.com/podman-container-tools/podman/releases/download/v6.1.1/podman.msi",
+                Some(mirror),
+            )
+            .expect_err("a mirror without a scheme or host cannot be used");
+            assert!(
+                refused
+                    .detail
+                    .as_deref()
+                    .is_some_and(|detail| detail.contains("ORBO_ENGINE_MIRROR")),
+                "{refused:?}"
+            );
+        }
+    }
+
+    /// The digest is compared against the bytes received, whatever server sent them, so the
+    /// mirror rides on the same pin and a mirror serving different bytes fails.
+    #[test]
+    fn an_engine_mirror_does_not_move_the_digest_that_is_checked() {
+        let mirrored = download_from(
+            "https://github.com/oven-sh/bun/releases/download/bun-v1.3.14/bun-linux-x64-baseline.zip".into(),
+            "a063908ae08b7852ca10939bbdc6ceed3ddabce8fb9402dce83d65d73b36e6c7",
+            "bun-linux-x64-baseline.zip",
+            Some("https://mirror.internal:9000"),
+        )
+        .expect("a pinned download composes behind the mirror");
+        assert_eq!(
+            mirrored.url,
+            "https://mirror.internal:9000/oven-sh/bun/releases/download/bun-v1.3.14/bun-linux-x64-baseline.zip"
+        );
+        assert_eq!(
+            mirrored.sha256,
+            "a063908ae08b7852ca10939bbdc6ceed3ddabce8fb9402dce83d65d73b36e6c7"
+        );
+        assert_eq!(mirrored.file, "bun-linux-x64-baseline.zip");
+    }
+
+    /// Without the override the pinned URLs are used exactly as they are released.
+    #[test]
+    fn without_a_mirror_the_installers_come_from_github_as_released() {
+        assert_eq!(
+            mirrored_url_with(
+                "https://github.com/podman-container-tools/podman/releases/download/v6.1.1/podman.msi",
+                None
+            )
+            .expect("no mirror keeps the default"),
+            "https://github.com/podman-container-tools/podman/releases/download/v6.1.1/podman.msi"
+        );
     }
 
     #[test]
