@@ -25,10 +25,36 @@ export function matchesToken(expected: string, offered: string): boolean {
 }
 
 /**
+ * How long an unauthenticated stream socket has to present its token.
+ *
+ * Short enough that a knocked-but-never-authorised connection cannot hold a slot for long, long
+ * enough for a proxy's own connect plus one frame. The server that prefers this path sends the
+ * frame immediately on open, so the deadline never bites a real caller.
+ */
+export const STREAM_AUTH_DEADLINE_MS = 5_000;
+
+/**
+ * The token a stream socket's FIRST message carries, or null when the message is not an auth frame.
+ *
+ * The preferred way a stream authenticates: the token travels as a message instead of a query
+ * parameter, so it never lands in a URL, an access log or a browser history. Anything that is not
+ * an auth frame — an input, garbage, an array — is null, and the caller refuses the socket rather
+ * than guessing. Exported so the contract has a test beside it.
+ */
+export function streamAuthToken(message: unknown): string | null {
+  if (typeof message !== "object" || message === null || Array.isArray(message))
+    return null;
+  const record = message as Record<string, unknown>;
+  if (record.type !== "auth") return null;
+  return typeof record.token === "string" ? record.token : null;
+}
+
+/**
  * The secret a caller offered, however it could carry it.
  *
- * WebSocket clients cannot set upgrade headers, so the stream also accepts the token as a query
- * parameter.
+ * WebSocket clients cannot set upgrade headers, so the stream accepts the token as a query
+ * parameter — kept because a plain WebSocket client with no message protocol has to have some way
+ * in — but the preferred path is the first-message frame above, and the server proxy uses that.
  */
 export function offeredToken(headers: Headers, url: URL): string {
   // The header path trims; the query path must too, or `?token=%20SECRET` 401s while the same

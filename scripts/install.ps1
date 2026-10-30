@@ -538,7 +538,7 @@ $oneComputerEach = Get-OrboSetting -Name 'ORBO_ONE_COMPUTER_EACH' -Fallback 'tru
 $pickedHarnessImage = Get-OrboSetting -Name 'PICKED_HARNESS_IMAGE' -Fallback ''
 $supervisorToken = Get-OrboSetting -Name 'SUPERVISOR_TOKEN' -Fallback 'orbo-dev-supervisor-token'
 $computerToken = Get-OrboSetting -Name 'ORBO_COMPUTER_TOKEN' -Fallback 'orbo-dev-computer-token'
-$workerSharedSecret = Get-OrboSetting -Name 'WORKER_SHARED_SECRET' -Fallback 'orbo-dev-worker-secret'
+$workerSharedSecret = Get-OrboSetting -Name 'WORKER_SHARED_SECRET' -Fallback 'orbo-dev-worker-shared-secret'
 # The same values install.sh exports, so compose sees what this run resolved.
 $env:APP_PORT = $appPort
 $env:SERVER_PORT = $serverPort

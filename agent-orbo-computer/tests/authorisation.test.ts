@@ -4,6 +4,8 @@ import {
   isOpenPath,
   matchesToken,
   offeredToken,
+  STREAM_AUTH_DEADLINE_MS,
+  streamAuthToken,
 } from "../src/authorisation";
 
 /**
@@ -73,6 +75,49 @@ describe("finding the secret a caller offered", () => {
 
   test("nothing offered is an empty string, not a crash", () => {
     expect(offeredToken(new Headers(), url("/snapshot"))).toBe("");
+  });
+});
+
+/**
+ * The first message IS the credential, for a stream that upgraded without a query token.
+ *
+ * This is the path the server proxy prefers, precisely because a token in a URL lands in access
+ * logs where a websocket message does not. The frame's shape is a contract between two processes
+ * changed together, so it is pinned here literally: `{"type":"auth","token":<the secret>}`, and
+ * nothing else — not an input that arrived early, not a near miss — reads as one.
+ */
+describe("the stream's first-message auth frame", () => {
+  test("an auth frame yields its token", () => {
+    expect(streamAuthToken({ type: "auth", token: SECRET })).toBe(SECRET);
+  });
+
+  test.each([
+    ["an input that arrived ahead of it", { type: "pointer-move", x: 1, y: 2 }],
+    ["the wrong type", { type: "login", token: SECRET }],
+    ["a frame with no token", { type: "auth" }],
+    ["a token that is not a string", { type: "auth", token: 42 }],
+    ["an array", ["auth", SECRET]],
+    ["a string", "auth"],
+    ["nothing at all", null],
+  ])("refuses %p", (_name, message) => {
+    expect(streamAuthToken(message)).toBeNull();
+  });
+
+  test("an unparseable message is refused by the caller's catch, and parses to nothing here", () => {
+    // The handler wraps JSON.parse itself; this pins that a valid-JSON-but-wrong frame can never
+    // authenticate, which is the part of that wrapping worth a test.
+    expect(streamAuthToken(JSON.parse('{"type":"auth","token":""}'))).toBe("");
+    // An empty token then fails `matchesToken` (an empty expected secret refuses everything), so
+    // "" can only ever end in a refusal.
+    expect(
+      matchesToken(SECRET, streamAuthToken({ type: "auth", token: "" }) ?? ""),
+    ).toBeFalse();
+  });
+
+  test("the deadline a socket has to present its token is bounded", () => {
+    // A connection that presents nothing must go away on its own, not hold the process open.
+    expect(STREAM_AUTH_DEADLINE_MS).toBeGreaterThan(0);
+    expect(STREAM_AUTH_DEADLINE_MS).toBeLessThanOrEqual(10_000);
   });
 });
 

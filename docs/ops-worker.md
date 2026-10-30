@@ -11,11 +11,16 @@ no CronJob process around the sweep, so `worker/src/index.ts` supplies the recur
 30-second loop running the very same phases in-process, with each phase's error caught and
 logged so a transient database blip does not kill the worker.
 
-It reads exactly three settings (`worker/src/env.ts`), all required:
+It reads its settings (`worker/src/env.ts`); the first three are required:
 
 - `DATABASE_URL` — Postgres, to due-offer and claim against.
 - `SERVER_INTERNAL_URL` — where claimed runs are handed: `POST /internal/routines/run`.
-- `WORKER_SHARED_SECRET` — the bearer credential for that handoff.
+- `WORKER_SHARED_SECRET` — the bearer credential for that handoff. Refused at boot when shorter
+  than 24 characters: a short shared secret is guessable, and the failure it produces is a worker
+  collecting 401s forever. Generate one with `openssl rand -base64 32` and set the same value in
+  the server's environment.
+- `WORKER_LIVENESS_PORT` — optional. Where the worker's `/live` HTTP endpoint binds (default
+  **3002**; `0` turns the endpoint off). See below.
 
 `scripts/start.sh` (and `start.ps1`) normally launch it as a background process from the
 deployment root, logging to `.logs/worker.log`, after composing up the Docker services.
@@ -23,12 +28,26 @@ deployment root, logging to `.logs/worker.log`, after composing up the Docker se
 ## Why silent death is bad
 
 Outside a chart install, the worker background process has no restart policy watching it: no
-systemd unit, no scheduled task, no HTTP endpoint of its own to health-check — it is a bare
+systemd unit, no scheduled task — it is a bare
 loop. If the process dies (machine reboot, OOM kill, an unhandled one-time failure in the
 process itself), nothing notices: **routines quietly stop firing**. Bots stop answering scheduled
 work, no alarm goes off, and the first evidence is a person asking why a routine did not run
 days ago. That gap is the reason this document and the installer scripts exist: make the
 start-at-boot and restart story come from something that actually watches.
+
+## Liveness: `GET /live`
+
+The worker binds one small HTTP endpoint for exactly the watcher the section above asks for:
+`GET /live` on `WORKER_LIVENESS_PORT` (default **3002**) answers `200 ok` while the process can
+answer at all, and a probe that keeps timing out is the restart signal. It is liveness and nothing
+more — it carries no secret, names nothing the server would call, and answers 404 for every other
+path. If the port is already taken the worker logs `worker-liveness-unavailable` and carries on:
+a port collision must not become a routines outage. Set `WORKER_LIVENESS_PORT=0` on a host that
+watches the worker some other way.
+
+A stop (SIGINT/SIGTERM) is a drain, not a kill: the loop finishes the tick it is in — an in-flight
+dispatch is a run row opened and owed its hand-off — closes its database client, and exits 0. A
+worker asked to stop between ticks does not sit out the full 30 seconds first.
 
 ## Install: register a boot-start service
 

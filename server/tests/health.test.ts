@@ -4,6 +4,32 @@ import { loadConfig } from "../src/config";
 import type { Database } from "../src/db/client";
 import { testEnvironment } from "./support/environment";
 
+/**
+ * A stand-in Intelligence, for the tests that need /health to answer healthy.
+ *
+ * The probe is reachability, so any answer will do; nothing here reads the request's
+ * credentials beyond recording that they arrived, which is one of the assertions.
+ */
+function intelligenceStub() {
+  const seen: { authorization: string | null; paths: string[] } = {
+    authorization: null,
+    paths: [],
+  };
+  const server = Bun.serve({
+    port: 0,
+    fetch: (request) => {
+      seen.authorization = request.headers.get("authorization");
+      seen.paths.push(new URL(request.url).pathname);
+      return new Response("ok", { status: 200 });
+    },
+  });
+  return {
+    seen,
+    url: `http://localhost:${server.port}`,
+    stop: () => server.stop(true),
+  };
+}
+
 const app = createApp(
   loadConfig({
     ...testEnvironment(),
@@ -11,78 +37,141 @@ const app = createApp(
 );
 
 describe("health endpoint", () => {
-  test("reports a reachable database as healthy with the measure of the ping", async () => {
+  test("reports a reachable database and Intelligence as healthy with the measure of the pings", async () => {
     // createApp takes positional stores; healthDatabase is the last parameter (36th). Build the
     // argument list by index so a future appended store cannot silently shift it.
-    const args: unknown[] = Array.from({ length: 36 });
-    args[0] = loadConfig(testEnvironment());
-    args[35] = { execute: async () => [] } as unknown as Database;
-    const healthy = createApp(...(args as never[]));
+    const intelligence = intelligenceStub();
+    try {
+      const args: unknown[] = Array.from({ length: 36 });
+      args[0] = loadConfig(
+        testEnvironment({ INTELLIGENCE_API_URL: intelligence.url }),
+      );
+      args[35] = { execute: async () => [] } as unknown as Database;
+      const healthy = createApp(...(args as never[]));
 
-    const response = await healthy.request("http://orbo.local/health");
+      const response = await healthy.request("http://orbo.local/health");
 
-    expect(response.status).toBe(200);
-    const body = (await response.json()) as Record<string, unknown>;
-    expect(body.status).toBe("ok");
-    expect(body.db).toBe("ok");
-    expect(typeof body.latencyMs).toBe("number");
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as Record<string, unknown>;
+      expect(body.status).toBe("ok");
+      expect(body.db).toBe("ok");
+      expect(body.intelligence).toBe("ok");
+      expect(typeof body.latencyMs).toBe("number");
+      // The probe presented the deployment's key, on the deployment's address, and read nothing.
+      expect(intelligence.seen.authorization).toBe("Bearer tenant-api-key");
+      expect(intelligence.seen.paths).toEqual(["/"]);
+    } finally {
+      intelligence.stop();
+    }
   });
 
   test("answers degraded, without leaking the address, when the database cannot be reached", async () => {
-    const degraded = createApp(
-      loadConfig({
-        ...testEnvironment({
-          DATABASE_URL: "postgres://orbos-password@127.0.0.1:1/orbo",
+    const intelligence = intelligenceStub();
+    try {
+      const degraded = createApp(
+        loadConfig({
+          ...testEnvironment({
+            DATABASE_URL: "postgres://orbos-password@127.0.0.1:1/orbo",
+            INTELLIGENCE_API_URL: intelligence.url,
+          }),
         }),
-      }),
-    );
+      );
 
-    const response = await degraded.request("http://orbo.local/health");
+      const response = await degraded.request("http://orbo.local/health");
 
-    expect(response.status).toBe(503);
-    const body = (await response.json()) as Record<string, unknown>;
-    expect(body.status).toBe("ok");
-    expect(String(body.db)).toMatch(/^degraded: /);
-    expect(String(body.db)).not.toContain("orbos-password");
-    expect(String(body.db)).not.toContain("postgres://");
-    expect(typeof body.latencyMs).toBe("number");
+      expect(response.status).toBe(503);
+      const body = (await response.json()) as Record<string, unknown>;
+      expect(body.status).toBe("ok");
+      expect(String(body.db)).toMatch(/^degraded: /);
+      expect(String(body.db)).not.toContain("orbos-password");
+      expect(String(body.db)).not.toContain("postgres://");
+      // Intelligence answered fine the whole time; the two degradations never blur.
+      expect(body.intelligence).toBe("ok");
+      expect(typeof body.latencyMs).toBe("number");
+    } finally {
+      intelligence.stop();
+    }
   });
 
-  test("answers degraded, naming the failure, and keeps the deployment answering", async () => {
+  test("answers degraded under its own name when Intelligence cannot be reached", async () => {
+    // A closed port: the one way to make the probe fail without a stub that lies.
+    const dead = intelligenceStub();
+    const deadUrl = dead.url;
+    dead.stop();
+    // The database is stubbed healthy, so the only degradation in play is Intelligence's.
     const args: unknown[] = Array.from({ length: 36 });
-    args[0] = loadConfig(testEnvironment());
-    args[35] = {
-      execute: async () => {
-        throw new Error("The connection was refused.");
-      },
-    } as unknown as Database;
+    args[0] = loadConfig(
+      testEnvironment({
+        INTELLIGENCE_API_URL: deadUrl,
+        INTELLIGENCE_API_KEY: "a-very-secret-intelligence-key",
+      }),
+    );
+    args[35] = { execute: async () => [] } as unknown as Database;
     const degraded = createApp(...(args as never[]));
 
     const response = await degraded.request("http://orbo.local/health");
 
     expect(response.status).toBe(503);
-    await expect(response.json()).resolves.toMatchObject({
-      status: "ok",
-      db: "degraded: The connection was refused.",
-    });
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(body.status).toBe("ok");
+    // Its own field, under its own name — a reader can tell which dependency fell.
+    expect(String(body.intelligence)).toMatch(/^degraded: /);
+    expect(String(body.intelligence)).not.toContain(deadUrl);
+    expect(String(body.intelligence)).not.toContain(
+      "a-very-secret-intelligence-key",
+    );
+    expect(String(body.intelligence)).not.toContain("localhost");
+    // The database was never the problem.
+    expect(body.db).toBe("ok");
+  });
+
+  test("answers degraded, naming the failure, and keeps the deployment answering", async () => {
+    const intelligence = intelligenceStub();
+    try {
+      const args: unknown[] = Array.from({ length: 36 });
+      args[0] = loadConfig(
+        testEnvironment({ INTELLIGENCE_API_URL: intelligence.url }),
+      );
+      args[35] = {
+        execute: async () => {
+          throw new Error("The connection was refused.");
+        },
+      } as unknown as Database;
+      const degraded = createApp(...(args as never[]));
+
+      const response = await degraded.request("http://orbo.local/health");
+
+      expect(response.status).toBe(503);
+      await expect(response.json()).resolves.toMatchObject({
+        status: "ok",
+        db: "degraded: The connection was refused.",
+        intelligence: "ok",
+      });
+    } finally {
+      intelligence.stop();
+    }
   });
 
   test("one cached answer short of a hammering, re-using it inside the TTL", async () => {
-    const args: unknown[] = Array.from({ length: 36 });
-    args[0] = loadConfig(testEnvironment());
-    let pings = 0;
-    args[35] = {
-      execute: async () => {
-        pings += 1;
-        return [];
-      },
-    } as unknown as Database;
-    const healthy = createApp(...(args as never[]));
+    const intelligence = intelligenceStub();
+    try {
+      const args: unknown[] = Array.from({ length: 36 });
+      args[0] = loadConfig(
+        testEnvironment({ INTELLIGENCE_API_URL: intelligence.url }),
+      );
+      args[35] = {
+        execute: async () => [],
+      } as unknown as Database;
+      const healthy = createApp(...(args as never[]));
 
-    await healthy.request("http://orbo.local/health");
-    await healthy.request("http://orbo.local/health");
+      await healthy.request("http://orbo.local/health");
+      await healthy.request("http://orbo.local/health");
 
-    expect(pings).toBe(1);
+      // One database ping AND one Intelligence probe: the whole report is cached together.
+      expect(intelligence.seen.paths).toHaveLength(1);
+    } finally {
+      intelligence.stop();
+    }
   });
 });
 

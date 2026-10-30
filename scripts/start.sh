@@ -66,7 +66,7 @@ ORBO_COMPUTER_TOKEN="$(setting ORBO_COMPUTER_TOKEN orbo-dev-computer-token)"
 # the fixed default gates nothing sensitive here. That is also why it is generated fresh and
 # persisted for ORBO_AGENT_TOOL_TOKEN (see the SECRETS_ROTATED block) but not for this one — production
 # must set a real WORKER_SHARED_SECRET.
-WORKER_SHARED_SECRET="$(setting WORKER_SHARED_SECRET orbo-dev-worker-secret)"
+WORKER_SHARED_SECRET="$(setting WORKER_SHARED_SECRET orbo-dev-worker-shared-secret)"
 
 # The secret the server sends to a managed Bot, generated and written back on first run.
 #
