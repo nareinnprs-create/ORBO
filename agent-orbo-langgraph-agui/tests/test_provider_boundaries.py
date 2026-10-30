@@ -337,7 +337,13 @@ async def test_anthropic_selection_reaches_anthropic_boundary_without_openai_key
     assert result["messages"][0].content == "anthropic proof"
     assert "OPENAI_API_KEY" not in os.environ
     assert captured[0]["url"] == "http://127.0.0.1:4311/v1/messages"
-    assert captured[0]["headers"]["x-api-key"] == "sk-ant-orbo-ci"
+    # The credential's arrival is the contract; the header that carries it is the SDK's to pick.
+    # Current anthropic SDKs send the API key as a bearer token, older ones as x-api-key.
+    credential_header = (
+        captured[0]["headers"].get("x-api-key")
+        or (captured[0]["headers"].get("authorization") or "").removeprefix("Bearer ")
+    )
+    assert credential_header == "sk-ant-orbo-ci"
     assert captured[0]["headers"]["anthropic-version"] == "2023-06-01"
     assert captured[0]["body"]["model"] == request_model
     assert captured[0]["body"]["messages"] == [
