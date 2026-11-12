@@ -1,4 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="680" height="180" viewBox="0 0 680 180">
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="680" height="180" viewBox="0 0 680 180">
+    <title>ORBO</title>
     <defs><linearGradient id="orbital" x1="0%" y1="90%" x2="100%" y2="10%">
       <stop offset="0%" stop-color="#8A3FFC"/>
       <stop offset="24%" stop-color="#2F6BFF"/>
