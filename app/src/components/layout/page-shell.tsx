@@ -122,7 +122,7 @@ export function PageShell({
         >
           <header className="flex flex-col gap-2">
             <div className="flex flex-row items-center justify-between gap-4">
-              <h1 className="font-bold text-2xl">{title}</h1>
+              <h1 className="font-heading font-bold text-2xl">{title}</h1>
               {action}
             </div>
             {description ? (

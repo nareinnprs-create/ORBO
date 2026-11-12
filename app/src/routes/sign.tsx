@@ -149,15 +149,31 @@ function SignScreen() {
           shown: { transition: { staggerChildren: ENTRANCE_STAGGER_SECONDS } },
         }}
       >
+        {/*
+         * The Diya horizontal wordmark, above the orb. Two files so the wordmark ink follows the
+         * theme without recolouring the artwork (assets/brand/README.txt forbids that).
+         */}
+        <motion.img
+          alt=""
+          className="h-11 dark:hidden"
+          src="/brand/orbo_diya_horizontal_light.svg"
+          variants={{ hidden, shown }}
+        />
+        <motion.img
+          alt=""
+          className="hidden h-11 dark:block"
+          src="/brand/orbo_diya_horizontal_dark.svg"
+          variants={{ hidden, shown }}
+        />
         <motion.div
           transition={{ duration: ENTRANCE_SECONDS, ease: EASE_OUT }}
           variants={{ hidden, shown }}
-          className="flex items-center justify-center"
+          className="mt-6 flex items-center justify-center"
         >
           <AgentOrb size="56px" />
         </motion.div>
         <motion.h1
-          className="text-2xl font-medium tracking-tight text-center mt-8"
+          className="font-heading text-2xl font-medium tracking-tight text-center mt-8"
           transition={{ duration: ENTRANCE_SECONDS, ease: EASE_OUT }}
           variants={{ hidden, shown }}
         >
