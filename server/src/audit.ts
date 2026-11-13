@@ -540,6 +540,20 @@ export const auditEventTypes = [
    */
   "skill.invoked",
   "skill.invoke_rejected",
+  /*
+   * A Bot sent a message out of this deployment as an action: email through SES, or one post to
+   * the deployment's Slack webhook (server/src/sends/tools.ts).
+   *
+   * The same four outcomes the tool-call trail records, folded into two rows because the send path
+   * has fewer layers: `send.succeeded` is a send the provider accepted, with the recipient and the
+   * subject — never the body, which is content and has no business in a trail an operator reads;
+   * `send.refused` is everything that stopped one, with `refusal` naming the layer that stopped it
+   * (`rate_limited` at the daily cap, `policy` at the approvals gateway, `provider_error` beyond
+   * it). The cap refusal is on the trail because "your Bots went quiet today" is exactly the kind
+   * of thing somebody investigates from here.
+   */
+  "send.succeeded",
+  "send.refused",
 ] as const;
 
 export type AuditEventType = (typeof auditEventTypes)[number];

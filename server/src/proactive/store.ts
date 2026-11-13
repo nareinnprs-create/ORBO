@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, gte, isNull, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNull, lte, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { auditEvents } from "../db/schema/core";
 import {
+  proactiveNudges,
   proactiveSettings,
   proactiveSuggestions,
 } from "../db/schema/proactive";
@@ -249,6 +250,48 @@ export function createProactiveStore(database: Database) {
           "This suggestion was already started or dismissed.",
         );
       return row;
+    },
+    /**
+     * When this person was last nudged, as far back as `since`. The nudge cooldown is computed
+     * from these rows rather than from an in-memory counter, so a restart or a second replica
+     * answers with the same discipline rather than a fresh allowance. Ordered ascending, so the
+     * last element is the newest.
+     */
+    async recentNudges(owner: string, since: Date): Promise<Date[]> {
+      const rows = await database
+        .select({ at: proactiveNudges.createdAt })
+        .from(proactiveNudges)
+        .where(
+          and(
+            eq(proactiveNudges.ownerUserId, owner),
+            gte(proactiveNudges.createdAt, since),
+          ),
+        )
+        .orderBy(asc(proactiveNudges.createdAt))
+        .limit(100);
+      return rows.map((row) => row.at);
+    },
+    /**
+     * Record one nudge. The unique index on the suggestion makes a redelivery count once: an
+     * `ON CONFLICT DO NOTHING` insert is silently idempotent, which is the property the cap
+     * arithmetic rests on.
+     */
+    async recordNudge(input: {
+      ownerUserId: string;
+      agentId: string;
+      suggestionId: string;
+      at: Date;
+    }): Promise<void> {
+      await database
+        .insert(proactiveNudges)
+        .values({
+          id: randomUUID(),
+          ownerUserId: input.ownerUserId,
+          agentId: input.agentId,
+          suggestionId: input.suggestionId,
+          createdAt: input.at,
+        })
+        .onConflictDoNothing();
     },
   };
 }

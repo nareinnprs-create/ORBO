@@ -197,6 +197,13 @@ import { createComposioClient } from "./plugins/composio-adapter";
 import { runTurnOrSkill } from "./plugins/invocation-turn";
 import { backfillComposioLogos } from "./plugins/logos";
 import { redirectUriFor } from "./plugins/oauth";
+import { createEmailSender, emailConfigFromEnv } from "./sends/email";
+import {
+  createSlackWebhookReader,
+  createSlackWebhookSender,
+} from "./sends/slack";
+import { createSendsStore } from "./sends/store";
+import { sendDailyCapFromEnv, sendTools } from "./sends/tools";
 import {
   createSharedUseGate,
   createSharedUseStore,
@@ -209,6 +216,7 @@ import {
   vendorAnswer,
 } from "./plugins/tools";
 import { createProactiveEngine } from "./proactive/engine";
+import { nudgePolicyFromEnv } from "./proactive/nudges";
 import {
   createPrivateShareCheck,
   PRIVATE_SHARE_TOOL_REF,
@@ -1108,6 +1116,31 @@ const teamBots = createTeamBots({
     ),
 });
 
+/*
+ * Send actions (see sends/tools.ts): what a Bot needs before it may email or post to Slack.
+ *
+ * Email is configured or it is not — all four ORBO_EMAIL_* values or nothing. Slack is configured
+ * when the vault holds a `slack-webhook` connector credential at boot; the URL is re-read per send
+ * inside the tool, so rotating the credential takes effect on the next send rather than after a
+ * restart, and a webhook revoked after boot turns the tool into a clear refusal instead of a
+ * stale send.
+ */
+const sendsStore = createSendsStore(database);
+const emailConfig = emailConfigFromEnv(process.env);
+const emailSender = emailConfig ? createEmailSender(emailConfig) : undefined;
+const slackWebhookReader = createSlackWebhookReader({
+  store: credentialStore,
+  reader: credentialStore,
+  encryptionKey: config.keyEncryptionKey,
+});
+const slackSender = (await slackWebhookReader.readWebhook())
+  ? createSlackWebhookSender(slackWebhookReader)
+  : undefined;
+const sendCaps = {
+  email: sendDailyCapFromEnv(process.env, "ORBO_SEND_EMAIL_DAILY_CAP"),
+  slack: sendDailyCapFromEnv(process.env, "ORBO_SEND_SLACK_DAILY_CAP"),
+};
+
 const loadToolsForActor =
   (actorId: string, initiator: AuditInitiator = PERSON_INITIATOR) =>
   async (botId: string) => [
@@ -1122,6 +1155,25 @@ const loadToolsForActor =
       ingestion: memoryIngestion,
       ownerUserId: actorId,
       agentId: botId,
+    }),
+    /*
+     * Send actions, where this deployment can actually perform them. Email appears only when SES
+     * is configured, Slack only when a webhook credential is in the vault at boot; a send whose
+     * transport is absent is a refusal a model collects on every turn, so it is not offered at
+     * all. Both run through the approvals gateway and the send ledger — see sends/tools.ts — and
+     * proactive runs refuse them like every other write, because restrictToolsForRun narrows this
+     * same list to reads for background research.
+     */
+    ...sendTools({
+      store: sendsStore,
+      approvalGate: approvalService.gate,
+      auditStore: bootAuditStore,
+      ownerUserId: actorId,
+      agentId: botId,
+      initiator,
+      ...(emailSender ? { email: emailSender } : {}),
+      ...(slackSender ? { slack: slackSender } : {}),
+      caps: sendCaps,
     }),
     ...(await grantedTools({
       store: pluginStore,
@@ -2297,6 +2349,17 @@ const proactiveEngine = createProactiveEngine({
   memory: personalMemoryStore,
   queue: createWorkQueue(database),
   owner: workOwner("proactive"),
+  /*
+   * Nudge discipline (see proactive/nudges.ts): the cooldown lives in proactive_nudges, so it
+   * survives a restart and holds across replicas, and the numbers come from ORBO_NUDGE_* with the
+   * shipped defaults of 3 a day, 48 hours between nudges, and quiet hours from 22:00 to 08:00.
+   */
+  nudges: {
+    recent: (ownerUserId, since) =>
+      proactiveStore.recentNudges(ownerUserId, since),
+    record: (input) => proactiveStore.recordNudge(input),
+  },
+  nudgePolicy: nudgePolicyFromEnv(process.env),
   runTurn: createTurnRunner({
     intelligence: routineIntelligence,
     runner: routineAgentRunner,

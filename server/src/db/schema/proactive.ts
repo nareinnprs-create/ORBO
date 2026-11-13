@@ -110,3 +110,37 @@ export const proactiveSuggestions = pgTable(
     ),
   ],
 );
+
+/**
+ * One proactive nudge: a suggestion that was actually pushed to its owner's inbox and routes.
+ *
+ * The cooldown policy reads this table, not memory, so caps and spacing survive a restart and hold
+ * across replicas: the count and the newest row for one person are the whole of the verdict. One
+ * row per suggestion, enforced by a unique index, so a delivery that runs twice can never count
+ * twice. The suggestion itself stays the record of what was proposed; this only says that it
+ * pinged somebody, which is the fact the discipline is about.
+ */
+export const proactiveNudges = pgTable(
+  "proactive_nudges",
+  {
+    id: text("id").primaryKey(),
+    ownerUserId: text("owner_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    agentId: text("agent_id")
+      .notNull()
+      .references(() => agents.id, { onDelete: "cascade" }),
+    suggestionId: text("suggestion_id")
+      .notNull()
+      .references(() => proactiveSuggestions.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    // One nudge per suggestion: a redelivery or a racing sweep counts once.
+    uniqueIndex("proactive_nudges_suggestion_idx").on(table.suggestionId),
+    // The cooldown query reads one person's newest nudge and today's count off this index.
+    index("proactive_nudges_owner_idx").on(table.ownerUserId, table.createdAt),
+  ],
+);

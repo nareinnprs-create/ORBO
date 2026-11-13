@@ -18,6 +18,11 @@ import type { WorkQueue } from "../work/queue";
 import type { TaskLedger } from "../work/tasks";
 import { acceptSuggestionAsTask } from "./accept";
 import {
+  type NudgePolicy,
+  nudgeLookbackMs,
+  nudgeVerdict,
+} from "./nudges";
+import {
   proactiveInitiator,
   proactiveRunIdOf,
   refusalsFor,
@@ -82,6 +87,25 @@ export type ProactiveEngineDeps = {
    * touches it. Absent in older callers, whose queue-only path is unchanged.
    */
   tasks?: TaskLedger;
+  /**
+   * Nudge discipline (see `./nudges.ts`). The engine consults it before each suggestion is pushed
+   * and records every push through it, so the cooldown lives in the database rather than in this
+   * process. When either half is absent — older callers, tests without a database — delivery
+   * behaves as it always did: unrestricted, bounded only by the per-run suggestion cap.
+   */
+  nudges?: {
+    /** This person's recent nudge moments, any Bot, back as far as `since`. */
+    recent(ownerUserId: string, since: Date): Promise<Date[]>;
+    /** Consume one allowance. Idempotent per suggestion. */
+    record(input: {
+      ownerUserId: string;
+      agentId: string;
+      suggestionId: string;
+      at: Date;
+    }): Promise<void>;
+  };
+  /** The numbers the discipline enforces; every bound is a deployment's own choice. */
+  nudgePolicy?: NudgePolicy;
 };
 
 export function researchInstruction(setting: Pick<ProactiveSetting, "focus">) {
@@ -225,8 +249,55 @@ export function createProactiveEngine(deps: ProactiveEngineDeps) {
     ];
   }
 
+  /**
+   * Push a run's undelivered suggestions to the person — the proactive nudge — under the
+   * deployment's cooldown policy when one is wired.
+   *
+   * THE ORDER IS DELIBERATELY SPEND-FIRST. The allowance is consumed (`record`) before the
+   * notification is sent, so a failure between the two can only under-deliver, never over-deliver:
+   * a crashed notify spends a slot and leaves the suggestion on the person's page, where the
+   * reverse order could push past the cap while the counter was being written. `record` is
+   * idempotent per suggestion, so a redelivery cannot spend twice.
+   *
+   * A REFUSED NUDGE IS A SKIP, NOT A FAILURE. The suggestion stays undelivered (and stays on the
+   * person's Bot page with every other open suggestion); the run itself is not failed, because
+   * "you may not ping them right now" is the discipline working, not a fault. Each skip is logged
+   * with the bound that closed, so an operator can tell a tuned policy from a bug.
+   */
   async function deliver(scope: ProactiveScope, runId: string) {
+    const policy = deps.nudgePolicy;
+    const discipline = policy && deps.nudges ? deps.nudges : null;
+    const nowMs = () => now().getTime();
     for (const suggestion of await deps.store.undelivered(runId)) {
+      if (discipline && policy) {
+        const recent = await discipline.recent(
+          scope.ownerUserId,
+          new Date(nowMs() - nudgeLookbackMs(policy)),
+        );
+        const verdict = nudgeVerdict({
+          now: now(),
+          policy,
+          recentNudges: recent,
+        });
+        if (!verdict.allowed) {
+          console.info(
+            JSON.stringify({
+              type: "proactive-nudge-deferred",
+              ownerUserId: scope.ownerUserId,
+              agentId: scope.agentId,
+              suggestionId: suggestion.id,
+              reason: verdict.reason,
+            }),
+          );
+          continue;
+        }
+        await discipline.record({
+          ownerUserId: scope.ownerUserId,
+          agentId: scope.agentId,
+          suggestionId: suggestion.id,
+          at: now(),
+        });
+      }
       await deps.notify(scope, {
         id: `suggestion:${suggestion.id}`,
         kind: "reply",

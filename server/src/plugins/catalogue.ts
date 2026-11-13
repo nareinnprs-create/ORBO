@@ -126,6 +126,17 @@ export type CatalogueEntry = {
    */
   writeTools: readonly string[];
   /**
+   * Every tool this server advertises is a write, including whatever the listing recorded.
+   *
+   * For a server whose tool names cannot be enumerated ahead of review — a local analysis server
+   * whose families an operator selects at run time, where the tool list is whatever the process
+   * exposes today. The reviewed list above is trusted to narrow what a Bot may do; where nobody
+   * could have reviewed the names, nothing may. A tool this flag is set on is never a read, so
+   * every call lands in the same governance any write gets: the policy engine, the approval gate
+   * and the trail. Optional; absent means the ordinary classifier.
+   */
+  unknownToolsAreWrites?: boolean;
+  /**
    * Which protocol reaches this vendor. Absent means MCP, which is what every entry was.
    *
    * A field rather than an inference, because the answer is not derivable from the host: Google
@@ -329,6 +340,47 @@ export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
     docsUrl:
       "https://github.com/nareinnprs-create/ORBO/blob/main/docs/routines.md",
   },
+  {
+    key: "rea",
+    title: "REA Agents",
+    vendor: "REA",
+    summary:
+      "Binary and app reverse-engineering reads: pseudocode, ASAR/JS analysis, version diffs, evidence bundles. Runs locally, restricted to read-safe tool families.",
+    /*
+     * A DEPLOYMENT-LOCAL SERVER, ON LOOPBACK, AND WHY THAT IS NOT THE CUSTOM-URL HOLE. Everything
+     * else here dials a vendor over https; this entry dials the deployment's own machine, because
+     * the REA MCP server is a local process (`npx -y rea-agents@<pin> mcp`, stdio) that an operator
+     * fronts with any stdio-to-StreamableHTTP bridge and a bearer token it enforces. The host is
+     * therefore pinned to loopback by the anchored pattern below and to nothing else: an address
+     * that merely ends in the right numbers, or the same service on another host, is refused, on
+     * exactly the argument the custom-URL rules make. Plain http is accepted ONLY on loopback,
+     * where the traffic does not leave the machine; the bearer token is still required, because
+     * anything on the box that can reach the port could otherwise drive the analysis tools.
+     *
+     * WHAT IT CAN DO, AND WHAT KEEPS THAT SAFE. REA's read-safe families — session, native,
+     * artifact, application, enhanced — answer pseudocode, ASAR/JS inspection, version diffs and
+     * evidence bundles. Its other families (frida, adb, browser, electron, javascript-runtime) are
+     * side-effectful: they inject into processes, drive devices and execute code. The deployment
+     * runs the server with `REA_MCP_TOOL_FAMILIES` naming only the read-safe families, and the
+     * server-side cap `REA_MCP_MAX_RESPONSE_BYTES` bounds each answer. That is the FIRST half of
+     * the boundary. The second half is here: `unknownToolsAreWrites` below makes every tool this
+     * server advertises a write, whatever its name and whatever the listing claims, because we
+     * cannot enumerate a third-party tool list ahead of review and a tool we cannot name is a tool
+     * we cannot vouch for as a read. A misconfigured REA that starts advertising side-effectful
+     * families therefore lands in the approvals gateway instead of walking through as reads.
+     * Ghidra/Hopper/IDA are the operator's own external tools, invoked by REA where installed —
+     * see docs/rea-integration.md for the platform matrix and the sandbox warning.
+     */
+    host: null,
+    hostPattern: "^http://127\\.0\\.0\\.1:\\d{4,5}$",
+    path: "/mcp",
+    transport: "mcp",
+    auth: { kind: "deployment-bearer" },
+    writeTools: Object.freeze([]),
+    docsUrl:
+      "https://github.com/nareinnprs-create/ORBO/blob/main/docs/rea-integration.md",
+    unknownToolsAreWrites: true,
+  },
 ]);
 
 const BY_KEY = new Map(CATALOGUE.map((entry) => [entry.key, entry]));
@@ -451,6 +503,10 @@ export function classifyTool(
   // A name the server never listed came from a model, and nothing reviewed says it only reads —
   // checked first, so neither later source can rescue a name that was never advertised.
   if (!advertised) return "write";
+  // An entry that vouches for no tool as a read: every advertised name is a write, before the
+  // recorded column is consulted, because that column may only ever narrow what a Bot may do and
+  // never widen it. See `unknownToolsAreWrites` on the entry for when review can say this.
+  if (entry?.unknownToolsAreWrites) return "write";
   // The reviewed list outranks the column, and only in this direction: a name a person reviewed as a
   // write stays a write whatever the listing recorded about it.
   if (entry?.writeTools.includes(toolName)) return "write";
