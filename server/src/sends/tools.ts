@@ -28,13 +28,13 @@ import {
   ApprovalRefusedError,
   currentApprovalContext,
 } from "../approvals/types";
-import { HeadlessToolSuspension } from "../computer/headless-tools";
 import {
   type AuditEventType,
   type AuditInitiator,
   type AuditStore,
   recordAuditEvent,
 } from "../audit";
+import { HeadlessToolSuspension } from "../computer/headless-tools";
 import type { GrantedTool } from "../plugins/tools";
 import { REFUSAL_MARKER } from "../plugins/tools";
 import { EmailSendError, type EmailSender, parseRecipient } from "./email";
@@ -300,7 +300,9 @@ export function sendTools(options: SendToolsOptions): GrantedTool[] {
             bot: agentId,
             kind: "slack",
             refusal:
-              error instanceof ApprovalRefusedError ? "policy" : "provider_error",
+              error instanceof ApprovalRefusedError
+                ? "policy"
+                : "provider_error",
             failure: sendFailure(
               error,
               "The Slack message could not be posted.",

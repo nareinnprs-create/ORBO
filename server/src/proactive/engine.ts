@@ -17,11 +17,7 @@ import type { TurnRunner } from "../routines/runner";
 import type { WorkQueue } from "../work/queue";
 import type { TaskLedger } from "../work/tasks";
 import { acceptSuggestionAsTask } from "./accept";
-import {
-  type NudgePolicy,
-  nudgeLookbackMs,
-  nudgeVerdict,
-} from "./nudges";
+import { type NudgePolicy, nudgeLookbackMs, nudgeVerdict } from "./nudges";
 import {
   proactiveInitiator,
   proactiveRunIdOf,

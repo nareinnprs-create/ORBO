@@ -23,7 +23,9 @@
  */
 import { z } from "zod";
 
-export type NudgeVerdict = { allowed: true } | { allowed: false; reason: string };
+export type NudgeVerdict =
+  | { allowed: true }
+  | { allowed: false; reason: string };
 
 /** The shipped policy, before a deployment tunes it with ORBO_NUDGE_*. */
 export const DEFAULT_NUDGE_MAX_PER_DAY = 3;

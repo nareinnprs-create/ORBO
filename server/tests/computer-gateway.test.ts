@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { AuditEventInput, AuditStore } from "../src/audit";
 import type { ApprovalCandidate, ApprovalGate } from "../src/approvals/types";
+import type { AuditEventInput, AuditStore } from "../src/audit";
 import { StaleSnapshotError } from "../src/computer/client";
 import {
   ActionRefusedError,

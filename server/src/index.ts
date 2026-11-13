@@ -197,13 +197,6 @@ import { createComposioClient } from "./plugins/composio-adapter";
 import { runTurnOrSkill } from "./plugins/invocation-turn";
 import { backfillComposioLogos } from "./plugins/logos";
 import { redirectUriFor } from "./plugins/oauth";
-import { createEmailSender, emailConfigFromEnv } from "./sends/email";
-import {
-  createSlackWebhookReader,
-  createSlackWebhookSender,
-} from "./sends/slack";
-import { createSendsStore } from "./sends/store";
-import { sendDailyCapFromEnv, sendTools } from "./sends/tools";
 import {
   createSharedUseGate,
   createSharedUseStore,
@@ -257,6 +250,13 @@ import { createRoutineRunner } from "./routines/runner";
 import { createRoutineStore } from "./routines/store";
 import { createIntentRouter } from "./routing/classify";
 import { createModelCompleter } from "./routing/model";
+import { createEmailSender, emailConfigFromEnv } from "./sends/email";
+import {
+  createSlackWebhookReader,
+  createSlackWebhookSender,
+} from "./sends/slack";
+import { createSendsStore } from "./sends/store";
+import { sendDailyCapFromEnv, sendTools } from "./sends/tools";
 import { createTeamBots } from "./team-bots/team-bots";
 import {
   createPackageStatusReader,

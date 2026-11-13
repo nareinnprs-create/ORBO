@@ -15,7 +15,8 @@
       "!server/drizzle",
       "!.orbo-*",
       "!container-images.json",
-      "!**/.venv"
+      "!**/.venv",
+      "!**/.pytest_cache"
     ]
   },
   "formatter": {

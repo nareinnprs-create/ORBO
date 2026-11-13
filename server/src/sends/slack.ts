@@ -19,9 +19,9 @@
  * become a POST to somewhere else.
  */
 import {
-  CredentialUnusableError,
   type CredentialSecretReader,
   type CredentialStore,
+  CredentialUnusableError,
   decryptCredentialForUse,
 } from "../credentials";
 

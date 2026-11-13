@@ -41,9 +41,6 @@ export const botSends = pgTable(
       table.kind,
       table.createdAt,
     ),
-    check(
-      "bot_sends_kind_check",
-      sql`${table.kind} IN ('email', 'slack')`,
-    ),
+    check("bot_sends_kind_check", sql`${table.kind} IN ('email', 'slack')`),
   ],
 );

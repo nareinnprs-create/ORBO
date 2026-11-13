@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { randomUUID } from "node:crypto";
 import { ApprovalRefusedError } from "../src/approvals/types";
 import { HeadlessToolSuspension } from "../src/computer/headless-tools";
-import { randomUUID } from "node:crypto";
 import {
   createEmailSender,
   emailConfigFromEnv,
@@ -9,8 +9,8 @@ import {
   sigV4Authorization,
 } from "../src/sends/email";
 import {
-  createSlackWebhookSender,
   createSlackWebhookReader,
+  createSlackWebhookSender,
   SlackSendError,
   slackWebhookUrlRefusal,
 } from "../src/sends/slack";
@@ -52,7 +52,9 @@ describe("email configuration", () => {
 
 describe("the SES request", () => {
   test("the signature is pinned: same inputs, same string, documented shape", () => {
-    const url = new URL("https://email.eu-west-1.amazonaws.com/v2/email/outbound-emails");
+    const url = new URL(
+      "https://email.eu-west-1.amazonaws.com/v2/email/outbound-emails",
+    );
     const input = {
       method: "POST",
       url,
@@ -93,7 +95,16 @@ describe("the SES request", () => {
     expect(result).toEqual({ id: "ses-1" });
     const request = seen[0];
     expect(request?.url.host).toBe("email.eu-west-1.amazonaws.com");
-    const body = JSON.parse(String(request?.init.body) ?? "{}") as Record<string, any>;
+    const body = JSON.parse(String(request?.init.body) ?? "{}") as {
+      FromEmailAddress?: string;
+      Destination?: { ToAddresses?: string[] };
+      Content?: {
+        Simple?: {
+          Subject?: { Data?: string };
+          Body?: { Text?: { Data?: string } };
+        };
+      };
+    };
     expect(body.FromEmailAddress).toBe("orbo@example.test");
     expect(body.Destination.ToAddresses).toEqual(["person@example.com"]);
     expect(body.Content.Simple.Subject.Data).toBe("Status");
@@ -145,12 +156,15 @@ describe("the Slack webhook", () => {
     expect(
       slackWebhookUrlRefusal("https://hooks.slack.com/services/T1/B2/X3"),
     ).toBeNull();
-    expect(slackWebhookUrlRefusal("http://hooks.slack.com/services/T1/B2/X3"))
-      .toMatch(/https/);
-    expect(slackWebhookUrlRefusal("https://evil.test/services/T1/B2/X3"))
-      .toMatch(/hooks\.slack\.com/);
-    expect(slackWebhookUrlRefusal("https://hooks.slack.com/other/T1"))
-      .toMatch(/services/);
+    expect(
+      slackWebhookUrlRefusal("http://hooks.slack.com/services/T1/B2/X3"),
+    ).toMatch(/https/);
+    expect(
+      slackWebhookUrlRefusal("https://evil.test/services/T1/B2/X3"),
+    ).toMatch(/hooks\.slack\.com/);
+    expect(slackWebhookUrlRefusal("https://hooks.slack.com/other/T1")).toMatch(
+      /services/,
+    );
     expect(slackWebhookUrlRefusal("not a url")).toMatch(/not a URL/);
   });
 
@@ -203,21 +217,34 @@ describe("the caps", () => {
   test("each cap is read from its own variable, with the shipped default", () => {
     expect(sendDailyCapFromEnv({}, "ORBO_SEND_EMAIL_DAILY_CAP")).toBe(25);
     expect(
-      sendDailyCapFromEnv({ ORBO_SEND_EMAIL_DAILY_CAP: "5" }, "ORBO_SEND_EMAIL_DAILY_CAP"),
+      sendDailyCapFromEnv(
+        { ORBO_SEND_EMAIL_DAILY_CAP: "5" },
+        "ORBO_SEND_EMAIL_DAILY_CAP",
+      ),
     ).toBe(5);
     expect(
-      sendDailyCapFromEnv({ ORBO_SEND_EMAIL_DAILY_CAP: "-3" }, "ORBO_SEND_EMAIL_DAILY_CAP"),
+      sendDailyCapFromEnv(
+        { ORBO_SEND_EMAIL_DAILY_CAP: "-3" },
+        "ORBO_SEND_EMAIL_DAILY_CAP",
+      ),
     ).toBe(25);
     expect(
-      sendDailyCapFromEnv({ ORBO_SEND_SLACK_DAILY_CAP: "0" }, "ORBO_SEND_SLACK_DAILY_CAP"),
+      sendDailyCapFromEnv(
+        { ORBO_SEND_SLACK_DAILY_CAP: "0" },
+        "ORBO_SEND_SLACK_DAILY_CAP",
+      ),
     ).toBe(0);
   });
 });
 
 describe("the send tools", () => {
-  const auditRows: { eventType: string; payload: Record<string, unknown> }[] = [];
+  const auditRows: { eventType: string; payload: Record<string, unknown> }[] =
+    [];
   const auditStore = {
-    insert: async (event: { eventType: string; payload: Record<string, unknown> }) => {
+    insert: async (event: {
+      eventType: string;
+      payload: Record<string, unknown>;
+    }) => {
       auditRows.push(event);
     },
   };
@@ -292,7 +319,9 @@ describe("the send tools", () => {
     // The refusal is on the trail: a silent cap is indistinguishable from a broken tool.
     expect(
       auditRows.some(
-        (row) => row.eventType === "send.refused" && row.payload.refusal === "rate_limited",
+        (row) =>
+          row.eventType === "send.refused" &&
+          row.payload.refusal === "rate_limited",
       ),
     ).toBe(true);
   });
@@ -305,7 +334,10 @@ describe("the send tools", () => {
       subject: "Status",
       body: "All quiet.",
     });
-    expect(JSON.parse(answer)).toEqual({ sent: true, to: "person@example.com" });
+    expect(JSON.parse(answer)).toEqual({
+      sent: true,
+      to: "person@example.com",
+    });
     expect(gateCalls[0]).toMatchObject({
       actorId: "person-1",
       botId: "bot-1",
@@ -343,14 +375,19 @@ describe("the send tools", () => {
 
     const waiting = harness({
       approvalGate: async () => {
-        throw new HeadlessToolSuspension("This action is waiting for your approval.", {
-          kind: "approval",
-          approvalId: randomUUID(),
-          requestId: randomUUID(),
-        });
+        throw new HeadlessToolSuspension(
+          "This action is waiting for your approval.",
+          {
+            kind: "approval",
+            approvalId: randomUUID(),
+            requestId: randomUUID(),
+          },
+        );
       },
     });
-    const waitingEmail = waiting.tools.find((tool) => tool.name === "send_email")!;
+    const waitingEmail = waiting.tools.find(
+      (tool) => tool.name === "send_email",
+    )!;
     // The suspension propagates: the run pauses and the person's answer becomes the tool's result.
     await expect(
       waitingEmail.execute({ to: "a@b.co", subject: "s", body: "b" }),
@@ -385,7 +422,8 @@ describe("the send tools", () => {
     expect(
       auditRows.some(
         (row) =>
-          row.eventType === "send.refused" && row.payload.refusal === "provider_error",
+          row.eventType === "send.refused" &&
+          row.payload.refusal === "provider_error",
       ),
     ).toBe(true);
   });

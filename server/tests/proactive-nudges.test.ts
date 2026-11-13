@@ -51,12 +51,14 @@ describe("environment configuration", () => {
     });
     // A deployment that mistypes one bound keeps the shipped default for that bound rather than
     // getting a policy that cannot be parsed at all.
-    expect(nudgePolicyFromEnv({ ORBO_NUDGE_MAX_PER_DAY: "many" }).maxPerDay).toBe(
-      3,
-    );
+    expect(
+      nudgePolicyFromEnv({ ORBO_NUDGE_MAX_PER_DAY: "many" }).maxPerDay,
+    ).toBe(3);
     // Zero is a legitimate choice (a deployment switching nudges off), and clamps keep the rest
     // in the range the quiet-hour arithmetic understands.
-    expect(nudgePolicyFromEnv({ ORBO_NUDGE_MAX_PER_DAY: "0" }).maxPerDay).toBe(0);
+    expect(nudgePolicyFromEnv({ ORBO_NUDGE_MAX_PER_DAY: "0" }).maxPerDay).toBe(
+      0,
+    );
     expect(
       nudgePolicyFromEnv({ ORBO_NUDGE_QUIET_START: "99" }).quietStartHour,
     ).toBe(23);
@@ -87,9 +89,7 @@ describe("quiet hours", () => {
     // Inclusive start, exclusive end: 22:00 is inside, 08:00 is not.
     expect(inQuietHours(at("2026-06-01T22:00:00Z"), defaultPolicy)).toBe(true);
     expect(inQuietHours(at("2026-06-01T08:00:00Z"), defaultPolicy)).toBe(false);
-    expect(inQuietHours(at("2026-06-01T21:59:00Z"), defaultPolicy)).toBe(
-      false,
-    );
+    expect(inQuietHours(at("2026-06-01T21:59:00Z"), defaultPolicy)).toBe(false);
     expect(inQuietHours(at("2026-06-01T07:59:00Z"), defaultPolicy)).toBe(true);
   });
 
@@ -99,7 +99,10 @@ describe("quiet hours", () => {
     expect(inQuietHours(at("2026-06-01T18:00:00Z"), daytime)).toBe(false);
     // Equal start and end means no quiet window at all, never "always quiet".
     expect(
-      inQuietHours(at("2026-06-01T12:00:00Z"), policy({ quietStartHour: 9, quietEndHour: 9 })),
+      inQuietHours(
+        at("2026-06-01T12:00:00Z"),
+        policy({ quietStartHour: 9, quietEndHour: 9 }),
+      ),
     ).toBe(false);
   });
 });
@@ -167,8 +170,15 @@ describe("the verdict", () => {
     expect(verdictNextDay.allowed).toBe(true);
     // A cap of zero refuses every nudge on the history alone.
     expect(
-      nudgeVerdict({ now: base, policy: policy({ maxPerDay: 0 }), recentNudges: [] }),
-    ).toMatchObject({ allowed: false, reason: expect.stringContaining("cap of 0") });
+      nudgeVerdict({
+        now: base,
+        policy: policy({ maxPerDay: 0 }),
+        recentNudges: [],
+      }),
+    ).toMatchObject({
+      allowed: false,
+      reason: expect.stringContaining("cap of 0"),
+    });
   });
 
   test("cap and spacing compose: whichever is stricter closes first", () => {

@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { decideAction, ruleMatches } from "../src/approvals/policy";
+import type { ApprovalCandidate, ApprovalRule } from "../src/approvals/types";
 import {
   CATALOGUE,
   catalogueEntry,
@@ -7,8 +9,6 @@ import {
   resolveServerUrl,
   serverCredentialKind,
 } from "../src/plugins/catalogue";
-import { decideAction, ruleMatches } from "../src/approvals/policy";
-import type { ApprovalCandidate, ApprovalRule } from "../src/approvals/types";
 
 /**
  * The `rea` catalogue entry and the one property that makes it safe to offer: REA's tool names
@@ -73,9 +73,7 @@ describe("the effect classification", () => {
       "artifact_extract_asar",
       "session_status",
     ]) {
-      expect(
-        classifyTool(rea!, name, true, "read"),
-      ).toBe("write");
+      expect(classifyTool(rea!, name, true, "read")).toBe("write");
       expect(classifyTool(rea!, name, true, null)).toBe("write");
     }
     // A name the server never advertised came from a model, and is a write as everywhere else.
@@ -183,9 +181,7 @@ describe("the grant policy", () => {
     const handed = await decideAction({
       candidate: payment,
       team: [],
-      personal: [
-        rule({ toolRef: "rea/*", behaviour: "allow" }),
-      ],
+      personal: [rule({ toolRef: "rea/*", behaviour: "allow" })],
       customRulesEnabled: true,
       autoReview: false,
       askBeforeChanges: false,

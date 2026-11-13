@@ -4,7 +4,10 @@ import { eq, inArray } from "drizzle-orm";
 import { createDatabase } from "../src/db/client";
 import { agents, users } from "../src/db/schema/core";
 import { proactiveSettings } from "../src/db/schema/proactive";
-import { createProactiveEngine, PROACTIVE_RUN_KIND } from "../src/proactive/engine";
+import {
+  createProactiveEngine,
+  PROACTIVE_RUN_KIND,
+} from "../src/proactive/engine";
 import { type NudgePolicy, nudgeVerdict } from "../src/proactive/nudges";
 import { createProactiveStore } from "../src/proactive/store";
 import type { WorkQueue } from "../src/work/queue";
@@ -33,7 +36,9 @@ const store = createProactiveStore(database);
 const settingId = `${prefix}-setting`;
 
 beforeAll(async () => {
-  await database.insert(users).values({ id: owner, email: `${owner}@example.test` });
+  await database
+    .insert(users)
+    .values({ id: owner, email: `${owner}@example.test` });
   await database.insert(agents).values({
     id: bot,
     name: "Research Bot",

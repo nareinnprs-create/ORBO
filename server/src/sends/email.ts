@@ -108,7 +108,10 @@ export function sigV4Authorization(input: {
     sha256Hex(canonicalRequest),
   ].join("\n");
   const signingKey = hmac(
-    hmac(hmac(hmac(`AWS4${input.secretAccessKey}`, date), input.region), input.service),
+    hmac(
+      hmac(hmac(`AWS4${input.secretAccessKey}`, date), input.region),
+      input.service,
+    ),
     "aws4_request",
   );
   const signature = createHmac("sha256", signingKey)
@@ -142,7 +145,7 @@ export type EmailSender = {
 /** The recipient SES will be asked for, or a refusal reason. One address, no display names. */
 export function parseRecipient(raw: string): string | null {
   const value = raw.trim().toLowerCase();
-  return /^[^\s@<>,;:"]+@[^\s@<>,;:\"]+\.[^\s@<>,;:\"]{2,}$/.test(value)
+  return /^[^\s@<>,;:"]+@[^\s@<>,;:"]+\.[^\s@<>,;:"]{2,}$/.test(value)
     ? value
     : null;
 }
@@ -175,7 +178,10 @@ export function createEmailSender(
     async send(email) {
       const to = parseRecipient(email.to);
       if (!to)
-        throw new EmailSendError(false, `"${email.to}" is not an email address.`);
+        throw new EmailSendError(
+          false,
+          `"${email.to}" is not an email address.`,
+        );
       const body = JSON.stringify({
         FromEmailAddress: config.from,
         Destination: { ToAddresses: [to] },
@@ -225,8 +231,8 @@ export function createEmailSender(
       if (!answered.ok) {
         const detail =
           answered.json && typeof answered.json === "object"
-            ? ((answered.json as Record<string, unknown>).message as string) ??
-              `HTTP ${answered.status}`
+            ? (((answered.json as Record<string, unknown>).message as string) ??
+              `HTTP ${answered.status}`)
             : `HTTP ${answered.status}`;
         // 4xx is SES refusing this request (unverified identity, bad address) and will refuse a
         // retry identically; 5xx and network answers leave the send uncertain, which the caller
@@ -238,8 +244,8 @@ export function createEmailSender(
       }
       const id =
         answered.json && typeof answered.json === "object"
-          ? ((answered.json as Record<string, unknown>).MessageId as string) ??
-            null
+          ? (((answered.json as Record<string, unknown>).MessageId as string) ??
+            null)
           : null;
       return { id };
     },
