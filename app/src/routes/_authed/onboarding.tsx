@@ -1,3 +1,4 @@
+import { IconCheck } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import Avatar from "boring-avatars";
@@ -6,12 +7,12 @@ import * as React from "react";
 import useMeasure from "react-use-measure";
 import AgentOrb from "@/components/agents/orb/agent-orb";
 import { Composer } from "@/components/channels/composer";
-import { DesktopIllustration } from "@/components/computer/desktop-illustration";
-import { ComputerPlaceholder } from "@/components/computer/placeholder";
+import { LoadingState } from "@/components/ui/states";
 import { Button } from "@/components/ui/button";
-import { agentListQueryOptions } from "@/lib/agents/queries";
 import { currentUserQueryOptions, needsOnboarding } from "@/lib/auth/queries";
+import { agentListQueryOptions } from "@/lib/agents/queries";
 import { appConfig } from "@/lib/generated/application-config";
+import { healthQueryOptions } from "@/lib/health/queries";
 import { completeOnboardingMutationOptions } from "@/lib/onboarding/mutations";
 import { queryClient } from "@/query-client";
 
@@ -31,10 +32,30 @@ export const Route = createFileRoute("/_authed/onboarding")({
 function WelcomeStep() {
   return (
     <div className="w-full flex flex-col items-center justify-center">
-      <h1 className="text-3xl font-semibold tracking-tight max-w-md text-center">
+      {/*
+       * The Diya wordmark, above the greeting. Two files so the ink follows the theme without
+       * recolouring the artwork (assets/brand/README.txt forbids that) — the same pair /sign draws.
+       */}
+      <img
+        alt=""
+        className="h-11 dark:hidden"
+        src="/brand/orbo_diya_horizontal_light.svg"
+      />
+      <img
+        alt=""
+        className="hidden h-11 dark:block"
+        src="/brand/orbo_diya_horizontal_dark.svg"
+      />
+      <h1 className="font-heading text-3xl font-medium tracking-tight max-w-md text-center mt-8">
         Welcome to {appConfig.brand.productName}
       </h1>
-      <div className="h-32" />
+      <p className="font-heading mt-2 text-base tracking-tight text-diya-rich-teal">
+        Your Personal AI Companion.
+      </p>
+      <p className="mt-1 text-muted-foreground text-sm">
+        Think. Remember. Plan. Act.
+      </p>
+      <div className="h-10" />
       <AgentOrb size="72px" />
       {/*
        * A POSTER OF A COMPOSER, AND `pointer-events-none` IS WHAT MAKES IT ONE. Nothing here is
@@ -63,99 +84,158 @@ function WelcomeStep() {
   );
 }
 
-function ComputerUseStep() {
+/**
+ * Model access, as the deployment actually is.
+ *
+ * ORBO is self-hosted: provider keys are configured once, on the deployment, by the person who runs
+ * it — nobody entering this wizard types a key. What this step can honestly branch on is /health,
+ * the one endpoint that answers for the Intelligence runtime: connected says "you're set", anything
+ * else says who connects it. The capability endpoint deliberately does not project provider
+ * configuration (server/src/app.ts), so there is nothing truer to read.
+ */
+function ProviderStep() {
+  const { data: user } = useQuery(currentUserQueryOptions());
+  const health = useQuery(healthQueryOptions());
+  const answered = health.data !== undefined;
+  const runtimeConnected = health.data
+    ? !health.data.degraded.some(
+        (dependency) => dependency.name === "intelligence",
+      )
+    : false;
+
   return (
     <div className="w-full flex flex-col items-center justify-center">
-      <h1 className="text-3xl font-semibold tracking-tight max-w-md text-center">
-        Each agent has its own computer
+      <h1 className="font-heading text-3xl font-medium tracking-tight max-w-md text-center">
+        No keys to enter
       </h1>
       <div className="h-8" />
-      <div className="relative aspect-5/3 w-full max-w-lg rounded-2xl overflow-hidden border border-border">
-        <ComputerPlaceholder className="absolute inset-0 h-full w-full" />
-        <DesktopIllustration />
+      <div className="flex w-full max-w-md flex-col items-center gap-3 text-center">
+        <p className="text-muted-foreground text-sm text-pretty">
+          {appConfig.brand.productName} is self-hosted. Bots answer through a
+          model runtime connected once, on the deployment itself — nobody enters
+          API keys here.
+        </p>
+        {!answered ? (
+          <LoadingState label="Checking the model runtime…" />
+        ) : runtimeConnected ? (
+          <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm">
+            <IconCheck
+              aria-hidden="true"
+              className="size-4 shrink-0 text-diya-rich-teal"
+            />
+            This deployment's model runtime is connected — you're set.
+          </div>
+        ) : (
+          <div className="rounded-lg border border-border bg-card px-3 py-2 text-muted-foreground text-sm text-pretty">
+            The model runtime isn't answering yet.{" "}
+            {user?.role === "admin"
+              ? "As an administrator, connect Intelligence in the deployment's environment — /health will say when it answers."
+              : "If Bots can't answer, your administrator is the one who connects it."}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function RosterStep() {
+/**
+ * The first Bot, chosen for real.
+ *
+ * The roster is what the server publishes on a first run; nothing is invented to top a sparse one
+ * up. A chosen Bot is carried out of the wizard as the recipient the app opens with — and the first
+ * channel itself is created by the first message sent (`/channel/new` creates it on send), which is
+ * why this step promises a conversation and not a channel.
+ */
+function FirstBotStep({
+  chosenId,
+  onChoose,
+}: {
+  chosenId: string | null;
+  onChoose: (agentId: string | null) => void;
+}) {
   const {
     data: agents,
     isPending: rosterPending,
     isError: rosterFailed,
   } = useQuery(agentListQueryOptions());
-  const explore =
-    agents?.filter((a) => !a.mine && a.visibility === "public") ?? [];
-  // The deployment's own roster only. Nothing is invented to top a sparse one up: a name later
-  // found nowhere in the Bot catalog costs more trust than a short list does.
-  const roster = explore.slice(0, 3);
+  const roster = (agents ?? [])
+    .filter((a) => !a.mine && a.visibility === "public")
+    .slice(0, 4);
 
   return (
     <div className="w-full flex flex-col items-center justify-center">
-      <h1 className="text-3xl font-semibold tracking-tight max-w-md text-center">
-        Choose from a variety of agents or create your own
+      <h1 className="font-heading text-3xl font-medium tracking-tight max-w-md text-center">
+        Choose your first Bot
       </h1>
+      <p className="mt-2 max-w-md text-center text-muted-foreground text-sm">
+        Your first conversation with it opens your first channel. You can create
+        your own Bots any time from the Bots page.
+      </p>
       <div className="h-8" />
-      <div className="w-full max-w-lg overflow-hidden grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid w-full max-w-lg grid-cols-1 gap-3 overflow-hidden md:grid-cols-2">
         {roster.map((a) => {
+          const chosen = chosenId === a.id;
           return (
-            <div
-              className="bg-card p-4 rounded-lg flex flex-row gap-4 items-center"
+            <button
+              aria-pressed={chosen}
+              className={`flex flex-row items-center gap-4 rounded-lg border p-4 text-left transition-colors ${
+                chosen
+                  ? "border-diya-rich-teal bg-diya-rich-teal/5"
+                  : "border-border bg-card hover:border-foreground/20"
+              }`}
               key={a.id}
+              onClick={() => onChoose(chosen ? null : a.id)}
+              type="button"
             >
               <Avatar name={a.avatarSeed} size={40} />
-              <div className="flex min-w-0 flex-col">
-                <h3 className="line-clamp-1 text-base font-medium tracking-tight">
+              <span className="flex min-w-0 flex-col">
+                <span className="line-clamp-1 font-medium text-base tracking-tight">
                   {a.name}
-                </h3>
-              </div>
-            </div>
+                </span>
+                {chosen ? (
+                  <IconCheck
+                    aria-hidden="true"
+                    className="size-4 shrink-0 text-diya-rich-teal"
+                  />
+                ) : (
+                  <span className="line-clamp-1 text-muted-foreground text-xs">
+                    {a.title}
+                  </span>
+                )}
+              </span>
+            </button>
           );
         })}
         {/*
-         * Guidance, not a placeholder, when the deployment publishes few public agents — the three
-         * cards' worth this grid would otherwise draw. Only drawn on a roster that actually
-         * answered: while it loads there is nothing to count, and on a failed query saying "you
-         * publish 0" would be a lie the failed read, not the deployment, produced.
+         * Guidance, not a placeholder, when the deployment publishes fewer public Bots than the
+         * grid would draw — and only on a roster that actually answered: while it loads there is
+         * nothing to count, and on a failed query saying "you have 0" would be a lie the failed
+         * read, not the deployment, produced.
          */}
-        {!rosterPending && !rosterFailed && roster.length < 3 ? (
-          <div className="bg-card p-4 rounded-lg flex items-center md:col-span-1">
-            <p className="text-sm text-muted-foreground">
-              Your {appConfig.brand.productName} deployment currently publishes{" "}
-              {roster.length} agent{roster.length === 1 ? "" : "s"} — ask your
-              administrator to publish more from the Bot catalog.
+        {!rosterPending && !rosterFailed && roster.length < 2 ? (
+          <div className="flex items-center rounded-lg border border-border bg-card p-4 md:col-span-1">
+            <p className="text-muted-foreground text-sm text-pretty">
+              This deployment publishes {roster.length}{" "}
+              {roster.length === 1 ? "Bot" : "Bots"} so far — ask your
+              administrator to publish more, or create your own from the Bots
+              page once you're in.
             </p>
           </div>
         ) : null}
-        {/*
-         * Said plainly when the roster never came back, for the same reason every screen here
-         * separates "you have none" from "the read failed": a person who is told the deployment
-         * publishes nothing publishes nothing they know is not true.
-         */}
         {rosterFailed ? (
-          <div className="bg-card p-4 rounded-lg flex items-center md:col-span-1">
-            <p className="text-sm text-destructive">
-              Your agents couldn't be loaded, so there's nothing to publish here
-              yet.
+          <div className="flex items-center rounded-lg border border-border bg-card p-4 md:col-span-1">
+            <p className="text-destructive text-sm">
+              The roster couldn't be loaded, so there's nothing to choose from
+              yet — you can pick a Bot after the wizard.
             </p>
           </div>
         ) : null}
-        <div className="bg-card p-4 rounded-lg flex flex-row gap-4 items-center">
-          <div className="rounded-full size-[40px] border border-foreground/30 border-dashed" />
-          <h3 className="line-clamp-1 text-base font-medium tracking-tight text-foreground/70">
-            Your own agent
-          </h3>
-        </div>
       </div>
     </div>
   );
 }
 
-const STEPS: Array<() => React.ReactNode> = [
-  () => <WelcomeStep />,
-  () => <ComputerUseStep />,
-  () => <RosterStep />,
-];
+const STEP_COUNT = 3;
 
 /** A pane arrives from the side the journey is moving toward, and leaves out the other. */
 const variants = {
@@ -173,13 +253,22 @@ function RouteComponent() {
   const [direction, setDirection] = React.useState(1);
   // The way out: set once the completion is saved, it fades the whole page and then navigates.
   const [leaving, setLeaving] = React.useState(false);
+  // The first Bot picked on the last step, carried out of the wizard as the app's opening
+  // conversation. Null means the app opens at home, the way it always has.
+  const [chosenId, setChosenId] = React.useState<string | null>(null);
   const [ref, bounds] = useMeasure();
 
-  const last = step === STEPS.length - 1;
+  const last = step === STEP_COUNT - 1;
 
   const go = (to: number) => {
     setDirection(to > step ? 1 : -1);
     setStep(to);
+  };
+
+  const finish = () => {
+    complete.mutate(undefined, {
+      onSuccess: () => setLeaving(true),
+    });
   };
 
   return (
@@ -193,7 +282,11 @@ function RouteComponent() {
       initial={false}
       onAnimationComplete={() => {
         if (leaving) {
-          navigate({ to: "/" });
+          navigate(
+            chosenId
+              ? { search: { agent: chosenId }, to: "/channel/new" }
+              : { to: "/" },
+          );
         }
       }}
       transition={{ duration: 0.5, ease: "easeInOut" }}
@@ -219,7 +312,13 @@ function RouteComponent() {
                   key={step}
                   variants={variants}
                 >
-                  {STEPS[step]()}
+                  {step === 0 ? (
+                    <WelcomeStep />
+                  ) : step === 1 ? (
+                    <ProviderStep />
+                  ) : (
+                    <FirstBotStep chosenId={chosenId} onChoose={setChosenId} />
+                  )}
                 </motion.div>
               </AnimatePresence>
 
@@ -238,9 +337,7 @@ function RouteComponent() {
                   disabled={complete.isPending}
                   onClick={() => {
                     if (last) {
-                      complete.mutate(undefined, {
-                        onSuccess: () => setLeaving(true),
-                      });
+                      finish();
                     } else {
                       go(step + 1);
                     }
@@ -253,7 +350,8 @@ function RouteComponent() {
                       ? "Get started"
                       : "Continue"}
                 </Button>
-                {step !== 0 && (
+                {/* The first step's way back is the browser's. */}
+                {step !== 0 ? (
                   <Button
                     className="w-full"
                     onClick={() => go(step - 1)}
@@ -262,7 +360,7 @@ function RouteComponent() {
                   >
                     Back
                   </Button>
-                )}
+                ) : null}
               </motion.div>
             </div>
           </motion.div>

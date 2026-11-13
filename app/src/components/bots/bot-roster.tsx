@@ -13,6 +13,7 @@ import {
   PageSection,
 } from "@/components/layout/page-shell";
 import { Button } from "@/components/ui/button";
+import { ErrorState } from "@/components/ui/states";
 import {
   Item,
   ItemActions,
@@ -44,11 +45,7 @@ export function BotRoster() {
   if (agents.isPending) return null;
   // Only when nothing ever loaded: a failed background refetch keeps the roster it had.
   if (agents.data === undefined) {
-    return (
-      <p className="mt-6 text-destructive text-sm" role="alert">
-        Could not load your Bots.
-      </p>
-    );
+    return <ErrorState className="mt-6">Could not load your Bots.</ErrorState>;
   }
   const { needsYou, pinned, yours, shared } = groupRoster(
     agents.data,

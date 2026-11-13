@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { AgentCard } from "@/components/agents/agent-card";
 import { Composer, toAgentOptions } from "@/components/channels/composer";
+import { StarterPrompts } from "@/components/channels/starter-prompts";
 import { SidebarToggleBar } from "@/components/layout/sidebar-toggle";
 import {
   Carousel,
@@ -35,6 +36,12 @@ function RouteComponent() {
   const explore = agents?.filter(isSharedWithYou);
   const { start, startChosen, pending } = useStartChannel();
   const [error, setError] = useState<string | null>(null);
+  /*
+   * The starter prompt picked from the chips below, and the Composer's remount key. The composer
+   * takes its draft as `initialValue` — uncontrolled, by design — so "put this sentence in the box"
+   * is a fresh composer seeded with it, not a second way to drive the editor.
+   */
+  const [starter, setStarter] = useState<string | null>(null);
 
   /** Default recipient when the composer draft has no mention. */
   const fallback = defaultAgentProfile(
@@ -59,6 +66,8 @@ function RouteComponent() {
             agents={toAgentOptions(agents)}
             className="w-full max-w-2xl"
             disabled={!fallback}
+            initialValue={starter ?? undefined}
+            key={starter ?? "empty"}
             onSubmit={async (draft) => {
               // A channel is pinned to one coworker for the life of its thread, so the coworker is
               // chosen now, before it is created. An `@` is an explicit choice and is honoured as-is.
@@ -101,6 +110,12 @@ function RouteComponent() {
               yourself.
             </p>
           ) : null}
+          {/*
+           * Starter prompts, until one is picked: a first sentence for somebody facing an empty
+           * box. Offered only while nothing is drafted — the chips are for starting, and once a
+           * sentence is in the composer (typed or picked) they have done their job.
+           */}
+          {starter === null ? <StarterPrompts onPick={setStarter} /> : null}
           {error ? (
             <p
               className="mt-2 w-full max-w-2xl text-sm text-destructive"

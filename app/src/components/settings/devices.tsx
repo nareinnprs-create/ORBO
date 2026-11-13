@@ -16,6 +16,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Separator } from "@/components/ui/separator";
+import { ErrorState } from "@/components/ui/states";
 import {
   deliveryQueryOptions,
   removePushDeviceMutationOptions,
@@ -37,11 +38,7 @@ export function NativeDevices() {
       description="Sign in to the ORBO app on your phone and turn on notifications to add it here."
       title="Your devices"
     >
-      {error ? (
-        <p className="mt-4 text-destructive text-sm" role="alert">
-          {error.message}
-        </p>
-      ) : null}
+      {error ? <ErrorState className="mt-4">{error.message}</ErrorState> : null}
       {reach.isPending || !reach.data ? null : reach.data.devices.length ===
         0 ? (
         <PageEmpty>No devices yet.</PageEmpty>
@@ -82,9 +79,7 @@ export function RecentDeliveries() {
   return (
     <PageSection title="Recent deliveries">
       {reach.error ? (
-        <p className="mt-4 text-destructive text-sm" role="alert">
-          {reach.error.message}
-        </p>
+        <ErrorState className="mt-4">{reach.error.message}</ErrorState>
       ) : null}
       {reach.isPending || !reach.data ? null : reach.data.deliveries.length ===
         0 ? (

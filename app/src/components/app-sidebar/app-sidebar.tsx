@@ -60,7 +60,7 @@ import {
 } from "@/lib/settings/message-list";
 import { BotsNavBadge } from "../bot-profile/attention";
 import { Button } from "../ui/button";
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "../ui/empty";
+import { EmptyState } from "../ui/states";
 import { Channel } from "./channel";
 import { ChannelPagination } from "./channel-pagination";
 
@@ -311,33 +311,28 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
              */}
             {searching && visibleChannels.length === 0 ? (
               <div className="py-4">
-                <Empty className="border border-dashed min-h-[40dvh]">
-                  <EmptyHeader>
-                    <EmptyTitle>
-                      {channels.hasNextPage
-                        ? "No loaded channels match your search"
-                        : "No channels match your search"}
-                    </EmptyTitle>
-                    <EmptyDescription className="text-pretty">
-                      {channels.hasNextPage
-                        ? "Load older conversations to search more of your history."
-                        : `Nothing here is named “${search.trim()}”, and nobody has said it recently either.`}
-                    </EmptyDescription>
-                  </EmptyHeader>
-                </Empty>
+                <EmptyState
+                  className="min-h-[40dvh]"
+                  description={
+                    channels.hasNextPage
+                      ? "Load older conversations to search more of your history."
+                      : `Nothing here is named “${search.trim()}”, and nobody has said it recently either.`
+                  }
+                  title={
+                    channels.hasNextPage
+                      ? "No loaded channels match your search"
+                      : "No channels match your search"
+                  }
+                />
               </div>
             ) : null}
             {!searching && channels.data?.length === 0 ? (
               <div className="py-4">
-                <Empty className="border border-dashed min-h-[40dvh]">
-                  <EmptyHeader>
-                    <EmptyTitle>You don't have channels yet</EmptyTitle>
-                    <EmptyDescription className="text-pretty">
-                      Start talking to agents and your channels will appear
-                      here.
-                    </EmptyDescription>
-                  </EmptyHeader>
-                </Empty>
+                <EmptyState
+                  className="min-h-[40dvh]"
+                  description="Start talking to agents and your channels will appear here."
+                  title="You don't have channels yet"
+                />
               </div>
             ) : null}
             <AnimatePresence initial={false}>
