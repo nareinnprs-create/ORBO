@@ -119,3 +119,36 @@ Config alone does nothing in Tauri v2. The re-add commits need, in lockstep:
 - [ ] `orbo://` deep link opens the right route from a cold start and a second launch.
 - [ ] Update `PLAN.md` §10.B.14 and `docs/planning/31-phase8-wrapper-plan.md` G3/G4 to
       resolved-with-endpoint.
+
+## 6. Status — 2026-11-14: pipeline live (keys + endpoint + first signed artifact)
+
+The two owner inputs from the top now exist:
+
+- **Domain/endpoint**: `https://dl.orbo.opraiz.com/latest.json` — R2 bucket `orbo-artifacts`
+  behind a custom domain (infra details: `deploy/cloudflare-infra.md`, untracked).
+- **Signing keys**: dedicated Tauri minisign pair generated with `tauri signer generate`
+  (key ID `4A38783C36225F2E`). Private key lives at `%USERPROFILE%\.orbo-updater\ORBO.key`
+  with restricted ACL (never committed; password held with it, off-repo). **Public key,
+  verbatim value for `"pubkey"`:**
+
+```
+dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDRBMzg3ODNDMzYyMjVGMkUKUldRdVh5STJQSGc0U3FvS2xGWWtpMWhlWkVjUW9JMmZGYmNLa2cwU3FjUE5Vem5lSHV1QXRhY2cK
+```
+
+**Endpoint to use**: because R2 is static hosting, use the single-manifest pattern —
+`"endpoints": ["https://dl.orbo.opraiz.com/latest.json"]` — with a `platforms` map inside the
+manifest (`windows-x86_64`, etc.). The plugin compares `version` client-side, so no
+`{{current_version}}` placeholder and no per-target path layout is needed (that pattern in §1
+above is the dynamic-server alternative; either works, pick one).
+
+**First artifact published** (Windows x64): `ORBO_0.1.0_x64_en-US.msi` + `.sig` + manifest at
+the URL above, all HTTP 200 and verified. Version is 0.1.0 (the artifact's real version): a
+fresh 0.1.6 build was attempted once and is blocked by pre-existing compile errors in
+owner-WIP `desktop/src-tauri/src/windows.rs` (fullwidth-colon char literals at lines
+254/286/291). After that file compiles, rebuild with `TAURI_SIGNING_PRIVATE_KEY_PATH` +
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` set and `createUpdaterArtifacts: true` — the `.sig` files
+are then emitted at build time; upload installer + sig, overwrite `latest.json`, and purge the
+CDN cache for the manifest URL.
+
+Full state, exact config snippet, and remaining owner actions: `deploy/desktop-updater.md`
+(untracked).
