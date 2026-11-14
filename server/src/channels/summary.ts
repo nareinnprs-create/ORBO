@@ -18,7 +18,7 @@ import {
 } from "../db/schema";
 import { DEFAULT_MAX_ATTEMPTS, type WorkQueue } from "../work/queue";
 import { CHANNEL_ACTIVITY_TOPIC, type ChannelActivityEvent } from "./events";
-import { oneLine } from "./text";
+import { oneLine, textOf } from "./text";
 
 export const CHANNEL_SUMMARY_KIND = "channel.summary";
 
@@ -310,20 +310,6 @@ async function openingOf(
     replied ? `Asked: ${asked}\nAnswered: ${replied}` : `Asked: ${asked}`,
     MAX_EXCERPT_GRAPHEMES,
   );
-}
-
-/* `content` is a string or an array of parts; anything else is no text, not `[object Object]`. */
-function textOf(content: unknown): string {
-  if (typeof content === "string") return content.trim();
-  if (!Array.isArray(content)) return "";
-  return content
-    .map((part) =>
-      part && typeof part === "object" && "text" in part
-        ? String((part as { text?: unknown }).text ?? "")
-        : "",
-    )
-    .join(" ")
-    .trim();
 }
 
 /* Only a matched pair wrapping the whole answer: a title containing a quote keeps it. */

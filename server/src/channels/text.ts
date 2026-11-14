@@ -33,6 +33,20 @@ export function cutAtCodeUnits(text: string, limit: number): string {
  * clusters so an emoji is never split. The caller supplies the cap; a preview and a title want
  * different ones.
  */
+/** The text a message carries: a string as it is, parts joined, anything else no text at all. */
+export function textOf(content: unknown): string {
+  if (typeof content === "string") return content.trim();
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((part) =>
+      part && typeof part === "object" && "text" in part
+        ? String((part as { text?: unknown }).text ?? "")
+        : "",
+    )
+    .join(" ")
+    .trim();
+}
+
 export function oneLine(text: string, maxGraphemes: number): string {
   // biome-ignore lint/suspicious/noControlCharactersInRegex: stripping them is the point.
   const flattened = text.replace(/[\u0000-\u001f\u007f-\u009f]+/g, " ").trim();

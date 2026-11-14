@@ -181,6 +181,12 @@ import { observeIntelligenceAuthentication } from "./intelligence-client";
 import { clearLearningRevisionFallback } from "./learning/runtime";
 import { createLearningSettingsStore } from "./learning/settings";
 import { createMemoryIngestion } from "./memory/ingestion";
+import { createMemoryMiner } from "./memory/miner";
+import {
+  forgetSettledMining,
+  mineClaimedConversations,
+  offerConversationsToMine,
+} from "./memory/mining";
 import { createMemoryStore } from "./memory/store";
 import { memoryTools } from "./memory/tools";
 import { runDueWatchChecks } from "./monitors/store";
@@ -2938,6 +2944,42 @@ repeatAfterEach(async () => {
     // reaches this on every pass, and it has not gone wrong, it simply has no titles.
     console.warn(
       "[channels] conversations could not be named:",
+      error instanceof Error ? error.message : error,
+    );
+  }
+}, 10_000);
+
+/*
+ * Remembering what channels taught, in the API process like the naming above. Its own loop, so a
+ * slow model never delays a title either.
+ */
+const memoryMiner = {
+  database,
+  queue: createWorkQueue(database),
+  memories: personalMemoryStore,
+  transcript: routineIntelligence,
+  mine: createMemoryMiner({
+    model: runtimeModel.defaultModel,
+    resolveApiKey: resolveRuntimeModelApiKey,
+  }),
+  owner: workOwner("miner"),
+};
+repeatAfterEach(async () => {
+  try {
+    await offerConversationsToMine(memoryMiner);
+    const report = await mineClaimedConversations(memoryMiner);
+    if (report.mined.length > 0) {
+      console.info(
+        JSON.stringify({ type: "memory-mining", mined: report.mined }),
+      );
+    }
+    // Same pass: one statement, deletes by age, and two replicas running it changes nothing.
+    await forgetSettledMining(memoryMiner);
+  } catch (error) {
+    // Never fatal, and never loud enough to drown the log: a deployment with no model configured
+    // reaches this on every pass, and it has not gone wrong, it simply remembers nothing.
+    console.warn(
+      "[memory] conversations could not be mined:",
       error instanceof Error ? error.message : error,
     );
   }
