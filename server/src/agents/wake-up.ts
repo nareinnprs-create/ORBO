@@ -517,7 +517,18 @@ export function createWakeUpRunner(options: {
                   },
                   { id: `follow-up:${item.key}` },
                 )
-                .catch(() => {});
+                .catch((error: unknown) =>
+                  console.error(
+                    JSON.stringify({
+                      type: "wake-up-activity-record-failed",
+                      followUp: item.key,
+                      agentId: payload.agentId,
+                      channelId: channel.id,
+                      error:
+                        error instanceof Error ? error.message : String(error),
+                    }),
+                  ),
+                );
               await done("waiting", error.message);
               report.ran.push(item.key);
             } else {
@@ -529,11 +540,22 @@ export function createWakeUpRunner(options: {
             }
           }
         } catch (error) {
-          // The channel or the person could not be resolved: over, and said on the row.
+          // The channel or the person could not be resolved: over, and said on the row. If the row
+          // cannot be written either, the two identifiers this loop already holds say which
+          // follow-up was lost instead of it silently staying scheduled forever.
           await done(
             "failed",
             error instanceof Error ? error.message : String(error),
-          ).catch(() => {});
+          ).catch((failure: unknown) =>
+            console.error(
+              JSON.stringify({
+                type: "wake-up-settle-failed",
+                followUp: item.key,
+                error:
+                  failure instanceof Error ? failure.message : String(failure),
+              }),
+            ),
+          );
           report.skipped.push(item.key);
         }
       }

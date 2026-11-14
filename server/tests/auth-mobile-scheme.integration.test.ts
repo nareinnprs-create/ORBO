@@ -19,6 +19,7 @@ const config = {
     allowedEmailDomains: [],
     google: { clientId: "id", clientSecret: "secret" },
   },
+  session: { expiresInDays: 7 },
   keyEncryptionKey: Buffer.alloc(32, 7).toString("base64"),
 } as unknown as DeploymentConfig;
 /** What the Expo plugin's after hook consults before appending the session cookie to a redirect. */

@@ -17,8 +17,8 @@ import {
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ComponentType, ReactNode } from "react";
-import { SetupSections } from "@/components/bot-profile/setup";
 import { CreateAgentDialog } from "@/components/agents/create-agent-dialog";
+import { SetupSections } from "@/components/bot-profile/setup";
 import { type AgentProfile, agentKeys } from "@/lib/agents/queries";
 import { computerKeys } from "@/lib/computers/queries";
 import { Route as BoundariesRoute } from "@/routes/_authed/admin/boundaries";

@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, redirect, useLocation } from "@tanstack/react-router";
 import { motion, useReducedMotion } from "motion/react";
 import { useState } from "react";
 import AgentOrb from "@/components/agents/orb/agent-orb";
@@ -45,6 +45,13 @@ function SignScreen() {
   // boolean would put "Opening…" on all of them.
   const [opening, setOpening] = useState<AuthProviderId | "sso" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const location = useLocation();
+  /*
+   * Carried by the sidebar's log out when the server refused to end the session. It rode here in
+   * history state, so it survives a reload; that is acceptable for a message about a request the
+   * person will rarely see fail, and any later navigation replaces it.
+   */
+  const signOutFailed = location.state?.signOutFailed === true;
   const { data: options } = useQuery(authProvidersQueryOptions());
   const providers = options?.providers ?? [];
   const [email, setEmail] = useState("");
@@ -142,15 +149,31 @@ function SignScreen() {
           shown: { transition: { staggerChildren: ENTRANCE_STAGGER_SECONDS } },
         }}
       >
+        {/*
+         * The Diya horizontal wordmark, above the orb. Two files so the wordmark ink follows the
+         * theme without recolouring the artwork (assets/brand/README.txt forbids that).
+         */}
+        <motion.img
+          alt=""
+          className="h-11 dark:hidden"
+          src="/brand/orbo_diya_horizontal_light.svg"
+          variants={{ hidden, shown }}
+        />
+        <motion.img
+          alt=""
+          className="hidden h-11 dark:block"
+          src="/brand/orbo_diya_horizontal_dark.svg"
+          variants={{ hidden, shown }}
+        />
         <motion.div
           transition={{ duration: ENTRANCE_SECONDS, ease: EASE_OUT }}
           variants={{ hidden, shown }}
-          className="flex items-center justify-center"
+          className="mt-6 flex items-center justify-center"
         >
           <AgentOrb size="56px" />
         </motion.div>
         <motion.h1
-          className="text-2xl font-medium tracking-tight text-center mt-8"
+          className="font-heading text-2xl font-medium tracking-tight text-center mt-8"
           transition={{ duration: ENTRANCE_SECONDS, ease: EASE_OUT }}
           variants={{ hidden, shown }}
         >
@@ -221,6 +244,12 @@ function SignScreen() {
           {error ? (
             <p className="mt-3 text-sm text-destructive" role="alert">
               {error}
+            </p>
+          ) : null}
+          {signOutFailed ? (
+            <p className="mt-3 text-sm text-destructive" role="alert">
+              You are signed out on this device, but the server could not be
+              told. Its copy of the session expires on its own.
             </p>
           ) : null}
         </motion.div>

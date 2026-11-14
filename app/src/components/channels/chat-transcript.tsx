@@ -10,6 +10,8 @@ import {
   IconChevronDown,
   IconClock,
   IconFile,
+  IconThumbDown,
+  IconThumbUp,
   IconX,
 } from "@tabler/icons-react";
 import { motion, useReducedMotion } from "motion/react";
@@ -48,7 +50,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { attachmentUrl } from "@/lib/channels/attachments";
 import { readResponsibilityTurn } from "@/lib/channels/responsibility-turn";
 import { readFiring } from "@/lib/channels/routine-firing";
-import { splitChatOrigin } from "./chat-origin";
 import { markdownComponents } from "@/lib/markdown";
 import { EASE_OUT, ENTRANCE_SECONDS } from "@/lib/motion";
 import { readToolName } from "@/lib/plugins/tool-name";
@@ -71,6 +72,7 @@ import {
   type SentAttachment,
   toVisibleChatItems,
 } from "./chat-messages";
+import { splitChatOrigin } from "./chat-origin";
 import type { QueuedMessage } from "./composer";
 import { TeamBotConsentCard } from "./team-bot-consent";
 import { ToolRenderBoundary } from "./tool-boundary";
@@ -208,6 +210,68 @@ function Stopped({ reason }: { reason: string }) {
     >
       {reason}
     </p>
+  );
+}
+
+/**
+ * Two thumbs under the answer that just finished, and nothing else about feedback.
+ *
+ * A SURVEY WITH NO SERVER TO RECEIVE IT. Nothing in the app's API collects a message rating — no
+ * endpoint exists — so the answer is held in this component's state alone: it survives only as long
+ * as the transcript does, is never sent anywhere, and says only "noted". That is still the right
+ * shape to ship: the affordance costs two buttons, and building it against a server that does not
+ * exist yet would mean inventing one from the browser, which is exactly what this lane does not do.
+ * When the server grows a route, `onVote` becomes a mutation and nothing about the drawing changes.
+ *
+ * OUTSIDE THE MEMOISED ROWS, and keyed on the id of the last answer. The buttons sit in the same
+ * slot `Thinking` and `Stopped` use — under the conversation — and their state must not live inside
+ * `TranscriptMessage`, which is memoised on primitives so a vote would either break the memo or
+ * never re-render the row that holds it.
+ *
+ * The row is hidden while the turn runs, so the thumbs do not sit under an answer still arriving.
+ */
+function TurnFeedback({
+  onVote,
+  voted,
+}: {
+  onVote: (vote: "up" | "down") => void;
+  voted: boolean;
+}) {
+  const buttonClassName =
+    "grid size-7 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
+
+  if (voted) {
+    return (
+      // `status` rather than `alert`: the person just did this, nothing interrupted them.
+      <p
+        className="text-muted-foreground text-xs"
+        data-testid="transcript-feedback-thanks"
+        role="status"
+      >
+        Thanks — noted.
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1" data-testid="transcript-feedback">
+      <button
+        aria-label="Mark this answer as helpful"
+        className={buttonClassName}
+        onClick={() => onVote("up")}
+        type="button"
+      >
+        <IconThumbUp aria-hidden className="size-4" />
+      </button>
+      <button
+        aria-label="Mark this answer as unhelpful"
+        className={buttonClassName}
+        onClick={() => onVote("down")}
+        type="button"
+      >
+        <IconThumbDown aria-hidden className="size-4" />
+      </button>
+    </div>
   );
 }
 
@@ -1590,6 +1654,19 @@ export function ChatTranscript({
     }
   }, [hasItems, delays]);
 
+  /*
+   * THUMBS ON THE LAST ANSWER, stored with the id of the answer they were about. A stale vote —
+   * one whose answer is no longer the last — simply does not display, so a new turn clears the
+   * row without an effect. See `TurnFeedback` for why this never leaves the browser.
+   */
+  const lastAnswerId =
+    items.findLast((item) => item.kind === "text" && item.role === "assistant")
+      ?.id ?? null;
+  const [vote, setVote] = useState<{
+    answerId: string;
+    choice: "up" | "down";
+  } | null>(null);
+
   return (
     <MessageScrollerProvider autoScroll scrollPreviousItemPeek={48}>
       <MessageScroller>
@@ -1665,6 +1742,21 @@ export function ChatTranscript({
                   text={message.text}
                 />
               ))}
+              {/*
+               * Drawn here rather than after `items.map`, for the same reason this whole block
+               * is: the scroller finds appended rows positionally, and a row of ours after the
+               * transcript would sit where the next answer must land. Inside this wrapper it is
+               * invisible to that count. It shows only when the turn is over, so it is never
+               * drawing under a queued line.
+               */}
+              {!busy && lastAnswerId !== null ? (
+                <TurnFeedback
+                  onVote={(choice) =>
+                    setVote({ answerId: lastAnswerId, choice })
+                  }
+                  voted={vote?.answerId === lastAnswerId}
+                />
+              ) : null}
             </div>
             {items.length === 0 && restoring ? <RestoringTranscript /> : null}
             {items.map((item, index) =>

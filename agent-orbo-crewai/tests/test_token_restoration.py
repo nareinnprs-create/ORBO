@@ -23,6 +23,9 @@ def isolated_environment(directory):
     directory.mkdir(parents=True, exist_ok=True)
     inherited = (
         "HOME", "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "CODEX_HOME",
+        # crewai's trace manager reads LOCALAPPDATA on win32 at import; without it
+        # every spawned child dies with Path(None) before the harness under test loads.
+        "LOCALAPPDATA",
         "PATH", "LANG", "SYSTEMROOT", "WINDIR",
     )
     environment = {name: os.environ[name] for name in inherited if name in os.environ}

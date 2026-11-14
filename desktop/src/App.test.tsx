@@ -8,6 +8,8 @@ import {
   test,
 } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import * as TauriCore from "@tauri-apps/api/core";
+import * as TauriEvent from "@tauri-apps/api/event";
 import {
   act,
   cleanup,
@@ -18,8 +20,6 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StrictMode } from "react";
-import * as TauriCore from "@tauri-apps/api/core";
-import * as TauriEvent from "@tauri-apps/api/event";
 
 type Invoke = (command: string, args?: unknown) => Promise<unknown>;
 type ProgressEvent = {
@@ -127,7 +127,7 @@ async function completeInstallation(
 
 function installationCalls() {
   return invokeCalls.filter((call) =>
-    ["prepare_installation", "prepare_engine"].includes(call.command),
+    ["prepare_installation"].includes(call.command),
   );
 }
 
@@ -1067,7 +1067,7 @@ test.each(["supervisor", "windows"])(
       if (blocker === "supervisor" && command === "last_failure")
         return { said: "The supervisor stopped retrying." };
       if (blocker === "windows" && command === "windows_blocker")
-        return "wsl-absent";
+        return { kind: "wsl-absent", ours_to_fix: true };
       if (command === "windows_blocker_instruction")
         return "Install WSL before continuing.";
       return previous(command, args);
@@ -1431,7 +1431,8 @@ test("a failed Windows blocker instruction is visible instead of an empty blocke
   );
   const setupHandler = invokeHandler;
   invokeHandler = async (command, args) => {
-    if (command === "windows_blocker") return "wsl-absent";
+    if (command === "windows_blocker")
+      return { kind: "wsl-absent", ours_to_fix: true };
     if (command === "windows_blocker_instruction") {
       throw { said: "The blocker instruction could not be read." };
     }
@@ -1452,12 +1453,75 @@ test("a successfully detected missing WSL feature keeps its setup instruction", 
   const instruction =
     "Run wsl --install, restart Windows, and start ORBO again.";
   invokeHandler = async (command, args) => {
-    if (command === "windows_blocker") return "wsl-absent";
+    if (command === "windows_blocker")
+      return { kind: "wsl-absent", ours_to_fix: true };
     if (command === "windows_blocker_instruction") return instruction;
     return setupHandler(command, args);
   };
   const view = await renderApp();
   expect(await view.findByText(instruction)).toBeTruthy();
+  expect(view.queryByRole("alert")).toBeNull();
+  expect(view.queryByRole("button", { name: "Set up ORBO" })).toBeNull();
+});
+
+test("an ours-to-fix Windows blocker says ORBO fixes it after the restart and keeps the manual command for IT", async () => {
+  setupRootConfiguration("/tmp/orbo-ours-to-fix-test", async () =>
+    emptyConfiguration(),
+  );
+  const setupHandler = invokeHandler;
+  const manual =
+    "Open Windows Terminal or PowerShell as an administrator, run `wsl --install` (or `wsl --install --no-launch` on Windows 11) and `wsl --update`, then start ORBO again.";
+  invokeHandler = async (command, args) => {
+    if (command === "windows_blocker")
+      return { kind: "wsl-absent", ours_to_fix: true };
+    if (command === "windows_blocker_instruction") {
+      expect(args).toEqual({
+        blocker: { kind: "wsl-absent", ours_to_fix: true },
+      });
+      return manual;
+    }
+    return setupHandler(command, args);
+  };
+  const view = await renderApp();
+  expect(
+    await view.findByText(
+      "ORBO will fix this after your computer restarts — nothing for you to run.",
+    ),
+  ).toBeTruthy();
+  expect((await view.findByText(manual)).textContent).toContain(
+    "wsl --install",
+  );
+  expect(view.getByText("The commands IT would run manually")).toBeTruthy();
+  expect(view.queryByRole("alert")).toBeNull();
+  expect(view.queryByRole("button", { name: "Set up ORBO" })).toBeNull();
+});
+
+test("a not-ours Windows blocker keeps the manual instruction as the main copy", async () => {
+  setupRootConfiguration("/tmp/orbo-firmware-blocker-test", async () =>
+    emptyConfiguration(),
+  );
+  const setupHandler = invokeHandler;
+  const instruction =
+    "Restart your computer, open the BIOS/UEFI settings, and enable hardware virtualization.";
+  invokeHandler = async (command, args) => {
+    if (command === "windows_blocker")
+      return { kind: "virtualization-disabled", ours_to_fix: false };
+    if (command === "windows_blocker_instruction") {
+      expect(args).toEqual({
+        blocker: { kind: "virtualization-disabled", ours_to_fix: false },
+      });
+      return instruction;
+    }
+    return setupHandler(command, args);
+  };
+  const view = await renderApp();
+  expect(await view.findByText(instruction)).toBeTruthy();
+  expect(
+    view.queryByText(
+      "ORBO will fix this after your computer restarts — nothing for you to run.",
+    ),
+  ).toBeNull();
+  expect(view.queryByText("The commands IT would run manually")).toBeNull();
   expect(view.queryByRole("alert")).toBeNull();
   expect(view.queryByRole("button", { name: "Set up ORBO" })).toBeNull();
 });
@@ -1471,9 +1535,14 @@ test("disabled Virtual Machine Platform displays its feature-specific fix and bl
     "Virtual Machine Platform is switched off. Open Windows Terminal or PowerShell as an administrator, run `dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart`, restart Windows, and start ORBO again.";
   invokeHandler = async (command, args) => {
     if (command === "windows_blocker")
-      return "virtual-machine-platform-disabled";
+      return { kind: "virtual-machine-platform-disabled", ours_to_fix: true };
     if (command === "windows_blocker_instruction") {
-      expect(args).toEqual({ blocker: "virtual-machine-platform-disabled" });
+      expect(args).toEqual({
+        blocker: {
+          kind: "virtual-machine-platform-disabled",
+          ours_to_fix: true,
+        },
+      });
       return instruction;
     }
     return setupHandler(command, args);
@@ -1490,9 +1559,7 @@ test("disabled Virtual Machine Platform displays its feature-specific fix and bl
   expect(view.queryByRole("button", { name: "Start ORBO" })).toBeNull();
   expect(
     invokeCalls.some((call) =>
-      ["prepare_installation", "prepare_engine", "start_stack"].includes(
-        call.command,
-      ),
+      ["prepare_installation", "start_stack"].includes(call.command),
     ),
   ).toBe(false);
 });

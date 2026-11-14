@@ -43,7 +43,10 @@ backup story in two.
 
 Default starting point (default, change to taste): take the logical `pg_dump`
 daily and retain 7 days of dumps. Off-site location, backup encryption, and
-recovery objectives are [OWNER TODO].
+recovery objectives are owner decisions:
+<!-- OWNER: Confirm the recovery objectives or replace them with the deployment's own; delete this comment and the confirm marker once set. Suggested defaults: RPO ≤ 24 hours (the daily dump above), RTO ≤ 4 hours (restore, migrate, verify), dumps copied off-site encrypted. -->
+[OWNER TO CONFIRM: off-site location, backup encryption, RPO, and RTO — suggested defaults:
+RPO ≤ 24 hours from the daily dump above, RTO ≤ 4 hours for a restore drill].
 
 ## Backing up
 
@@ -84,7 +87,10 @@ files above.
 Restore-drill expectation (default, change to taste): restore the latest dump
 to an empty database and verify sign-in plus one Bot turn before you need it
 in an incident. Who may run a restore, and the expected recovery time, are
-[OWNER TODO].
+owner decisions:
+<!-- OWNER: Confirm who may run a restore and the expected recovery time, or replace them; delete this comment and the confirm marker once set. Suggested defaults: the deployment administrator, RTO ≤ 4 hours, drilled quarterly. -->
+[OWNER TO CONFIRM: who may run a restore, and the expected recovery time — suggested defaults:
+the deployment administrator, RTO ≤ 4 hours, drill quarterly].
 
 ## What is NOT backed up
 
@@ -92,7 +98,8 @@ in an incident. Who may run a restore, and the expected recovery time, are
   Bots in again.
 - **Agent workspaces** (`agent-workspace` volume, `/workspace` per Bot): working files, not
   product state. Back these up separately only if an operator decides they matter
-  ([OWNER TODO]).
+  <!-- OWNER: Decide whether this deployment's agent workspaces matter enough to back up, and say so here; delete this comment and the confirm marker once decided. -->
+  ([OWNER TO CONFIRM: whether agent workspaces are backed up in this deployment]).
 - **SPIRE data and sockets** (`spire-server-data`, `spire-agent-data`, socket volumes):
   workload identities are reissued at start.
 - **Images and build artifacts**: re-pulled by digest from the release's

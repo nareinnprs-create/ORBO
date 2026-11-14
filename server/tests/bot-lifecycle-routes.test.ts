@@ -4,6 +4,7 @@ import { BotPausedError } from "../src/agents/lifecycle";
 import { createBotLifecycleRoutes } from "../src/agents/lifecycle-routes";
 import { createWakeUpRunner, type WakeUpPayload } from "../src/agents/wake-up";
 import type { AuditEventInput } from "../src/audit";
+import { HeadlessToolSuspension } from "../src/computer/headless-tools";
 
 const ACTOR = { id: "u1", email: "person@orbo.test", role: "user" } as const;
 
@@ -265,5 +266,105 @@ describe("follow-up runner", () => {
     });
     await wake.sweep();
     expect(settled).toEqual(["failed"]);
+  });
+
+  test("a failing activity write after a suspension is logged, not swallowed", async () => {
+    const errors: string[] = [];
+    const original = console.error;
+    console.error = ((message: unknown) => {
+      if (String(message).includes("wake-up-activity-record-failed"))
+        errors.push(String(message));
+    }) as typeof console.error;
+    const wake = createWakeUpRunner({
+      queue: {
+        claim: async () => [
+          { kind: "bot.wakeup", key: "w1", payload, attempts: 1 },
+        ],
+        finish: async () => true,
+        purge: async () => 0,
+      },
+      store: { settle: async () => undefined } as never,
+      owner: "replica",
+      actorFor: async (id) => ({ id, role: "user" }),
+      channels: {
+        get: async () => null,
+        direct: async () => ({
+          id: "c1",
+          threadId: "t1",
+          name: "",
+          agentIds: [],
+          active: true,
+          lastMessageAt: null,
+        }),
+        recordActivity: async () => {
+          throw new Error("the channel is gone");
+        },
+      },
+      runTurn: async () =>
+        Promise.reject(new HeadlessToolSuspension("needs a human")),
+    });
+    try {
+      // Still over, and still said: the logged failure is not the sweep's own failure.
+      expect(await wake.sweep()).toEqual({ ran: ["w1"], skipped: [] });
+    } finally {
+      console.error = original;
+    }
+    expect(errors).toHaveLength(1);
+    expect(JSON.parse(errors[0])).toMatchObject({
+      type: "wake-up-activity-record-failed",
+      followUp: "w1",
+      agentId: "bot-1",
+      channelId: "c1",
+      error: "the channel is gone",
+    });
+  });
+
+  test("a follow-up whose row cannot be settled either is logged with its identifiers", async () => {
+    const errors: string[] = [];
+    const original = console.error;
+    console.error = ((message: unknown) => {
+      if (String(message).includes("wake-up-settle-failed"))
+        errors.push(String(message));
+    }) as typeof console.error;
+    const wake = createWakeUpRunner({
+      queue: {
+        claim: async () => [
+          { kind: "bot.wakeup", key: "w1", payload, attempts: 1 },
+        ],
+        finish: async () => true,
+        purge: async () => 0,
+      },
+      store: {
+        settle: async () => {
+          throw new Error("the row would not take the outcome.");
+        },
+      } as never,
+      owner: "replica",
+      actorFor: async () => {
+        throw new Error("the person is not here");
+      },
+      channels: {
+        get: async () => null,
+        direct: async () => {
+          throw new Error("no channel was ever built");
+        },
+        recordActivity: async () => {
+          throw new Error("unreachable in this test");
+        },
+      },
+      runTurn: async () =>
+        Promise.reject(new Error("unreachable in this test")),
+    });
+    try {
+      expect(await wake.sweep()).toEqual({ ran: [], skipped: ["w1"] });
+    } finally {
+      console.error = original;
+    }
+    expect(errors).toHaveLength(1);
+    expect(JSON.parse(errors[0])).toMatchObject({
+      type: "wake-up-settle-failed",
+      followUp: "w1",
+      error: "the row would not take the outcome.",
+    });
   });
 });

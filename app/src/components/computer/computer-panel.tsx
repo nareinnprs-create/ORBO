@@ -1,4 +1,5 @@
 import { ActivityLog } from "./activity-log";
+import { ComputerActionTimeline } from "./computer-action-timeline";
 import { ComputerView } from "./computer-view";
 
 /** The current live computer, separate from screenshots kept in historical tool results. */
@@ -15,6 +16,10 @@ export function ComputerViewPanel({
       <div className="mt-8">
         <h3 className="mb-2 font-medium text-sm">Activity</h3>
         <ActivityLog computerId={agentId} />
+      </div>
+      <div className="mt-8">
+        <h3 className="mb-2 font-medium text-sm">Action trail</h3>
+        <ComputerActionTimeline agentId={agentId} />
       </div>
     </section>
   );

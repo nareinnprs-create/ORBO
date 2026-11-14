@@ -654,9 +654,10 @@ export type LoadAttachment = (
  * that did not happen. It must also treat a row that is ALREADY sent as recorded, because a replayed
  * message and a retried run are both ordinary and neither is an error.
  *
- * REJECT WITH A SENTENCE, NOT A SYMPTOM. There is no `app.onError` behind this server, and what an
- * implementation throws travels out of the run as an AG-UI error and is shown to the person who was
- * waiting. It is the same road `resolvePart`'s refusals take, and it wants the same kind of message:
+ * REJECT WITH A SENTENCE, NOT A SYMPTOM. What an implementation throws here travels out of the run
+ * as an AG-UI error and is shown to the person who was waiting — the app's HTTP `onError` backstop
+ * never sees it, because a run is a stream and not a request/response. It is the same road
+ * `resolvePart`'s refusals take, and it wants the same kind of message:
  * what happened, and what they can do about it.
  *
  * Absent still means nothing is recorded, which is what every deployment did before this existed.
@@ -1143,7 +1144,7 @@ async function remoteTransport(
      * The same class, twice, under two names.
      *
      * This server runs zod 4 and `@ag-ui/mastra` depends on zod 3, so the package manager resolves
-     * two peer variants of `@mastra/client-js` — identical code at identical version 1.43.0, but
+     * two peer variants of `@mastra/client-js` — identical code at identical version 1.57.0, but
      * two nominal types to TypeScript, which tells them apart by a private field. The cast crosses
      * that and nothing else. It is deliberately written against the bridge's own parameter type, so
      * the day the two versions really do diverge this stops compiling instead of lying.

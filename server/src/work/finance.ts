@@ -1,18 +1,17 @@
 /**
- * Spending summaries as a Work task kind (Phase 6 slice 1; 24 §4).
+ * Spending summaries as a Work task kind (Phase 6; 24 §4).
  *
  * A CSV import rides the unified task ledger in `server/src/work/tasks.ts` rather
  * than growing its own table or route: one task + one run row + one receipt event,
- * all in-memory, with the CSV text arriving as the task input. The worker branch is
- * `analyzeSpending` below — a faithful port of OpenMuse's `engine/finance.ts`
+ * now durable rows, with the CSV text arriving as the task input. The worker branch
+ * is `analyzeSpending` below — a faithful port of OpenMuse's `engine/finance.ts`
  * (F-01) — so the numbers stay cents-exact and the CSV grammar stays strict.
  *
  * WHAT THIS IS NOT. No savings-goal action — that is slice 2, a `responsibilities`
  * row with the two fixed milestones (F-09). No UI: no import screen, no summary
- * card (F-07), no delegate sheet (F-08). No network, no database, no currency
- * conversion: positive amounts are expenses and negative amounts are income, in
- * the source currency. The ledger here is the in-memory one; the durable tables
- * do not exist yet, the same as the rest of slice 1.
+ * card (F-07), no delegate sheet (F-08). No network, no currency conversion:
+ * positive amounts are expenses and negative amounts are income, in the source
+ * currency.
  */
 import { z } from "zod";
 import type { Task, TaskLedger, TaskReceipt, TaskRun } from "./tasks";
@@ -21,9 +20,9 @@ import type { Task, TaskLedger, TaskReceipt, TaskRun } from "./tasks";
 export const FINANCE_TASK_KIND = "finance" as const;
 
 /**
- * The ledger producer finance offers under. The ledger's producer shape is
- * `{kind: "routine", routineId}` with no task-kind field yet, so the kind rides
- * the routine id — the same key that makes the offer idempotent.
+ * The ledger producer finance offers under, as its own producer kind — the same
+ * unification TD-05 gave proactive: the kind names who offered it, the key names
+ * what it is, and neither rides the other.
  */
 export const FINANCE_PRODUCER_ID = "finance-import";
 
@@ -210,9 +209,9 @@ export type FinanceTaskResult = {
  * discipline: a turn's failure is a row the ledger owns, so an invalid CSV
  * closes the run as failed and receipts the reason rather than throwing. Only
  * ledger misuse throws — an offered task with no run row or receipt behind it.
- * Pure apart from the injected ledger: no fetch, no database, no clock read.
+ * Pure apart from the injected ledger: no fetch, no clock read.
  */
-export function runFinanceTask(options: {
+export async function runFinanceTask(options: {
   ledger: TaskLedger;
   /** The identity of the import: the same key offered again imports nothing twice. */
   key: string;
@@ -220,36 +219,36 @@ export function runFinanceTask(options: {
   csv: string;
   /** When the import is filed. Defaulted, never live by need. */
   at?: Date;
-}): FinanceTaskResult {
+}): Promise<FinanceTaskResult> {
   const { ledger } = options;
-  const { task, offered } = ledger.offer({
+  const { task, offered } = await ledger.offer({
     key: options.key,
-    routineId: FINANCE_PRODUCER_ID,
+    producer: { kind: "finance", id: FINANCE_PRODUCER_ID },
     scheduledFor: options.at ?? new Date(),
   });
   if (!offered) {
     // Imported before: the run row and the receipt are already there, so hand back
     // the triple rather than analyzing the CSV a second time for one import.
-    const run = ledger.runForTask(task.id);
-    const receipt = run ? ledger.receiptForRun(run.id) : null;
+    const run = await ledger.runForTask(task.id);
+    const receipt = run ? await ledger.receiptForRun(run.id) : null;
     if (!run || !receipt)
       throw new Error("an offered finance task has no run row or receipt");
     return { task, run, receipt, report: tryAnalyze(options.csv), offered };
   }
 
-  const run = ledger.startRun(task.id);
+  const run = await ledger.startRun(task.id);
   try {
     const report = analyzeSpending(options.csv);
-    const finished = ledger.finishRun(run.id, "succeeded");
-    const receipt = ledger.recordReceipt(run.id, {
+    const finished = await ledger.finishRun(run.id, "succeeded");
+    const receipt = await ledger.recordReceipt(run.id, {
       title: "Spending tracker",
       detail: summarizeSpending(report),
     });
     return { task, run: finished, receipt, report, offered };
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
-    const finished = ledger.finishRun(run.id, "failed", reason);
-    const receipt = ledger.recordReceipt(run.id, {
+    const finished = await ledger.finishRun(run.id, "failed", reason);
+    const receipt = await ledger.recordReceipt(run.id, {
       title: "Import failed",
       detail: `That CSV could not be imported: ${reason}`,
     });

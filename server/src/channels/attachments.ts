@@ -11,6 +11,13 @@ import {
 } from "drizzle-orm";
 import type { Context, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
+import {
+  classifyAttachment,
+  MAX_ATTACHMENTS_PER_MESSAGE,
+  MAX_FILE_BYTES,
+  MAX_IMAGE_BYTES,
+  namesNoFormat,
+} from "../../../shared/attachments";
 import type { AppVariables } from "../auth/guards";
 import type { Database } from "../db/client";
 import {
@@ -19,15 +26,8 @@ import {
   channels,
   intelligenceChannelMappings,
 } from "../db/schema";
-import {
-  classifyAttachment,
-  MAX_ATTACHMENTS_PER_MESSAGE,
-  MAX_FILE_BYTES,
-  MAX_IMAGE_BYTES,
-  namesNoFormat,
-} from "../../../shared/attachments";
-import type { StoredAttachment } from "./attachment-parts";
 import { sniffMimeType } from "./attachment-mime";
+import type { StoredAttachment } from "./attachment-parts";
 
 function megabytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(0)}MB`;
@@ -1015,10 +1015,12 @@ export function createChannelAttachmentRoutes(
       /*
        * EVERY OTHER FAILURE ON THIS ROUTE ANSWERS `{ error }`, AND SO DOES THIS ONE.
        *
-       * The `formData()` call three dozen lines above is wrapped for exactly this reason — there is
-       * no `app.onError` anywhere behind this router, so an unguarded throw is Hono's default
-       * plain-text `Internal Server Error` — and then the database calls underneath it were not.
-       * The composer reads `{ error }` off every failed upload and falls back to a generic
+       * The `formData()` call three dozen lines above is wrapped for exactly this reason — there
+       * was no `app.onError` anywhere behind this router, so an unguarded throw was Hono's default
+       * plain-text `Internal Server Error` (the app has a JSON backstop now, but a generic 500
+       * sentence is still not a refusal a retry knows what to do with) — and then the database
+       * calls underneath it were not. The composer reads `{ error }` off every failed upload and
+       * falls back to a generic
        * `Could not upload "<name>"` when the body will not parse as JSON, so a lost connection
        * during a rollout, a `statement_timeout`, a lock timeout on the advisory lock, a `53100`
        * disk-full on an 8 MiB insert and a serialisation failure were all the same unactionable
@@ -1126,8 +1128,8 @@ export function createChannelAttachmentRoutes(
  * else: the C0 controls and DEL are not representable there at all. Two of them, CR and LF, are
  * the header-injection pair, and for a long time they were the only two this file took out. The
  * rest are just as fatal, only more quietly. Bun's serializer throws on a NUL, and it throws from
- * inside `c.body` after the response has already begun, with no `app.onError` behind this router
- * to turn that into anything — so one such name is a 500 on EVERY fetch of that attachment rather
+ * inside `c.body` after the response has already begun, where nothing — not even the app's
+ * `onError` — can turn that into anything else — so one such name is a 500 on EVERY fetch of that attachment rather
  * than a served file. The ones Bun does pass through (0x01-0x08, 0x0B, 0x0C, 0x0E-0x1F, 0x7F) are
  * still illegal on the wire, arrive mangled at the client, and entitle any proxy in between to
  * reject or re-parse the whole header over one byte.
@@ -1410,8 +1412,9 @@ function visibleToActor(database: Database, actorId: string, id: string) {
  * lost connection with 404 would tell every member that a file which is still there has been
  * withdrawn. An empty array is the real "no row", and that alone is the 404.
  *
- * There is no `app.onError` behind this router, so the alternative to catching here is Hono's
- * plain-text default, which the client cannot read as `{ error }` and which leaves no server-side
+ * There is an `app.onError` behind this router now, but a backstop is not a refusal: the
+ * alternative to catching here is a generic 500 sentence the client cannot read as `{ error }` and
+ * which leaves no server-side
  * trace of a fault that is this side's to fix. One log line for all three reads, naming the row and
  * the asker, because that is what it would take to act on it.
  */

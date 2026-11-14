@@ -9,6 +9,7 @@ import {
   globMatches,
   reviewAction,
   safetyRequirement,
+  toolRiskTier,
 } from "../src/approvals/policy";
 import {
   createApprovalService,
@@ -175,6 +176,48 @@ describe("custom rules", () => {
           ...base,
           candidate: candidate({ effect: "read" }),
           askBeforeChanges: true,
+        })
+      ).behaviour,
+    ).toBe("allow");
+  });
+
+  test("risk tiers: a read is the read tier and everything else the write tier", () => {
+    expect(toolRiskTier("read")).toBe("read");
+    expect(toolRiskTier("write")).toBe("write");
+    expect(toolRiskTier("")).toBe("write");
+  });
+
+  test("the read tier auto-runs unless the workspace turns it off", async () => {
+    const read = candidate({
+      toolRef: "mcp/gmail/list_messages",
+      effect: "read",
+    });
+    expect((await decideAction({ ...base, candidate: read })).behaviour).toBe(
+      "allow",
+    );
+    expect(
+      (
+        await decideAction({
+          ...base,
+          candidate: read,
+          askBeforeChanges: true,
+        })
+      ).behaviour,
+    ).toBe("allow");
+    const outcome = await decideAction({
+      ...base,
+      candidate: read,
+      autoRunReads: false,
+    });
+    expect(outcome).toMatchObject({ behaviour: "ask", source: "default" });
+    // The floor is the workspace's, not the person's, and a rule still wins over it.
+    expect(
+      (
+        await decideAction({
+          ...base,
+          candidate: read,
+          autoRunReads: false,
+          personal: [rule("allow", { effect: "read" })],
         })
       ).behaviour,
     ).toBe("allow");
@@ -499,6 +542,7 @@ function memoryStore(options: {
         enforceAutoReview: false,
         customRulesEnabled: true,
         hostCommandsCap: "allow",
+        autoRunReads: true,
         ...options.team,
       }),
       setTeamSettings: async () => {

@@ -80,6 +80,19 @@ async function buildModel() {
 const port = listenPort(process.env.PORT, 4213);
 if (!port.ok) throw new Error(port.reason);
 
+// The middleware below keeps checking per request - belt and braces for a server that started
+// before the token existed - but a harness that starts and then 401s every run reports healthy
+// to Compose forever, and the shell restarts a dead process, never a useless one. Boot is the
+// moment a deployment can still act, the same posture as agent-orbo-bot/src/index.ts. `/health`
+// stays exempt because Compose polls it before any token exists.
+const ORBO_MANAGED_AGENT_TOKEN = process.env.ORBO_MANAGED_AGENT_TOKEN?.trim();
+if (!ORBO_MANAGED_AGENT_TOKEN) {
+  console.error(
+    "ORBO_MANAGED_AGENT_TOKEN is not set. This process holds a model credential and will not start without a token for ORBO's server.",
+  );
+  process.exit(1);
+}
+
 export const orboBaseInstructions =
   "Answer the question you are asked, briefly and correctly.";
 

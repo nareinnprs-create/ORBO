@@ -93,6 +93,12 @@ type Props = {
   /** Called with a human-readable reason when the stream cannot be established. */
   onProblem?: (problem: string | null) => void;
   retryKey?: number;
+  /**
+   * Client-side freeze of the picture: the socket stays open and the newest frame stays held,
+   * but nothing is drawn until this turns false again. No server pause exists; this only stops
+   * the local view from moving.
+   */
+  paused?: boolean;
 };
 
 type FrameMessage = {
@@ -105,10 +111,14 @@ export function LiveScreen({
   computerId,
   driving,
   onProblem,
+  paused = false,
   retryKey = 0,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
+  /** Read by the frame loop without restarting the socket on pause changes. */
+  const pausedRef = useRef(paused);
+  pausedRef.current = paused;
   /** Keydowns handled locally whose matching keyup must not leak to the remote browser. */
   const localKeyUps = useRef(new Set<string>());
   /** The size of the frames Chrome is sending, which is what input coordinates are relative to. */
@@ -117,6 +127,8 @@ export function LiveScreen({
   const latestFrame = useRef<FrameMessage | null>(null);
   /** Monotonic guard so a slow older decode cannot replace a newer frame. */
   const latestFrameId = useRef(0);
+  /** Redraws the held frame; set once the socket exists, read when a pause ends. */
+  const resumeRef = useRef<() => void>(() => {});
   const [connected, setConnected] = useState(false);
   const inputReady = useRef(false);
   const previouslyDriving = useRef(driving);
@@ -148,6 +160,7 @@ export function LiveScreen({
         if (
           closed ||
           frameId !== latestFrameId.current ||
+          pausedRef.current ||
           !currentPageVisible()
         ) {
           bitmap.close();
@@ -168,11 +181,13 @@ export function LiveScreen({
     };
 
     const drawLatestFrame = () => {
-      if (!currentPageVisible()) return;
+      if (!currentPageVisible() || pausedRef.current) return;
       const frame = latestFrame.current;
       if (!frame) return;
       void drawFrame(frame, latestFrameId.current);
     };
+    // Read by the resume effect below, which runs outside this connection's scope.
+    resumeRef.current = drawLatestFrame;
 
     const onMessage = (event: { data: unknown }) => {
       let parsed: unknown;
@@ -239,7 +254,7 @@ export function LiveScreen({
       latestFrame.current = frame;
       const frameId = ++latestFrameId.current;
 
-      if (!currentPageVisible()) return;
+      if (!currentPageVisible() || pausedRef.current) return;
       void drawFrame(frame, frameId);
     };
 
@@ -297,6 +312,14 @@ export function LiveScreen({
       socketRef.current = null;
     };
   }, [computerId, onProblem, retryKey]);
+
+  /**
+   * Resuming paints the newest frame already held. The socket sends frames only when the page
+   * changes, so without this a resumed view could sit frozen until the page moves again.
+   */
+  useEffect(() => {
+    if (!paused) resumeRef.current();
+  }, [paused]);
 
   useEffect(() => {
     const wasDriving = previouslyDriving.current;

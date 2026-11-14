@@ -3,10 +3,15 @@
   "license": "SEE LICENSE IN LICENSE",
   "private": true,
   "type": "module",
+  "scripts": {
+    "dev": "bunx mastra dev --dir src/mastra",
+    "start": "bunx mastra start --dir src/mastra",
+    "test": "bun test tests"
+  },
   "dependencies": {
-    "@ai-sdk/anthropic": "*",
-    "@ai-sdk/openai": "*",
-    "@mastra/core": "*",
-    "mastra": "*"
+    "@ai-sdk/anthropic": "4.0.84",
+    "@ai-sdk/openai": "4.0.98",
+    "@mastra/core": "1.78.0",
+    "mastra": "1.34.2"
   }
 }

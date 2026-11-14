@@ -456,13 +456,27 @@ impl SigningIn {
          * case worth looking at, and exactly the case where the file holds a live credential. Never
          * on in a build somebody installs, and never in the message handed to the window.
          */
-        if let Ok(path) = std::env::var("ORBO_SIGNIN_TRANSCRIPT") {
+        if let Some(path) = debug_env("ORBO_SIGNIN_TRANSCRIPT") {
             if let Ok(seen) = self.output.lock() {
                 let _ = std::fs::write(path, seen.as_str());
             }
         }
         self.stop();
         saying.to_string()
+    }
+}
+
+/// An environment variable that exists to switch on debug recording, read as a gated value.
+///
+/// Returns `Some(value)` only in a build nobody else installs: `cfg!(test)` or
+/// `cfg!(debug_assertions)`. A release binary deliberately ignores these variables entirely —
+/// there is no code path behind them to reach — so an environment somebody else's process set
+/// can never turn recording on. The contract is asserted by the test at the bottom of this file.
+pub fn debug_env(key: &str) -> Option<String> {
+    if cfg!(test) || cfg!(debug_assertions) {
+        std::env::var(key).ok()
+    } else {
+        None
     }
 }
 
@@ -775,6 +789,25 @@ pub fn openai_url_in(output: &str) -> Option<String> {
 mod tests {
     use super::*;
     use crate::engine::Engine;
+
+    #[test]
+    fn the_debug_recording_gate_ignores_its_variable_outside_test_and_debug_builds() {
+        std::env::set_var("ORBO_DEBUG_ENV_PROBE", "seen");
+        if cfg!(test) || cfg!(debug_assertions) {
+            assert_eq!(
+                debug_env("ORBO_DEBUG_ENV_PROBE").as_deref(),
+                Some("seen"),
+                "this build is a test or debug build, so the variable is readable"
+            );
+        } else {
+            assert_eq!(
+                debug_env("ORBO_DEBUG_ENV_PROBE"),
+                None,
+                "a release build reads the variable as absent, whatever it held"
+            );
+        }
+        std::env::remove_var("ORBO_DEBUG_ENV_PROBE");
+    }
 
     #[test]
     fn subscription_containers_never_download_software() {

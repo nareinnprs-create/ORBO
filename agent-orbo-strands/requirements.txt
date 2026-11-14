@@ -1,6 +1,8 @@
 ag-ui-strands==1.0.2
 strands-agents==1.61.1
-litellm==1.103.5
-fastapi
+litellm==1.106.0
+# No mcp pin here: strands-agents pins mcp<2.2 itself, so pinning 2.3.0 (the litellm-handler
+# version the other harnesses use) cannot resolve. Follow strands' own constraint.
+fastapi==0.144.0
 python-multipart
 uvicorn[standard]

@@ -163,9 +163,32 @@ export function selectORBOManualChunk(id: string): string | undefined {
   return undefined;
 }
 
-export const routeBuildRollupOutputOptions = {
-  onlyExplicitManualChunks: true,
-  manualChunks: selectORBOManualChunk,
+/*
+ * Vite 8 builds with Rolldown, whose chunking has a property Rollup's `manualChunks` did not: a
+ * captured module's dependencies are pulled into its chunk recursively, so the route-admin group
+ * would absorb every vendor library the admin routes touch (megabytes that other routes also load).
+ * `includeDependenciesRecursively: false` restores the old semantics — only the matched split
+ * components are captured, and their dependencies go through automatic splitting — which is what
+ * the pre-Vite-8 `onlyExplicitManualChunks: true` flag (a no-op under Rollup) had intended.
+ *
+ * One group per chunk name, each delegating to `selectORBOManualChunk` so the route → chunk
+ * mapping stays in that one function. A module matches at most one name, so the groups never
+ * contend; no `priority` is needed.
+ */
+const routeChunkNames = [
+  "route-sign",
+  "route-chat-core",
+  "route-admin",
+  "route-settings",
+  "route-app-secondary",
+] as const;
+
+export const routeBuildCodeSplitting = {
+  includeDependenciesRecursively: false,
+  groups: routeChunkNames.map((name) => ({
+    name,
+    test: (id: string) => selectORBOManualChunk(id) === name,
+  })),
 };
 
 export default defineConfig({
@@ -186,8 +209,10 @@ export default defineConfig({
   server: serving,
   preview: serving,
   build: {
-    rollupOptions: {
-      output: routeBuildRollupOutputOptions,
+    rolldownOptions: {
+      output: {
+        codeSplitting: routeBuildCodeSplitting,
+      },
     },
   },
 });

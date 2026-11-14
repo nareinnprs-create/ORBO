@@ -216,6 +216,31 @@ are capped at 350 per instance on the basic tier.
 **Railway, Render, Fly.io.** All run this image directly and all provision PostgreSQL in a click,
 which makes them the shortest path from nothing to a running deployment.
 
+## Workload identity (SPIRE)
+
+The repo ships a SPIRE pair under `spire/` — `server.conf` (the identity authority) and
+`agent.conf` (the agent every Bot's computer asks for its SVID). It is a local-development
+shape, and one line in it is the difference between that and a production one:
+
+- `spire/agent.conf` sets `insecure_bootstrap = true`. That is the agent trusting the server's
+  bundle **on first contact**, with no proof of who it is talking to. On a dev laptop the two
+  containers came from the same `compose` run and the trust domain is `orbo.local`; on any
+  deployment where the agent and the server can be reached by anybody else, first contact is
+  exactly what an attacker gets to be.
+- **The production variant** keeps `insecure_bootstrap = false` and provisions the trust bundle
+  out of band, before the agent starts: a hardware or platform attestation (`x509pop` with a
+  TPM-backed key, a cloud instance identity document, or the platform's own node attestation),
+  with the bundle distributed through the secret manager the deployment already uses. The comment
+  beside the setting names the same list. A test in `tests/` pins that this setting only ever
+  ships as `true` with that documentation beside it, so the local default cannot quietly become
+  the shipped one.
+
+Nothing in this image reads `spire/*.conf` at runtime: the supervisor's identity registration
+(`supervisor/src/identity.ts`) is switched on by `SPIRE_SOCKET` and talks to the agent through its
+socket, so these files are inputs to how you run SPIRE, not to how the server starts. A deployment
+that wants workload identity runs SPIRE itself — server, agent, and the registration entries the
+supervisor creates per Bot — and points `SPIRE_SOCKET` at the agent.
+
 ## Known costs
 
 **The browser images carry only the Chromium browser family.** The all-in-one Dockerfile and the

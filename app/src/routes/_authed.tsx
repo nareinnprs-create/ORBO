@@ -1,4 +1,5 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
+import { DegradedBanner } from "@/components/layout/degraded-banner";
 import { currentUserQueryOptions, needsOnboarding } from "../lib/auth/queries";
 import { CopilotProvider } from "../lib/copilot/provider";
 import { AppHotkeys } from "../lib/hotkeys/app-hotkeys";
@@ -25,6 +26,8 @@ export const Route = createFileRoute("/_authed")({
   component: () => (
     <CopilotProvider>
       <AppHotkeys />
+      {/* One sentence for a degraded dependency, above whatever route sits under the gate. */}
+      <DegradedBanner />
       <Outlet />
     </CopilotProvider>
   ),

@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
 import { router } from "../src/router";
 import {
-  routeBuildRollupOutputOptions,
+  routeBuildCodeSplitting,
   routeCodeSplittingOptions,
-  selectORBOManualChunk,
   selectedRouteSplitBehavior,
+  selectORBOManualChunk,
 } from "../vite.config";
 
 test("provides the generated index route", () => {
@@ -41,31 +41,34 @@ test("splits route components without splitting loaders or providers", () => {
   expect(selectedRouteSplitBehavior({ routeId: "/" })).toBeUndefined();
 });
 
-test("uses explicit manual chunks for route components", () => {
-  expect(routeBuildRollupOutputOptions.onlyExplicitManualChunks).toBe(true);
+test("uses explicit code-splitting groups for route components", () => {
+  // Dependencies must not be pulled into route chunks recursively — that is Rolldown's
+  // default and it would move shared vendor code into whichever route loads it first.
+  expect(routeBuildCodeSplitting.includeDependenciesRecursively).toBe(false);
+  expect(routeBuildCodeSplitting.groups.map((group) => group.name)).toEqual([
+    "route-sign",
+    "route-chat-core",
+    "route-admin",
+    "route-settings",
+    "route-app-secondary",
+  ]);
+  for (const group of routeBuildCodeSplitting.groups) {
+    expect(
+      group.test("/repo/app/src/components/markdown/lazy-mermaid.tsx"),
+    ).toBe(false);
+  }
   expect(
-    selectORBOManualChunk("/repo/app/src/routes/sign.tsx?tsr-split=component"),
+    routeBuildCodeSplitting.groups.find((group) =>
+      group.test("/repo/app/src/routes/sign.tsx?tsr-split=component"),
+    )?.name,
   ).toBe("route-sign");
   expect(
-    selectORBOManualChunk(
-      "C:\\repo\\app\\src\\routes\\_authed\\_app\\channel\\$channelId.tsx?tsr-split=component",
-    ),
-  ).toBe("route-chat-core");
-  expect(
-    selectORBOManualChunk(
-      "/repo/app/src/routes/_authed/admin/credentials.tsx?tsr-split=component",
-    ),
+    routeBuildCodeSplitting.groups.find((group) =>
+      group.test(
+        "C:\\repo\\app\\src\\routes\\_authed\\admin\\credentials.tsx?tsr-split=component",
+      ),
+    )?.name,
   ).toBe("route-admin");
-  expect(
-    selectORBOManualChunk(
-      "/repo/app/src/routes/_authed/settings/connected-accounts/index.tsx?tsr-split=component",
-    ),
-  ).toBe("route-settings");
-  expect(
-    selectORBOManualChunk(
-      "/repo/app/src/routes/_authed/_app/agents/index.tsx?tsr-split=component",
-    ),
-  ).toBe("route-app-secondary");
 });
 
 test("does not manually chunk lazy content or dependencies", () => {

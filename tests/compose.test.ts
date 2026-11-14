@@ -142,6 +142,9 @@ function runLangGraphAguiModelProbe(
       ...process.env,
       BOT_MODEL: options.botModel ?? "gpt-test",
       OPENAI_API_KEY: options.openaiApiKey ?? "sk-test",
+      // src/main runs its boot token guard at import; a real container always has this set,
+      // and without it the probe dies before _model() is ever reached.
+      ORBO_MANAGED_AGENT_TOKEN: "orbo-test-agent-token",
       // The platform's own path separator: Python splits PYTHONPATH on `;` on Windows, where a
       // `:`-joined list is one unreadable path and the probe dies on a missing `src`.
       PYTHONPATH: [
@@ -618,6 +621,44 @@ test("carries per-Bot egress into the computer and the supervisor", () => {
 
   // Optional, because a deployment with no proxy is the ordinary case and must still start.
   expect(compose).toContain("required: false");
+});
+
+/**
+ * The computer runs as the browser's user, in every place a container is started.
+ *
+ * Three places can start a computer: this file's shared `orbo-computer` service, and the
+ * supervisor's `docker.createContainer` for each per-Bot one, and the image's own `USER` for
+ * whoever runs it by hand. All three say the same pinned number, because the boundary a
+ * `--no-sandbox` Chromium has is its process user, and a browser holding real logins run as root
+ * is the one arrangement none of this is allowed to drift back into.
+ */
+test("runs the computer as the pinned browser user everywhere it starts", () => {
+  const compose = composeFile();
+
+  // The shared service: user on the container, and the image that carries the same contract.
+  const service = compose
+    .split(/^ {2}(?=\S)/m)
+    .find((block) => block.startsWith("orbo-computer:"));
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: asserting the compose file's literal expansion syntax, not interpolating.
+  expect(service).toContain("user: ${ORBO_COMPUTER_USER:-1001:1001}");
+
+  const supervisorDocker = readFileSync(
+    join(import.meta.dir, "..", "supervisor", "src", "docker.ts"),
+    "utf8",
+  );
+  // The per-Bot containers, created by the supervisor, carry the same default.
+  expect(supervisorDocker).toContain('options.user ?? "1001:1001"');
+
+  // The image agrees, at the number the contract pins.
+  const dockerfile = agentComputerDockerfile();
+  expect(dockerfile).toContain(
+    "useradd --uid 1001 --create-home --shell /bin/bash pwuser",
+  );
+  expect(dockerfile).toContain("USER pwuser");
+  // The directories a non-root browser writes are owned before it runs.
+  expect(dockerfile).toContain(
+    "chown -R pwuser:pwuser /workspace /profiles /app",
+  );
 });
 
 test("gives the selected harness the same governed callback as the framework Bot", () => {

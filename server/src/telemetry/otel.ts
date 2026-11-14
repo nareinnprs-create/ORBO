@@ -19,7 +19,7 @@
  * Never fatal. An unreachable collector drops records after the SDK's own retries, and the audit row
  * in PostgreSQL is still the record of truth.
  */
-import { SeverityNumber } from "@opentelemetry/api-logs";
+import { SeverityNumber } from "@opentelemetry/api";
 import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-http";
 import { resourceFromAttributes } from "@opentelemetry/resources";
 import {

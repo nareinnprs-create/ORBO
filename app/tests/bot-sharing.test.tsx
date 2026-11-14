@@ -121,6 +121,8 @@ test("an unpublished Bot of yours offers to publish it", async () => {
   expect(view.queryByRole("button", { name: "Unpublish" })).toBeNull();
 });
 
+// Full-suite contention has tripped Bun's default 5s timeout on this render-heavy test; alone
+// it takes about three seconds at the most, so the budget is named rather than inherited.
 test("publishing to specific people sends them and their groups", async () => {
   serving(
     {
@@ -156,7 +158,7 @@ test("publishing to specific people sends them and their groups", async () => {
       },
     }),
   );
-});
+}, 15_000);
 
 test("a published Bot of yours can be updated, unpublished and its link copied", async () => {
   serving({ teamBots: [PUBLISHED], publishable: [] }, "user");

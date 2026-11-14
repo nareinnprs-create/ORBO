@@ -33,6 +33,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Separator } from "@/components/ui/separator";
+import { ErrorState } from "@/components/ui/states";
 import { Switch } from "@/components/ui/switch";
 import { relativeTime } from "@/lib/relative-time";
 import {
@@ -162,11 +163,7 @@ function RoutineRuns({ routine }: { routine: RoutineRecord }) {
   // Pending renders nothing: "No runs yet." would otherwise flash for the fetch.
   if (runs.isPending) return null;
   if (runs.error)
-    return (
-      <p className="text-destructive text-xs" role="alert">
-        {runs.error.message}
-      </p>
-    );
+    return <ErrorState className="text-xs">{runs.error.message}</ErrorState>;
   if (!runs.data?.length)
     return <p className="text-muted-foreground text-xs">No runs yet.</p>;
   return (
@@ -269,9 +266,9 @@ export function RoutinesList({
 
       {/* Pending renders nothing: the empty-state sentence would otherwise flash for the fetch. */}
       {routines.isPending ? null : routines.error ? (
-        <p className="mt-4 text-destructive text-sm" role="alert">
+        <ErrorState className="mt-4">
           Your routines could not be loaded.
-        </p>
+        </ErrorState>
       ) : rows.length === 0 ? (
         <PageEmpty>
           {agentId

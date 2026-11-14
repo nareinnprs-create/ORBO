@@ -1,6 +1,7 @@
 import {
   checkAgentEndpoint,
   createAgentFetch,
+  type DnsResolver,
   EndpointNotAllowedError,
 } from "./endpoint";
 
@@ -127,6 +128,8 @@ export async function testAgentConnection(
     allowPrivateHosts?: boolean;
     allowedHosts?: ReadonlySet<string>;
     fetchImpl?: typeof fetch;
+    /** Passed through to the guarded fetch, so a test can resolve names without the network. */
+    resolveDns?: DnsResolver;
     timeoutMs?: number;
   } = {},
 ): Promise<ConnectionTestResult> {
@@ -146,6 +149,7 @@ export async function testAgentConnection(
       ? { allowPrivateHosts: options.allowPrivateHosts }
       : {}),
     ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+    ...(options.resolveDns ? { resolveDns: options.resolveDns } : {}),
   });
   let response: Response;
   try {

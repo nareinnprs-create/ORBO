@@ -2,7 +2,11 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { addressOf, createDatabase } from "../src/db/client";
+import {
+  addressOf,
+  connectionParameters,
+  createDatabase,
+} from "../src/db/client";
 import { testDatabaseUrl } from "./support/database";
 
 // Any readable PEM will do: these tests check what reaches Bun, not a handshake.
@@ -134,6 +138,71 @@ describe("connection parameters on the URL", () => {
       ).toBe("db_client_address_probe");
     } finally {
       await named.$client.close();
+    }
+  });
+});
+
+/**
+ * The per-connection statement ceilings.
+ *
+ * The unit half pins what `connectionParameters` derives from the environment, including the two
+ * ways a deployment restates it (`0` for off, a URL parameter winning for one address). The
+ * integration half proves the parameters actually land: a live connection answers `show` with the
+ * ceilings set, and one opened from a URL that names its own keeps that one instead.
+ */
+describe("the per-connection statement ceilings", () => {
+  test("default to 30s for a statement and 60s for a stalled transaction", () => {
+    expect(connectionParameters({})).toEqual({
+      statement_timeout: "30000",
+      idle_in_transaction_session_timeout: "60000",
+    });
+  });
+
+  test("are restated in whole milliseconds, and 0 leaves a ceiling off", () => {
+    expect(
+      connectionParameters({
+        DATABASE_STATEMENT_TIMEOUT_MS: "5000",
+        DATABASE_IDLE_TRANSACTION_TIMEOUT_MS: "0",
+      }),
+    ).toEqual({ statement_timeout: "5000" });
+  });
+
+  test("reject a value that is not a whole number of milliseconds", () => {
+    expect(() =>
+      connectionParameters({ DATABASE_STATEMENT_TIMEOUT_MS: "soon" }),
+    ).toThrow(/DATABASE_STATEMENT_TIMEOUT_MS/);
+    expect(() =>
+      connectionParameters({ DATABASE_STATEMENT_TIMEOUT_MS: "1.5" }),
+    ).toThrow(/DATABASE_STATEMENT_TIMEOUT_MS/);
+    expect(() =>
+      connectionParameters({ DATABASE_IDLE_TRANSACTION_TIMEOUT_MS: "-1" }),
+    ).toThrow(/DATABASE_IDLE_TRANSACTION_TIMEOUT_MS/);
+  });
+
+  test("land on a live connection, which the factory opens with them", async () => {
+    const database = createDatabase(testDatabaseUrl());
+    try {
+      const rows = (await database.execute(
+        "select current_setting('statement_timeout') as statement, current_setting('idle_in_transaction_session_timeout') as idle",
+      )) as Array<{ statement: string; idle: string }>;
+      expect(rows[0]?.statement).toBe("30s");
+      expect(rows[0]?.idle).toBe("1min");
+    } finally {
+      await database.$client.close();
+    }
+  });
+
+  test("a URL's own parameter keeps its address's ceiling, not the default", async () => {
+    const address = new URL(testDatabaseUrl());
+    address.searchParams.set("statement_timeout", "5s");
+    const database = createDatabase(address.toString());
+    try {
+      const rows = (await database.execute(
+        "select current_setting('statement_timeout') as statement",
+      )) as Array<{ statement: string }>;
+      expect(rows[0]?.statement).toBe("5s");
+    } finally {
+      await database.$client.close();
     }
   });
 });

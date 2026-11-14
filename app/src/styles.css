@@ -121,6 +121,22 @@ body {
  * not in that selector list — rendered a size smaller than the fields they belonged to.
  */
 
+/*
+ * ORBO Diya brand palette (assets/brand/specs/brand_spec.json). Tokens only for now - no
+ * component is repainted in them yet; use `bg-diya-*`/`text-diya-*` utilities where brand
+ * colour is wanted.
+ */
+@theme static {
+  --color-diya-obsidian: #080f14;
+  --color-diya-deep-teal: #006e7a;
+  --color-diya-rich-teal: #00c2d4;
+  --color-diya-cinematic-blue: #2f6bff;
+  --color-diya-violet: #8a3ffc;
+  --color-diya-copper: #f6c284;
+  --color-diya-ivory: #fff9f1;
+  --color-diya-slate: #667782;
+}
+
 @theme inline {
   --font-heading: "Montserrat Variable", sans-serif;
   --font-sans: "Inter Variable", sans-serif;

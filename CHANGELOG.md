@@ -1,6 +1,6 @@
 # Changelog
 
-What changed, for somebody deciding whether to upgrade. Written for the person running OpenBot, not
+What changed, for somebody deciding whether to upgrade. Written for the person running ORBO, not
 for the person who wrote the commit: a line belongs here when a deployment behaves differently
 afterwards, and does not when only the code moved.
 

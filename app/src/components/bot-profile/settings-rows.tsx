@@ -1,12 +1,13 @@
 import {
+  IconBinary,
   IconBrain,
   IconChecks,
   IconChevronRight,
-  IconDeviceMobile,
-  IconTargetArrow,
   IconClock,
+  IconDeviceMobile,
   IconPuzzle,
   IconSettings,
+  IconTargetArrow,
   IconUsersGroup,
 } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
@@ -35,9 +36,9 @@ import { approvalInboxOptions, ruleCoversBot } from "@/lib/approvals";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
 import { deliveryQueryOptions } from "@/lib/delivery";
 import { memorySourcesQueryOptions } from "@/lib/memory";
+import { agentPluginsQueryOptions } from "@/lib/plugins/queries";
 import { proactiveSettingsQueryOptions } from "@/lib/proactive";
 import { responsibilitiesQueryOptions } from "@/lib/responsibilities";
-import { agentPluginsQueryOptions } from "@/lib/plugins/queries";
 import { routinesQueryOptions } from "@/lib/routines/queries";
 import { teamBotsQueryOptions } from "@/lib/team-bots";
 import { connectorCount } from "./access";
@@ -50,6 +51,7 @@ type Row = {
     | "/bots/$agentId/approvals"
     | "/bots/$agentId/routines"
     | "/bots/$agentId/access"
+    | "/bots/$agentId/rea"
     | "/bots/$agentId/sharing"
     | "/bots/$agentId/setup";
   title: string;
@@ -160,6 +162,20 @@ export function BotSettingsRows({ agent }: { agent: AgentProfile }) {
         ? accessSummary(
             plugins.data.skills.length,
             connectorCount(plugins.data),
+          )
+        : "",
+    },
+    {
+      to: "/bots/$agentId/rea",
+      title: "Reverse engineering",
+      icon: IconBinary,
+      summary: plugins.data
+        ? countLabel(
+            plugins.data.tools.filter((tool) => tool.ref.startsWith("rea/"))
+              .length,
+            "tool",
+            "tools",
+            "No tools",
           )
         : "",
     },

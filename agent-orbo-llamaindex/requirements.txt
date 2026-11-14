@@ -1,7 +1,8 @@
 llama-index-core
 llama-index-protocols-ag-ui
 llama-index-llms-litellm
-litellm==1.105.0
-fastapi
+litellm==1.106.0
+mcp==2.3.0  # litellm 1.106.0 lazily imports its MCP handler; the mcp extra is not pulled in by the base pin.
+fastapi==0.144.0
 python-multipart
 uvicorn[standard]

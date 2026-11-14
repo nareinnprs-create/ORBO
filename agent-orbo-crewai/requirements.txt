@@ -1,3 +1,9 @@
-ag-ui-crewai
-litellm==1.105.1
+# Pinned to the suite-era line: ag-ui-crewai 0.3.x moved tool-call emission to crewai's
+# StreamFrame transport (crewai >= 1.6 + flows exposing `astream`), which this harness's
+# flow-method listener does not use, so 0.3.x runs learnings without emitting TOOL_CALL_*.
+# Move both pins together, and only after the learning contract suite passes on Linux CI.
+ag-ui-crewai==0.1.2
+crewai==0.130.0
+# No litellm or mcp pin here: crewai pins litellm exactly itself (0.130.0 -> litellm 1.72.0),
+# so pinning it again desyncs and pip cannot resolve. Follow crewai's own constraint.
 uvicorn[standard]

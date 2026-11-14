@@ -1,4 +1,8 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, test } from "bun:test";
+import { randomUUID } from "node:crypto";
+import { like } from "drizzle-orm";
+import { createDatabase } from "../src/db/client";
+import { tasks } from "../src/db/schema";
 import { createProactiveEngine } from "../src/proactive/engine";
 import type { ProactiveStore } from "../src/proactive/store";
 import {
@@ -7,22 +11,36 @@ import {
   type ProactiveSuggestion,
 } from "../src/proactive/types";
 import type { WorkQueue } from "../src/work/queue";
-import { createTaskLedger } from "../src/work/tasks";
+import { createTaskLedger, type TaskLedger } from "../src/work/tasks";
+import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
  * Accepting a suggestion mints a unified task (25 §3.3: the small transform
  * mapping Ideas onto `proactive_suggestions`).
  *
- * In-memory fakes only: no database (Docker is down), no model, no clock
- * beyond the injected `now`. The ledger is the real `createTaskLedger`, so
- * what is under test is the link — offer idempotence plus the receipt —
- * not a reimplementation of it.
+ * In-memory fakes for the store and the queue; the ledger is the real one over
+ * its tables, so what is under test is the link — offer idempotence, one run
+ * row, one receipt, and all of it durable — not a reimplementation of it. The
+ * suggestion id is suite-scoped because the ledger's key namespace is the
+ * database's now: a second run of this suite must be a different suggestion.
  */
 
+const database = createDatabase(testDatabaseUrl(), TEST_POOL);
+
+/**
+ * The per-test ceiling. Generous, because these tests run on the shared test database
+ * alongside every other suite in the same process, and the five-second default is
+ * contention food: a busy moment stalls a statement, not a property under test.
+ */
+const DB_TIMEOUT = 30_000;
+
+const suite = randomUUID().slice(0, 8);
 const AT = new Date("2026-10-16T12:00:00.000Z");
+const SETTING_ID = `setting-${suite}`;
+const SUGGESTION_ID = `suggestion-${suite}`;
 
 const setting: ProactiveSetting = {
-  id: "setting-1",
+  id: SETTING_ID,
   ownerUserId: "owner",
   agentId: "bot",
   channelId: "channel",
@@ -40,7 +58,7 @@ const setting: ProactiveSetting = {
 
 function suggestionRow(): ProactiveSuggestion {
   return {
-    id: "suggestion-1",
+    id: SUGGESTION_ID,
     ownerUserId: "owner",
     agentId: "bot",
     settingId: setting.id,
@@ -57,9 +75,9 @@ function suggestionRow(): ProactiveSuggestion {
   };
 }
 
-function harness() {
+function harness(ledger: TaskLedger) {
   const rows = new Map<string, ProactiveSuggestion>([
-    ["suggestion-1", suggestionRow()],
+    [SUGGESTION_ID, suggestionRow()],
   ]);
   const store = {
     get: async (_owner: string, _id: string) => setting,
@@ -90,7 +108,6 @@ function harness() {
       return "queued";
     },
   } as unknown as WorkQueue;
-  const ledger = createTaskLedger({ now: () => new Date(AT) });
   const engine = createProactiveEngine({
     store,
     memory: {
@@ -112,58 +129,134 @@ function harness() {
     now: () => new Date(AT),
     tasks: ledger,
   });
-  return { engine, ledger, offered, rows };
+  return { engine, offered, rows };
 }
 
+/** The one task key an acceptance mints, read back through the idempotence probe. */
+async function minted(ledger: TaskLedger) {
+  const offer = await ledger.offer({
+    key: `suggestion:${SUGGESTION_ID}`,
+    producer: { kind: "proactive", id: `proactive:${SETTING_ID}` },
+    scheduledFor: AT,
+  });
+  return offer;
+}
+
+beforeEach(async () => {
+  // Each test owns the suggestion's whole key namespace: an acceptance is durable
+  // now, so the previous test's mint would otherwise be this test's replay.
+  await database
+    .delete(tasks)
+    .where(like(tasks.key, `suggestion:${SUGGESTION_ID}%`));
+});
+
+afterAll(async () => {
+  await database
+    .delete(tasks)
+    .where(like(tasks.key, `suggestion:${SUGGESTION_ID}%`));
+  await database.$client.close();
+});
+
 describe("accepting a suggestion mints a task", () => {
-  test("accept mints one task with a linked receipt", async () => {
-    const { engine, ledger } = harness();
+  test(
+    "accept mints one task with a linked receipt, in its own producer kind",
+    async () => {
+      const ledger = createTaskLedger(database, { now: () => new Date(AT) });
+      const { engine } = harness(ledger);
 
-    const started = await engine.start("owner", "suggestion-1");
+      const started = await engine.start("owner", SUGGESTION_ID);
 
-    expect(started.status).toBe("started");
-    expect(ledger.counts()).toEqual({ tasks: 1, runs: 1, receipts: 1 });
-  });
+      expect(started.status).toBe("started");
+      // The key names the suggestion; the producer names the setting. Neither rides
+      // the other, and both are rows now rather than conventions.
+      const offer = await minted(ledger);
+      expect(offer.offered).toBe(false);
+      expect(offer.task.producer).toEqual({
+        kind: "proactive",
+        id: `proactive:${SETTING_ID}`,
+      });
+      expect(await ledger.runForTask(offer.task.id)).not.toBeNull();
+    },
+    DB_TIMEOUT,
+  );
 
-  test("the receipt is visible for the minted run and names the suggestion", async () => {
-    const { engine, ledger } = harness();
+  test(
+    "the receipt names the suggestion and the run it answered",
+    async () => {
+      const ledger = createTaskLedger(database, { now: () => new Date(AT) });
+      const { engine } = harness(ledger);
 
-    await engine.start("owner", "suggestion-1");
+      await engine.start("owner", SUGGESTION_ID);
 
-    // The one task the ledger holds is the suggestion's, keyed on its id.
-    const offer = ledger.offer({
-      key: "suggestion:suggestion-1",
-      routineId: "proactive:setting-1",
-      scheduledFor: AT,
-    });
-    expect(offer.offered).toBe(false);
-    const run = ledger.runForTask(offer.task.id);
-    expect(run).not.toBeNull();
-    const receipt = run ? ledger.receiptForRun(run.id) : null;
-    expect(receipt).not.toBeNull();
-    expect(receipt?.taskId).toBe(offer.task.id);
-    expect(receipt?.runId).toBe(run?.id);
-    expect(receipt?.detail).toContain("Reply to Sam");
-  });
+      const offer = await minted(ledger);
+      const run = await ledger.runForTask(offer.task.id);
+      expect(run).not.toBeNull();
+      const receipt = run ? await ledger.receiptForRun(run.id) : null;
+      expect(receipt).not.toBeNull();
+      expect(receipt?.taskId).toBe(offer.task.id);
+      expect(receipt?.runId).toBe(run?.id);
+      expect(receipt?.detail).toContain("Reply to Sam");
+    },
+    DB_TIMEOUT,
+  );
 
-  test("dismiss resolves the suggestion and mints no task", async () => {
-    const { engine, ledger, offered } = harness();
+  test(
+    "a second ledger — a restart — sees the acceptance the first minted",
+    async () => {
+      const ledger = createTaskLedger(database, { now: () => new Date(AT) });
+      const { engine } = harness(ledger);
+      await engine.start("owner", SUGGESTION_ID);
 
-    const dismissed = await engine.dismiss("owner", "suggestion-1");
+      const afterRestart = createTaskLedger(database, {
+        now: () => new Date(AT),
+      });
+      const offer = await minted(afterRestart);
+      expect(offer.offered).toBe(false);
+      const run = await afterRestart.runForTask(offer.task.id);
+      const receipt = run ? await afterRestart.receiptForRun(run.id) : null;
+      expect(receipt?.detail).toContain("Reply to Sam");
+    },
+    DB_TIMEOUT,
+  );
 
-    expect(dismissed.status).toBe("dismissed");
-    expect(ledger.counts()).toEqual({ tasks: 0, runs: 0, receipts: 0 });
-    // Dismissal is store-only: nothing reaches the task queue either.
-    expect(offered).toEqual([]);
-  });
+  test(
+    "dismiss resolves the suggestion and mints no task",
+    async () => {
+      const ledger = createTaskLedger(database, { now: () => new Date(AT) });
+      const { engine, offered } = harness(ledger);
 
-  test("a second accept is refused and mints no second task", async () => {
-    const { engine, ledger } = harness();
+      const dismissed = await engine.dismiss("owner", SUGGESTION_ID);
 
-    await engine.start("owner", "suggestion-1");
-    await expect(engine.start("owner", "suggestion-1")).rejects.toBeInstanceOf(
-      ProactiveRefusedError,
-    );
-    expect(ledger.counts()).toEqual({ tasks: 1, runs: 1, receipts: 1 });
-  });
+      expect(dismissed.status).toBe("dismissed");
+      const probe = await ledger.offer({
+        key: `suggestion:${SUGGESTION_ID}-unused-probe`,
+        producer: { kind: "proactive", id: `proactive:${SETTING_ID}` },
+        scheduledFor: AT,
+      });
+      // The probe is the first row under its key: acceptance was the only minter.
+      expect(probe.offered).toBe(true);
+      // Dismissal is store-only: nothing reaches the task queue either.
+      expect(offered).toEqual([]);
+    },
+    DB_TIMEOUT,
+  );
+
+  test(
+    "a second accept is refused and mints no second task",
+    async () => {
+      const ledger = createTaskLedger(database, { now: () => new Date(AT) });
+      const { engine } = harness(ledger);
+
+      await engine.start("owner", SUGGESTION_ID);
+      await expect(engine.start("owner", SUGGESTION_ID)).rejects.toBeInstanceOf(
+        ProactiveRefusedError,
+      );
+
+      const offer = await minted(ledger);
+      expect(offer.offered).toBe(false);
+      const runs = await ledger.runForTask(offer.task.id);
+      expect(runs).not.toBeNull();
+    },
+    DB_TIMEOUT,
+  );
 });

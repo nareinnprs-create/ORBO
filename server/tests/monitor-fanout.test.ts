@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
+import type { FetchPage } from "../src/monitors/check";
 import {
   backoffDelayMinutes,
   buildDedupKey,
   createMemoryNotificationWriter,
-  runWatchCheck,
   type FanoutMonitor,
   type FanoutMonitorUpdate,
+  runWatchCheck,
 } from "../src/monitors/fanout";
-import type { FetchPage } from "../src/monitors/check";
 
 /**
  * The monitor fan-out writer, asserted without a database, without a network, and

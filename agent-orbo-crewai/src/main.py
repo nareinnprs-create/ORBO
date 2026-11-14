@@ -10,6 +10,7 @@ serve AG-UI on a port, answer `/health`, and refuse anybody who does not carry t
 """
 
 import hmac
+import inspect
 import os
 import sys
 from collections.abc import Mapping
@@ -24,11 +25,14 @@ from model_providers import bot_settings
 
 import ag_ui_crewai.endpoint as crewai_endpoint
 from ag_ui.core import Message, Tool
+from pydantic import BaseModel, ConfigDict
 from ag_ui_crewai import add_crewai_flow_fastapi_endpoint
+from ag_ui_crewai.sdk import copilotkit_stream
 from crewai.flow.flow import Flow, listen, start
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from litellm import acompletion
+from litellm.litellm_core_utils.streaming_handler import CustomStreamWrapper
 
 # The one header ORBO's server sends when it calls a managed Bot. Same name the TypeScript Bots
 # check, because a Bot is a Bot whatever it is written in.
@@ -37,6 +41,25 @@ TOKEN_HEADER = "x-orbo-agent-token"
 
 def _expected_token() -> str:
     return (os.environ.get("ORBO_MANAGED_AGENT_TOKEN") or "").strip()
+
+
+def _require_server_token() -> None:
+    """Refuse to boot without ORBO's token, rather than boot "healthy" and 401 every run.
+
+    The middleware below keeps checking per request — belt and braces for a container that
+    started before the token existed — but a harness that starts and then 401s every run reports
+    healthy to Compose forever, and the shell restarts a dead process, never a useless one. Boot
+    is the moment a deployment can still act, the same posture as `agent-orbo-bot/src/index.ts`.
+    `/health` stays exempt because Compose polls it before any token exists.
+    """
+    if not _expected_token():
+        raise SystemExit(
+            "ORBO_MANAGED_AGENT_TOKEN is not set. This process holds a model credential and will "
+            "not start without a token for ORBO's server."
+        )
+
+
+_require_server_token()
 
 
 def _model() -> str:
@@ -127,6 +150,16 @@ def _provider_messages(messages: list[Any]) -> list[dict[str, Any]]:
 
 _prepare_crewai_inputs = crewai_endpoint.crewai_prepare_inputs
 
+# The wrapper below always receives `context` and `forwarded_props` (the AG-UI run input carries
+# both), but the pinned ag-ui-crewai 0.1.2 only accepts state, messages and tools - the newer
+# fields arrived after it. Forward only what the installed adapter accepts, so the pin can move
+# without this seam breaking in either direction.
+_PREPARE_INPUT_FIELDS = {
+    name
+    for name in ("state", "messages", "tools", "context", "forwarded_props")
+    if name in inspect.signature(_prepare_crewai_inputs).parameters
+}
+
 
 def _orbo_prepare_crewai_inputs(
     *,
@@ -136,13 +169,19 @@ def _orbo_prepare_crewai_inputs(
     context: list[Any] | None = None,
     forwarded_props: Any = None,
 ):
+    offered = {
+        "state": state,
+        "messages": messages,
+        "tools": tools,
+        "context": context,
+        "forwarded_props": forwarded_props,
+    }
     inputs = _prepare_crewai_inputs(
-        state=state,
-        messages=messages,
-        tools=tools,
-        context=context,
-        forwarded_props=forwarded_props,
+        **{field: value for field, value in offered.items() if field in _PREPARE_INPUT_FIELDS}
     )
+    # The pinned adapter's merge keeps only state and messages - the caller's tool schemas are
+    # the model's to answer with, so carry them through here.
+    inputs["tools"] = tools
     if messages and getattr(messages[0], "role", None) == "system":
         prepared_messages = inputs.get("messages")
         if isinstance(prepared_messages, list):
@@ -155,7 +194,37 @@ def _orbo_prepare_crewai_inputs(
 crewai_endpoint.crewai_prepare_inputs = _orbo_prepare_crewai_inputs
 
 
-class ORBOFlow(Flow):
+def _provider_tools(tools: list[Any]) -> list[dict[str, Any]] | None:
+    """AG-UI carries a tool as its bare schema; the provider wants OpenAI's function envelope."""
+    if not tools:
+        return None
+    converted = []
+    for tool in tools:
+        if hasattr(tool, "model_dump"):
+            tool = tool.model_dump()
+        converted.append(
+            tool if "function" in tool
+            else {
+                "type": "function",
+                "function": {key: tool[key] for key in ("name", "description", "parameters") if key in tool},
+            }
+        )
+    return converted or None
+
+
+# The flow's state is a typed model, not a dict, because that is the state shape the pinned
+# ag-ui-crewai 0.1.2 is written against: its snapshot handler reads `state.messages` as an
+# attribute, and a dict state crashes that handler, which is how MESSAGES_SNAPSHOT (and with it
+# the whole conversation record) disappears from the stream. `extra="allow"` carries the fields
+# the AG-UI input adds (`copilotkit`) without the flow caring about them.
+class ORBOState(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    messages: list[Any] = []
+    tools: list[Any] | None = None
+
+
+class ORBOFlow(Flow[ORBOState]):
     """A crew of one, which is the right size for a Bot answering a person.
 
     CrewAI's own examples build multi-agent crews, and a person who wants that edits this. What
@@ -165,17 +234,19 @@ class ORBOFlow(Flow):
 
     @start()
     async def answer(self):
-        messages = self.state.get("messages", [])
+        # Streamed completions go through copilotkit_stream: the pinned ag-ui-crewai only emits
+        # TOOL_CALL_CHUNK / TEXT_MESSAGE_CHUNK from its streaming bridge, and without those events
+        # a caller never sees the model's tool calls. The bridge hands back the assembled
+        # completion; a completion that is already whole (the tests' fakes) needs no bridge.
         response = await acompletion(
             model=_model(),
-            messages=_provider_messages(messages),
-            tools=self.state.get("tools") or None,
-            stream=False,
+            messages=_provider_messages(self.state.messages),
+            tools=_provider_tools(self.state.tools),
+            stream=True,
         )
-        self.state.setdefault("messages", []).append(
-            response.choices[0].message.model_dump()
-        )
-
+        if isinstance(response, CustomStreamWrapper):
+            response = await copilotkit_stream(response)
+        self.state.messages.append(response.choices[0].message.model_dump())
 
 app = FastAPI()
 

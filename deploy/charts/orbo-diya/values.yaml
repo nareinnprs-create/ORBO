@@ -132,8 +132,13 @@ config:
   # Matched exactly, no wildcards: `example.com` admits neither `sub.example.com` nor
   # `evil-example.com`. Name every domain your staff use.
   allowedEmailDomains: ""
-  # Every request is one fixed administrator. Local trials only; the deployment refuses to start
-  # with no identity provider unless this says somebody meant it.
+  # Every request is one fixed administrator. Local trials only.
+  #
+  # The server refuses this flag under NODE_ENV=production, which is what a real chart install
+  # runs, so commonEnv renders NODE_ENV=development beside it: the ask is rendered as the
+  # development convenience it names. What that ask may NOT be combined with is refused at
+  # template time here (a public URL, or a LoadBalancer with no source ranges — see
+  # validation.yaml), the same reachability question the server applies to the mode at boot.
   singleUser: false
 
   # How people sign in. One of these, or `singleUser` above, and nothing else will do: the server

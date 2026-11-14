@@ -391,7 +391,7 @@ describe("how deep a run is", () => {
  */
 describe("the tool-call route a callback token guards", () => {
   /** The deployment-wide token, which authenticates without naming a Bot of its own. */
-  const DEPLOYMENT_TOKEN = "deployment-wide-agent-token";
+  const DEPLOYMENT_TOKEN = "deployment-wide-agent-token-0123456";
 
   const config = loadConfig(
     testEnvironment({ ORBO_AGENT_TOOL_TOKEN: DEPLOYMENT_TOKEN }),

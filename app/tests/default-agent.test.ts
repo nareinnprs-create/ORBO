@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
+  DIYA_AGENT_ID,
   defaultAgentId,
   defaultAgentProfile,
-  DIYA_AGENT_ID,
   PICKED_HARNESS_AGENT_ID,
 } from "@/lib/agents/default-agent";
 import type { AgentProfile } from "@/lib/agents/queries";

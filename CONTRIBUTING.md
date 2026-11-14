@@ -4,7 +4,7 @@ ORBO is proprietary software owned by Opraiz Technology Pvt Ltd. No part of it m
 copied, modified, or distributed without prior written permission, except as expressly permitted
 under a separate written agreement (see `LICENSE`). That includes contributions: if you are
 outside the owning organization, do not open a pull request expecting it can be merged — talk
-to the owners first. [OWNER TODO: contribution agreement / licensing contact for external
+to the owners first. <!-- OWNER: Name the contribution agreement / licensing contact for external contributors; delete this comment and the confirm marker once named. --> [OWNER TO CONFIRM: contribution agreement / licensing contact for external
 contributors.]
 
 That said, well-formed pull requests from people already working with the owners are welcome,
@@ -91,4 +91,5 @@ transcripts out of source control; put sensitive behavior on the server, not onl
 browser; update `docs/configuration.md`, `docs/architecture.md`, or the root `README.md`
 when behavior changes.
 
-Where to file issues, and where to ask questions before writing code, are [OWNER TODO].
+<!-- OWNER: Say where issues are filed and where questions are asked before writing code (a private tracker, an email address, or a public issue tracker opened for that purpose); delete this comment and the confirm marker once said. -->
+Where to file issues, and where to ask questions before writing code, are [OWNER TO CONFIRM: the issue-filing location and the place to ask questions before writing code].

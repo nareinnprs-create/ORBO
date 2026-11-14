@@ -168,6 +168,10 @@ impl Telemetry {
     }
 
     /// The exact process environment the desktop gives to Bun before runtime imports.
+    ///
+    /// `CPK_TELEMETRY_ID` here does not describe ORBO: it is the literal name the third-party
+    /// runtime (`server/src/copilot.ts` telemetry + CopilotKit runtime v2) reads today, and it
+    /// goes away when the runtime removal lands. Everything ORBO owns is `ORBO_`-prefixed.
     pub fn runtime_env(&self) -> std::collections::BTreeMap<String, String> {
         let mut env = std::collections::BTreeMap::new();
         let Some(id) = self.install_id() else {
@@ -178,7 +182,7 @@ impl Telemetry {
             return env;
         };
         env.insert("CPK_TELEMETRY_ID".into(), id);
-        env.insert("COPILOTKIT_TELEMETRY_SAMPLE_RATE".into(), "1".into());
+        env.insert("ORBO_TELEMETRY_SAMPLE_RATE".into(), "1".into());
         env.insert(
             "ORBO_DISTRIBUTION".into(),
             context.distribution.as_str().into(),
@@ -289,7 +293,7 @@ impl Telemetry {
             let response = self
                 .client
                 .post(endpoint)
-                .header("X-CopilotKit-Telemetry-Id", &install_id)
+                .header("X-Orbo-Telemetry-Id", &install_id)
                 .json(&event.to_sink_payload())
                 .send();
             match response {
@@ -837,14 +841,46 @@ fn normalized_max_queue(configured: usize) -> usize {
     configured.clamp(1, 256)
 }
 
+/// The kill switch. `DO_NOT_TRACK` is the industry-wide opt-out and always wins; the ORBO-prefixed
+/// name is its setter's own knob. In debug builds the pre-rename `COPILOTKIT_TELEMETRY_DISABLED`
+/// keeps working so existing operator terminals do not silently start sending, but it announces
+/// itself loudly.
 fn telemetry_disabled(env_override: EnvOverride) -> bool {
     match env_override {
         EnvOverride::Enabled => false,
         EnvOverride::Disabled => true,
         EnvOverride::Process => {
-            disabled_value("COPILOTKIT_TELEMETRY_DISABLED") || disabled_value("DO_NOT_TRACK")
+            disabled_value("ORBO_TELEMETRY_DISABLED")
+                || disabled_value("DO_NOT_TRACK")
+                || legacy_disabled_value()
         }
     }
+}
+
+#[cfg_attr(not(debug_assertions), allow(dead_code))]
+fn legacy_disabled_value() -> bool {
+    #[cfg(debug_assertions)]
+    {
+        match env::var("COPILOTKIT_TELEMETRY_DISABLED") {
+            Ok(value) => {
+                eprintln!(
+                    "[telemetry] COPILOTKIT_TELEMETRY_DISABLED is deprecated; set ORBO_TELEMETRY_DISABLED instead"
+                );
+                disabled_value_literal(&value)
+            }
+            Err(_) => false,
+        }
+    }
+    #[cfg(not(debug_assertions))]
+    {
+        false
+    }
+}
+
+/// The value half of `disabled_value`, usable on strings that did not come from this process's env.
+#[cfg_attr(not(debug_assertions), allow(dead_code))]
+fn disabled_value_literal(value: &str) -> bool {
+    matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true")
 }
 
 fn disabled_value(name: &str) -> bool {
@@ -894,6 +930,7 @@ fn new_uuid() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeMap;
     use std::fs;
     use std::io::{Read, Write};
     use std::net::TcpListener;
@@ -1243,9 +1280,7 @@ mod tests {
         replay.flush().unwrap();
         let request = server.join().unwrap();
         assert!(request.contains("oss.desktop.step_viewed"));
-        assert!(request
-            .to_ascii_lowercase()
-            .contains("x-copilotkit-telemetry-id"));
+        assert!(request.to_ascii_lowercase().contains("x-orbo-telemetry-id"));
         assert!(request.contains("oss.desktop.setup_abandoned"));
         assert!(request.contains("orbo_distribution"));
         assert_eq!(
@@ -1556,5 +1591,82 @@ mod tests {
                 step: Step::Harness
             }
         ));
+    }
+
+    #[test]
+    fn runtime_env_hands_the_runtime_its_literal_names_and_orbo_its_own_metadata() {
+        let dir = temp_dir("runtime-env");
+        let telemetry = Telemetry::open_with_env(
+            &dir,
+            context("1.2.3", Engine::Docker),
+            enabled("http://127.0.0.1:1/ingest".to_string()),
+            EnvOverride::Enabled,
+        )
+        .unwrap();
+        let env = telemetry.runtime_env();
+        let install_id = telemetry.install_id().unwrap();
+        // The identity and the sample rate cross under the names the pinned third-party runtime
+        // reads; everything ORBO owns is ORBO_-prefixed. Keep this closed list: a new entry must
+        // be either a runtime literal (wave 3 removes it) or a filtered ORBO_ metadata key.
+        assert_eq!(
+            env.keys().collect::<Vec<_>>().as_slice(),
+            &[
+                "CPK_TELEMETRY_ID",
+                "ORBO_ARCH",
+                "ORBO_DISTRIBUTION",
+                "ORBO_ENGINE",
+                "ORBO_OS_VERSION",
+                "ORBO_PLATFORM",
+                "ORBO_TELEMETRY_SAMPLE_RATE",
+                "ORBO_VERSION",
+            ]
+        );
+        assert_eq!(env["CPK_TELEMETRY_ID"], install_id);
+        assert_eq!(env["ORBO_TELEMETRY_SAMPLE_RATE"], "1");
+        assert_eq!(env["ORBO_DISTRIBUTION"], "desktop");
+        assert_eq!(env["ORBO_VERSION"], "1.2.3");
+        assert_eq!(env["ORBO_PLATFORM"], "macos");
+        assert_eq!(env["ORBO_ARCH"], "aarch64");
+        assert_eq!(env["ORBO_ENGINE"], "docker");
+        assert_eq!(env["ORBO_OS_VERSION"], "14.5.0");
+    }
+
+    #[test]
+    fn disabled_emitter_names_no_identity_but_tells_the_runtime_to_stop() {
+        std::env::set_var("DO_NOT_TRACK", "1");
+        let telemetry = Telemetry::open_with_env(
+            temp_dir("runtime-env-disabled"),
+            context("1.2.3", Engine::None),
+            Config::disabled_for_tests(),
+            EnvOverride::Process,
+        );
+        std::env::remove_var("DO_NOT_TRACK");
+        let telemetry = telemetry.unwrap();
+        assert!(telemetry.install_id().is_none());
+        assert_eq!(
+            telemetry.runtime_env(),
+            BTreeMap::from([("COPILOTKIT_TELEMETRY_DISABLED".into(), "1".into())])
+        );
+    }
+
+    #[test]
+    fn legacy_disabled_name_honors_the_kill_switch_only_outside_release() {
+        // Only the legacy half is asserted: `telemetry_disabled(Process)` also reads
+        // `ORBO_TELEMETRY_DISABLED` and `DO_NOT_TRACK`, which this binary's own disabled-emitter
+        // test flips in parallel, so a process-wide answer here would be a coin flip.
+        for value in ["1", "true", "TRUE", " true ", "0", "false"] {
+            std::env::set_var("COPILOTKIT_TELEMETRY_DISABLED", value);
+            let outcome = legacy_disabled_value();
+            std::env::remove_var("COPILOTKIT_TELEMETRY_DISABLED");
+            #[cfg(debug_assertions)]
+            assert_eq!(
+                outcome,
+                matches!(value.trim().to_ascii_lowercase().as_str(), "1" | "true"),
+                "{value}"
+            );
+            #[cfg(not(debug_assertions))]
+            assert!(!outcome, "release must ignore the legacy name: {value}");
+        }
+        assert!(!legacy_disabled_value());
     }
 }

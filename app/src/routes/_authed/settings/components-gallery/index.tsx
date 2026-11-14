@@ -3,12 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ComponentPreview } from "@/components/component-preview";
 import { PageShell } from "@/components/layout/page-shell";
 import { SettingsItemBackground } from "@/components/settings/background";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from "@/components/ui/empty";
+import { ErrorState, EmptyState } from "@/components/ui/states";
 import { componentListQueryOptions } from "@/lib/components/queries";
 
 /**
@@ -33,18 +28,13 @@ function RouteComponent() {
       title="Components gallery"
     >
       {components.isPending ? null : components.error ? (
-        <p className="mt-12 text-destructive text-sm" role="alert">
-          Could not load components.
-        </p>
+        <ErrorState className="mt-12">Could not load components.</ErrorState>
       ) : published?.length === 0 ? (
-        <Empty className="mt-12 min-h-[30dvh] border border-dashed">
-          <EmptyHeader>
-            <EmptyTitle>Nothing published yet</EmptyTitle>
-            <EmptyDescription className="text-pretty">
-              When an administrator publishes a component, it will show up here.
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
+        <EmptyState
+          className="mt-12 min-h-[30dvh]"
+          description="When an administrator publishes a component, it will show up here."
+          title="Nothing published yet"
+        />
       ) : (
         <div className="mx-auto mt-12 grid w-full max-w-2xl grid-cols-1 gap-4 md:grid-cols-2">
           {published?.map((component) => (

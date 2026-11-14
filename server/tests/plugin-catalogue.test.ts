@@ -252,6 +252,127 @@ describe("Notion", () => {
   });
 });
 
+describe("GitHub", () => {
+  const entry = catalogueEntry("github");
+
+  test("resolves to the Copilot API host the vendor publishes, not the REST host", () => {
+    expect(entry).not.toBeNull();
+    // api.github.com is GitHub's REST API. The MCP server lives on the Copilot host, so a pin
+    // that accepted the REST host would spend the token somewhere other than the reviewed one.
+    expect(resolveServerUrl("github")?.url).toBe(
+      "https://api.githubcopilot.com/mcp/",
+    );
+    expect(hostAdmissible(entry!, "https://api.githubcopilot.com")).toBe(true);
+    expect(hostAdmissible(entry!, "https://api.github.com")).toBe(false);
+    // The suffix case: a pin written with endsWith rather than equality would accept it.
+    expect(
+      hostAdmissible(entry!, "https://api.githubcopilot.com.evil.test"),
+    ).toBe(false);
+  });
+
+  test("is reached as the deployment, not as a person", () => {
+    expect(entry?.auth.kind).toBe("deployment-bearer");
+    expect(serverCredentialKind(entry!)).toBe("mcp");
+  });
+
+  test("pins the exact write list, so a dropped or renamed entry fails here", () => {
+    expect(entry?.writeTools).toEqual([
+      "actions_run_trigger",
+      "add_comment_to_pending_review",
+      "add_issue_comment",
+      "add_reply_to_pull_request_comment",
+      "assign_copilot_to_issue",
+      "assign_copilot_to_issue_with_intent",
+      "create_branch",
+      "create_gist",
+      "create_or_update_file",
+      "create_pull_request",
+      "create_pull_request_with_copilot",
+      "create_repository",
+      "create_repository_ruleset",
+      "custom_properties_write",
+      "delete_file",
+      "delete_repository",
+      "dismiss_notification",
+      "discussion_comment_write",
+      "fork_repository",
+      "issue_write",
+      "label_write",
+      "mark_all_notifications_read",
+      "manage_notification_subscription",
+      "manage_repository_notification_subscription",
+      "merge_pull_request",
+      "projects_write",
+      "pull_request_review_write",
+      "push_files",
+      "request_copilot_review",
+      "star_repository",
+      "sub_issue_write",
+      "unstar_repository",
+      "update_gist",
+      "update_issue_comment",
+      "update_pull_request",
+      "update_pull_request_branch",
+    ]);
+    for (const name of entry?.writeTools ?? []) {
+      expect(classifyTool(entry, name, true)).toBe("write");
+    }
+    // Reads the vendor's docs name by name, which no reviewed entry here calls a write.
+    expect(classifyTool(entry, "get_file_contents", true)).toBe("read");
+    expect(classifyTool(entry, "issue_read", true)).toBe("read");
+    expect(classifyTool(entry, "pull_request_read", true)).toBe("read");
+    // A name that came from a model is a write, as for every vendor.
+    expect(classifyTool(entry, "brand-new-tool", false)).toBe("write");
+  });
+});
+
+describe("GitLab", () => {
+  const entry = catalogueEntry("gitlab");
+
+  test("pins gitlab.com and leaves self-managed instances outside the catalogue", () => {
+    expect(entry).not.toBeNull();
+    expect(resolveServerUrl("gitlab")?.url).toBe(
+      "https://gitlab.com/api/v4/mcp",
+    );
+    expect(hostAdmissible(entry!, "https://gitlab.com")).toBe(true);
+    // The vendor documents self-managed endpoints at <gitlab.example.com>. Deliberately absent:
+    // a per-customer host needs a pattern, and adding one is a review of what a token aimed at
+    // an instance this deployment does not operate may reach, not an edit.
+    expect(hostAdmissible(entry!, "https://gitlab.acme.example")).toBe(false);
+    expect(hostAdmissible(entry!, "https://about.gitlab.com")).toBe(false);
+  });
+
+  test("is reached as the deployment, not as a person", () => {
+    expect(entry?.auth.kind).toBe("deployment-bearer");
+    expect(serverCredentialKind(entry!)).toBe("mcp");
+  });
+
+  test("pins the exact write list, so a dropped or renamed entry fails here", () => {
+    expect(entry?.writeTools).toEqual([
+      "add_branch",
+      "add_commit",
+      "attach_scan_profile",
+      "link_work_items",
+      "save_merge_request",
+      "save_merge_request_review",
+      "save_note",
+      "save_pipeline",
+      "save_project",
+      "save_vulnerability",
+      "save_work_item",
+      "send_duo_session_input",
+      "start_duo_session",
+    ]);
+    for (const name of entry?.writeTools ?? []) {
+      expect(classifyTool(entry, name, true)).toBe("write");
+    }
+    expect(classifyTool(entry, "get_project", true)).toBe("read");
+    expect(classifyTool(entry, "list_projects", true)).toBe("read");
+    expect(classifyTool(entry, "get_merge_request", true)).toBe("read");
+    expect(classifyTool(entry, "brand-new-tool", false)).toBe("write");
+  });
+});
+
 describe("Routines", () => {
   const entry = catalogueEntry("routines");
 

@@ -2,14 +2,14 @@ import { describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import type { AuditEventInput } from "../src/audit";
 import {
-  createCredential,
   CredentialRefusedError,
+  type CredentialStore,
+  type CredentialStoreValue,
+  createCredential,
   decryptCredentialForUse,
   resolveModelApiKey,
   revokeCredential,
   rotateCredential,
-  type CredentialStore,
-  type CredentialStoreValue,
 } from "../src/credentials";
 
 const encryptionKey = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";

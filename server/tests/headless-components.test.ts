@@ -8,6 +8,7 @@ import { GALLERY as CHARTS } from "../../app/src/components/gallery/charts";
 import { GALLERY as DECISIONS } from "../../app/src/components/gallery/decisions";
 import { GALLERY as FORM } from "../../app/src/components/gallery/form";
 import { GALLERY as QUOTE } from "../../app/src/components/gallery/quote";
+import { GALLERY as REA } from "../../app/src/components/gallery/rea";
 import { GALLERY as TABLE } from "../../app/src/components/gallery/table";
 import { NOT_SHOWN } from "../../shared/component-markers";
 import type { AuditEventInput } from "../src/audit";
@@ -32,6 +33,7 @@ const GALLERY = [
   ...DECISIONS,
   ...FORM,
   ...QUOTE,
+  ...REA,
   ...TABLE,
 ];
 
@@ -56,6 +58,7 @@ describe("headless components mirror the compiled gallery", () => {
       "decisions.tsx",
       "form.tsx",
       "quote.tsx",
+      "rea.tsx",
       "table.tsx",
     ]);
   });

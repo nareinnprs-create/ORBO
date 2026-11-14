@@ -799,6 +799,7 @@ describe("SCIM 2.0 through Better Auth", () => {
           allowedEmailDomains: [],
           google: { clientId: "id", clientSecret: "secret" },
         },
+        session: { expiresInDays: 7 },
         keyEncryptionKey: Buffer.alloc(32, 7).toString("base64"),
       } as unknown as DeploymentConfig,
       database,

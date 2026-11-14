@@ -30,6 +30,12 @@ struct Prepared {
     fingerprint: String,
     harness: Option<HarnessChoice>,
     images: Vec<String>,
+    /// Which `.orbo-deployment` stamp this fingerprint was taken over.
+    ///
+    /// Written from v0.1.7 on; records written before the field existed deserialize as `None`,
+    /// and the install-fingerprint heal below refuses them rather than guessing at their age.
+    #[serde(default)]
+    deployment: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -388,10 +394,40 @@ pub fn image_present(address: &Address, image: &str) -> Result<bool, Problem> {
 
 pub fn require_images(address: &Address, images: &[String]) -> Result<(), Problem> {
     for image in images {
-        if !image_present(address, image)? {
-            return Err(required(format!(
-                "The selected container engine does not have {image}."
-            )));
+        if image_present(address, image)? {
+            continue;
+        }
+        /*
+         * An image the engine no longer has is a re-download before it is a failure.
+         *
+         * The engine can lose an image out from under a finished installation: a prune, a
+         * reinstalled engine with a fresh empty store. The references recorded at install are
+         * the exact digest-pinned ones, so downloading the same bytes again is the honest repair
+         * and Install would only run this same pull. `pull_image` is the acquire path the
+         * Install screen itself uses — the same missing-only policy, the same capability
+         * probing — so a repaired start cannot turn into an acquisition the Install flow
+         * would refuse.
+         */
+        match crate::pull_metrics::pull_image(address, image, |_| {}, |_| {}) {
+            Ok(()) if image_present(address, image)? => continue,
+            Ok(()) => {
+                return Err(required(format!(
+                    "The selected container engine does not have {image}. ORBO needs the \
+                     container images it was installed with, so it tried to download {image} \
+                     again, and the engine has still not placed it. Return to Install and try \
+                     again."
+                )))
+            }
+            Err(pull_problem) => {
+                let engine_said = pull_problem
+                    .detail
+                    .unwrap_or_else(|| pull_problem.said.clone());
+                return Err(required(format!(
+                    "The selected container engine does not have {image}. ORBO needs the \
+                     container images it was installed with, so it tried to download {image} \
+                     again, and the engine refused. {engine_said}"
+                )));
+            }
         }
     }
     Ok(())
@@ -403,6 +439,7 @@ pub fn record(
     harness: Option<&HarnessChoice>,
     images: Vec<String>,
 ) -> Result<(), Problem> {
+    let deployment = deployment::installed(root).map(|installed| installed.version);
     write_record(
         root,
         FILE,
@@ -410,6 +447,7 @@ pub fn record(
             fingerprint: fingerprint(root)?,
             harness: harness.cloned(),
             images,
+            deployment,
         },
     )
 }
@@ -450,22 +488,61 @@ fn require_with(
     selection: Option<&Option<HarnessChoice>>,
     verify: impl FnOnce(&[String]) -> Result<(), Problem>,
 ) -> Result<PathBuf, Problem> {
-    let record: Prepared = serde_json::from_slice(
+    let saved: Prepared = serde_json::from_slice(
         &std::fs::read(root.join(FILE)).map_err(|e| required(e.to_string()))?,
     )
     .map_err(|e| required(e.to_string()))?;
-    if record.fingerprint != fingerprint(root)?
-        || selection.is_some_and(|selection| selection != &record.harness)
-    {
+    /*
+     * DECISION RULES FOR THE INSTALL-FINGERPRINT HEAL, written down so the next reader can audit
+     * them against the code. The install fingerprint covers four files in full: the
+     * `.orbo-deployment` stamp, `container-images.json`, `deploy/compose/docker-compose.yml`,
+     * and `.orbo-dependencies.json`. Drift is repaired in place here only when EVERY one of
+     * these holds:
+     *
+     *   1. The Bot selection is unchanged. Selection check below runs first and refuses
+     *      regardless of anything else; a heal must never follow a selection change.
+     *   2. The record notes which stamp version it was installed over (`record` has written
+     *      that from this version on). A record that predates the field cannot prove where its
+     *      fingerprint came from, so it is never healed.
+     *   3. The stamp on disk now names a DIFFERENT version than the record notes. The stamp is
+     *      written by exactly one thing — `deployment::fetch`, which rewrites the stamp, the
+     *      image manifest and the Compose file together as one download — so a version change
+     *      is the one drift shape a fetch produces and a hand edit does not imply.
+     *   4. `stack::deployment_problem(root)` is None: the re-fetched layout is complete for the
+     *      version on disk.
+     *
+     * Then the record is rewritten over what is on disk (this is `dependencies_ready_or_repair`'s
+     * spirit: the repair records what is already there, it acquires nothing) and Start continues
+     * with the images the record already names.
+     *
+     * EVERYTHING else keeps today's refusal with today's message:
+     *   - a fingerprinted file changed while the stamp version stayed the same (Compose or the
+     *     manifest edited by hand, or a dependency record rewritten outside a fetch);
+     *   - the stamp unreadable or absent, because that tree is not a fetch's output;
+     *   - a legacy record with no stamp version noted;
+     *   - a changed selection, always.
+     */
+    if selection.is_some_and(|selection| selection != &saved.harness) {
         return Err(required(
             "The deployment folder or Bot selection changed after installation.",
         ));
+    }
+    if saved.fingerprint != fingerprint(root)? {
+        let refetched = saved.deployment.as_ref().is_some_and(|installed_with| {
+            deployment::installed(root).is_some_and(|stamp| &stamp.version != installed_with)
+        }) && stack::deployment_problem(root).is_none();
+        if !refetched {
+            return Err(required(
+                "The deployment folder or Bot selection changed after installation.",
+            ));
+        }
+        record(root, saved.harness.as_ref(), saved.images.clone())?;
     }
     if let Some(problem) = stack::deployment_problem(root) {
         return Err(required(problem));
     }
     let bun = dependencies_ready_or_repair(root)?;
-    verify(&record.images)?;
+    verify(&saved.images)?;
     Ok(bun)
 }
 
@@ -800,6 +877,156 @@ fn main() {
             !f.root.join("installs").exists(),
             "the repair must not attempt an install without the whole tree on disk"
         );
+    }
+
+    /// The install-fingerprint heal: a fetch re-recorded the deployment (the stamp moved, and
+    /// only a fetch writes it), so the start re-records the installation over the re-fetched
+    /// tree instead of bouncing to Install, and the start continues with what it already has.
+    #[test]
+    fn a_refetched_deployment_repairs_the_install_record_and_the_start_continues() {
+        let f = Fixture::with_runtime(INSTALL_SUCCEEDS);
+        f.prepared(None);
+        deployment::record(&f.root, "v-other").unwrap();
+        require_with(&f.root, None, |images| {
+            assert_eq!(images, ["synthetic-image"]);
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(f.root.join("installs")).unwrap_or_default(),
+            "",
+            "the heal records what is on disk; it acquires nothing"
+        );
+        // The re-record followed the re-fetched tree, so the start after it repairs nothing.
+        require_with(&f.root, None, |_| Ok(())).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(f.root.join("installs")).unwrap_or_default(),
+            ""
+        );
+    }
+
+    /// A fingerprinted file changed while the stamp holds the version the record was installed
+    /// over: a hand edit or an outside rewrite, never a fetch, so the refusal keeps its exact
+    /// message and nothing is re-recorded.
+    #[test]
+    fn a_fingerprinted_edit_without_a_fetch_keeps_the_install_screen() {
+        let f = Fixture::with_runtime(INSTALL_SUCCEEDS);
+        f.prepared(None);
+        std::fs::write(
+            f.root.join("deploy/compose/docker-compose.yml"),
+            "services: {}\n# edited by hand, with no fetch in sight\n",
+        )
+        .unwrap();
+        let problem = require_with(&f.root, None, |_| {
+            panic!("a hand edit must not start, and must not be re-recorded")
+        })
+        .expect_err("an edited fingerprint is not a fetch");
+        assert_eq!(
+            problem.detail.as_deref(),
+            Some("The deployment folder or Bot selection changed after installation.")
+        );
+        // The refusal is stable: healing it twice would dismiss the edit once and for all.
+        assert!(require_with(&f.root, None, |_| panic!("still refused")).is_err());
+        assert_eq!(
+            std::fs::read_to_string(f.root.join("installs")).unwrap_or_default(),
+            ""
+        );
+    }
+
+    /// A record written before it noted its stamp proves nothing about where its fingerprint
+    /// came from, so the heal never touches it: Install remains the answer.
+    #[test]
+    fn a_legacy_install_record_without_a_stamp_is_never_healed() {
+        let f = Fixture::with_runtime(INSTALL_SUCCEEDS);
+        f.dependencies();
+        deployment::record(&f.root, "v-later").unwrap();
+        std::fs::write(
+            f.root.join(FILE),
+            serde_json::to_vec(&serde_json::json!({
+                "fingerprint": "a fingerprint this tree cannot reproduce",
+                "harness": serde_json::Value::Null,
+                "images": ["synthetic-image"],
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        let problem = require_with(&f.root, None, |_| panic!("a legacy record never heals"))
+            .expect_err("a record with no noted stamp cannot be healed");
+        assert_eq!(
+            problem.detail.as_deref(),
+            Some("The deployment folder or Bot selection changed after installation.")
+        );
+    }
+
+    /// A stand-in engine for the Start-time re-download: an image exists only while the fixture
+    /// has written its marker file, a pull places one unless its name declines to.
+    const PULLING_ENGINE: &str = r#"
+fn main() {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let home = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
+    let marker = |image: &str| home.join(image.replace(['/', ':'], "-"));
+    match args.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
+        ["image", "inspect", image] => std::process::exit(if marker(image).is_file() { 0 } else { 1 }),
+        ["compose", "pull", "--help"] => std::process::exit(1),
+        ["pull", image] => {
+            if image.contains("broken") {
+                eprintln!("synthetic engine refusal");
+                std::process::exit(71);
+            }
+            if image.contains("stuck") { return; }
+            std::fs::write(marker(image), "pulled").unwrap();
+        }
+        _ => panic!("unreachable engine call: {args:?}"),
+    }
+}
+"#;
+
+    /// An image the engine lost is downloaded again at Start with the same acquire path the
+    /// Install screen uses; a pull that fails, or that places nothing, keeps the Install bounce.
+    #[test]
+    fn a_missing_image_at_start_is_downloaded_again_and_only_a_failed_pull_bounces() {
+        if crate::test_support::isolated_process(
+            "preparation::tests::a_missing_image_at_start_is_downloaded_again_and_only_a_failed_pull_bounces",
+        ) {
+            return;
+        }
+        let root = crate::test_support::temp_root("preparation-image-refetch");
+        std::fs::create_dir_all(&root).unwrap();
+        let source = root.join("docker.rs");
+        std::fs::write(&source, PULLING_ENGINE).unwrap();
+        crate::test_support::compile_fixture(
+            &source,
+            &root.join(format!("docker{}", std::env::consts::EXE_SUFFIX)),
+        );
+        std::env::set_var("PATH", &root);
+        let address = crate::engine::Address::new(crate::engine::Engine::Docker, None);
+        let images = |name: &str| vec![name.to_string()];
+
+        let refusal = require_images(&address, &images("example/broken@sha256:0000"))
+            .expect_err("a pull the engine refuses keeps the Install bounce");
+        assert_eq!(refusal.said, REQUIRED);
+        let detail = refusal.detail.unwrap_or_default();
+        assert!(
+            detail.contains("does not have example/broken@sha256:0000"),
+            "{detail}"
+        );
+        assert!(
+            detail.contains("container images it was installed with"),
+            "{detail}"
+        );
+        assert!(detail.contains("synthetic engine refusal"), "{detail}");
+
+        // A pull the engine carries out places the digest-pinned reference exactly as recorded,
+        // and the start then continues instead of bouncing.
+        require_images(&address, &images("example/pullable@sha256:0000")).unwrap();
+
+        // An engine that reports success without placing anything still keeps Install involved.
+        let phantom = require_images(&address, &images("example/stuck@sha256:0000"))
+            .expect_err("a pull that places nothing is a failure");
+        assert_eq!(phantom.said, REQUIRED);
+        let detail = phantom.detail.unwrap_or_default();
+        assert!(detail.contains("still not placed"), "{detail}");
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

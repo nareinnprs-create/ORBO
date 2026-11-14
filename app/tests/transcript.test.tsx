@@ -7,8 +7,8 @@
 // metadata, including replayed ids), and internal voice-receipt prompts stay
 // hidden while summaries and ordinary turns remain.
 import { expect, test } from "bun:test";
-import { renderToStaticMarkup } from "react-dom/server";
 import { createElement, Fragment, type ReactNode } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 
 type Message = {
   id: string;

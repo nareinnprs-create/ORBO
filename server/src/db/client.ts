@@ -1,5 +1,5 @@
-import { SQL } from "bun";
 import { readFileSync } from "node:fs";
+import { SQL } from "bun";
 import { drizzle } from "drizzle-orm/bun-sql";
 import * as schema from "./schema";
 
@@ -189,6 +189,78 @@ export function addressOf(
 }
 
 /**
+ * The server-side statement ceilings, applied as connection start-up parameters on every
+ * connection this factory opens.
+ *
+ * Two runaway shapes used to have no floor: a query that never returns (a missing index meeting a
+ * big table, a lock waited on forever) holds its pooled connection until the process is restarted,
+ * and a session that opens a transaction and stalls inside it holds its locks the same way. Postgres
+ * carries both settings; they only do anything when somebody sets them, so this factory does, on
+ * every connection, where no caller can forget.
+ *
+ * - `statement_timeout` — one statement, 30s by default. Long enough for every ordinary query here;
+ *   a migration or a deliberate batch that needs longer overrides it for its own session.
+ * - `idle_in_transaction_session_timeout` — a session parked inside an open transaction, 60s by
+ *   default. Generous next to the statement ceiling, because a legitimate transaction has thinking
+ *   time between its statements; an abandoned one is what this reaps.
+ *
+ * `DATABASE_STATEMENT_TIMEOUT_MS` / `DATABASE_IDLE_TRANSACTION_TIMEOUT_MS` restate either in
+ * milliseconds; `0` leaves that ceiling off entirely. A value that is not a non-negative integer is
+ * refused at client construction, the same loud-and-early treatment every malformed `DATABASE_URL`
+ * part gets — a typo surfacing on the first slow query, hours into a deployment, is the failure
+ * mode to avoid. URL query parameters still win: a `?statement_timeout=` on `DATABASE_URL` names
+ * the ceiling for that one address, exactly as `?application_name=` already names the session.
+ */
+const STATEMENT_TIMEOUT_MS_ENV = "DATABASE_STATEMENT_TIMEOUT_MS";
+const IDLE_IN_TRANSACTION_TIMEOUT_MS_ENV =
+  "DATABASE_IDLE_TRANSACTION_TIMEOUT_MS";
+const DEFAULT_STATEMENT_TIMEOUT_MS = 30_000;
+const DEFAULT_IDLE_IN_TRANSACTION_TIMEOUT_MS = 60_000;
+
+/** One timeout from its environment variable: milliseconds, `0` for off, refused otherwise. */
+function timeoutMs(
+  name: string,
+  environmentValue: string | undefined,
+  defaultMs: number,
+) {
+  const raw = environmentValue?.trim();
+  if (raw === undefined || raw === "") return defaultMs;
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new TypeError(
+      `${name} must be a whole number of milliseconds, or 0 for no ceiling.`,
+    );
+  }
+  return parsed;
+}
+
+/**
+ * The start-up parameters themselves, Postgres's own names. Values are plain millisecond integers
+ * in string form, which is the one spelling every Postgres version takes on the wire, with no
+ * unit-suffix parsing to disagree about.
+ */
+export function connectionParameters(
+  environment: Record<string, string | undefined> = process.env,
+): Record<string, string> {
+  const parameters: Record<string, string> = {};
+  const statement = timeoutMs(
+    STATEMENT_TIMEOUT_MS_ENV,
+    environment[STATEMENT_TIMEOUT_MS_ENV],
+    DEFAULT_STATEMENT_TIMEOUT_MS,
+  );
+  if (statement > 0) parameters.statement_timeout = String(statement);
+  const idle = timeoutMs(
+    IDLE_IN_TRANSACTION_TIMEOUT_MS_ENV,
+    environment[IDLE_IN_TRANSACTION_TIMEOUT_MS_ENV],
+    DEFAULT_IDLE_IN_TRANSACTION_TIMEOUT_MS,
+  );
+  if (idle > 0) {
+    parameters.idle_in_transaction_session_timeout = String(idle);
+  }
+  return parameters;
+}
+
+/**
  * `max` is exposed so tests can pin the pool to a single connection. Code that opens a transaction
  * and then reads on a second connection deadlocks once every pooled connection is inside such a
  * transaction; a pool of one turns that from a load-dependent production hang into an immediate,
@@ -227,8 +299,16 @@ export function createDatabase(
    */
   delete process.env.DATABASE_URL;
 
+  const address = addressOf(databaseUrl);
+  // The ceilings ride with the address's own connection parameters, which win: a URL that names
+  // its own `statement_timeout` said so for that address specifically.
+  const parameters = {
+    ...connectionParameters(),
+    ...(address.connection ?? {}),
+  };
   const client = new SQL({
-    ...addressOf(databaseUrl),
+    ...address,
+    ...(Object.keys(parameters).length > 0 ? { connection: parameters } : {}),
     ...(options.max === undefined ? {} : { max: options.max }),
   });
 

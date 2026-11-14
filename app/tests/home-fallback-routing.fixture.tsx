@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, spyOn } from "bun:test";
 import type { ReactNode } from "react";
-import * as Carousel from "@/components/ui/carousel";
 import * as SidebarToggle from "@/components/layout/sidebar-toggle";
+import * as Carousel from "@/components/ui/carousel";
 
 /**
  * Restorable namespace spies rather than `mock.module`, which bun cannot unregister. The spies are

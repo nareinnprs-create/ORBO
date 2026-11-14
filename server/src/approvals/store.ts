@@ -30,6 +30,7 @@ const DEFAULT_TEAM: ApprovalTeamSettings = {
   enforceAutoReview: false,
   customRulesEnabled: true,
   hostCommandsCap: "allow",
+  autoRunReads: true,
 };
 
 export function createApprovalStore(database: Database): ApprovalStore {
@@ -292,6 +293,7 @@ function createPolicyStore(database: Database): ApprovalPolicyStore {
           enforceAutoReview: row.enforceAutoReview,
           customRulesEnabled: row.customRulesEnabled,
           hostCommandsCap: row.hostCommandsCap,
+          autoRunReads: row.autoRunReads,
         }
       : { ...DEFAULT_TEAM };
   };

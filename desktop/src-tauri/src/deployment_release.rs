@@ -8,6 +8,27 @@ use crate::deployment;
 
 const LATEST_RELEASE: &str = "https://api.github.com/repos/nareinnprs-create/ORBO/releases/latest";
 
+// The operator map — seven keys move this install off a public github.com; the six below are
+// read in `deployment.rs` and `install.rs` (defaults listed there), and the seventh,
+// ORBO_NPM_REGISTRY (the bun install registry for an offline mirror), is owned elsewhere —
+// stack.rs reads it and documents it. This file's site:
+// - ORBO_RELEASES_API_URL
+//   default https://api.github.com/repos/nareinnprs-create/ORBO/releases/latest
+// - ORBO_RELEASES_TARBALL_TEMPLATE
+//   default https://codeload.github.com/nareinnprs-create/ORBO/tar.gz/refs/tags/{version}
+// - ORBO_RELEASES_ASSETS_TEMPLATE
+//   default https://github.com/nareinnprs-create/ORBO/releases/download/{version}/{asset}
+// - ORBO_RELEASES_TOKEN
+//   default unset: the published release is public, so nothing is authenticated
+// - ORBO_ENGINE_MIRROR
+//   default unset: the engine installers come from github.com
+// - ORBO_IMAGE_PREFIX
+//   default unset: images are pulled from ghcr.io/nareinnprs-create/orbo as released
+// - ORBO_NPM_REGISTRY
+//   related but owned elsewhere: stack.rs reads it (bun install registry); see that file
+// An unset (or blank) ORBO_RELEASES_API_URL keeps the public endpoint; a value that is not a
+// usable URL refuses naming the key rather than falling back to it.
+
 /// The first release whose fetched deployment is internally consistent.
 ///
 /// Releases published before v0.1.5 declare workspaces in the root `package.json` and `bun.lock` —
@@ -27,12 +48,15 @@ const FIRST_COMPLETE_DEPLOYMENT: &str = "v0.1.6";
 /// Uses blocking HTTP, so callers in an async runtime must use a blocking task.
 pub fn resolve_version(root: &Path) -> Result<String, String> {
     resolve_version_with(root, || {
-        let body = deployment::get(LATEST_RELEASE).map_err(|error| {
+        let url =
+            latest_release_url_with(deployment::env_override("ORBO_RELEASES_API_URL").as_deref())?;
+        let body = deployment::get(&url).map_err(|error| {
             if error.contains("404") {
                 format!(
                     "could not find the latest ORBO release: {error}. \
                      The repository is private; set ORBO_RELEASES_TOKEN to a fine-grained \
-                     personal access token with Contents: Read on nareinnprs-create/ORBO."
+                     personal access token with Contents: Read on nareinnprs-create/ORBO, or \
+                     point ORBO_RELEASES_API_URL at the endpoint your mirror publishes."
                 )
             } else {
                 format!("could not find the latest ORBO release: {error}")
@@ -40,6 +64,17 @@ pub fn resolve_version(root: &Path) -> Result<String, String> {
         })?;
         release_tag(&body)
     })
+}
+
+/// The latest-release endpoint, with the operator's `ORBO_RELEASES_API_URL` passed in.
+///
+/// The override is a full URL, used exactly as given; only a usable absolute URL is accepted,
+/// so a mistyped override refuses naming the key instead of silently landing somewhere else.
+fn latest_release_url_with(api: Option<&str>) -> Result<String, String> {
+    match api {
+        None => Ok(LATEST_RELEASE.to_string()),
+        Some(api) => deployment::render_endpoint("ORBO_RELEASES_API_URL", api, &[]),
+    }
 }
 
 fn resolve_version_with(
@@ -215,6 +250,27 @@ mod tests {
     fn missing_or_unreadable_release_metadata_is_refused() {
         for body in [b"not json".as_slice(), b"{}", br#"{"tag_name":" "}"#] {
             assert!(release_tag(body).is_err());
+        }
+    }
+
+    #[test]
+    fn the_latest_release_endpoint_follows_the_api_override() {
+        assert_eq!(latest_release_url_with(None).as_deref(), Ok(LATEST_RELEASE));
+        assert_eq!(
+            latest_release_url_with(Some(
+                "https://ghe.example.com/api/v3/repos/acme/ORBO/releases/latest"
+            ))
+            .as_deref(),
+            Ok("https://ghe.example.com/api/v3/repos/acme/ORBO/releases/latest")
+        );
+    }
+
+    #[test]
+    fn an_api_override_that_is_not_a_usable_url_names_the_key() {
+        for api in ["not a url", "http://"] {
+            let refused = latest_release_url_with(Some(api))
+                .expect_err("an unusable override must not silently keep the default");
+            assert!(refused.contains("ORBO_RELEASES_API_URL"), "{refused}");
         }
     }
 

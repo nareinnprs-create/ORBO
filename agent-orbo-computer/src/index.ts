@@ -14,6 +14,8 @@ import {
   matchesToken,
   mutatesBrowser,
   offeredToken,
+  STREAM_AUTH_DEADLINE_MS,
+  streamAuthToken,
 } from "./authorisation";
 import { isPlainBotId } from "./bot-id";
 import { browserRuntimeFromEnv } from "./browser-runtime";
@@ -462,8 +464,102 @@ const SCREEN_NO_LONGER_LIVE =
 /** How often the cast checks that it is still showing the page the Bot is on. */
 const FOLLOW_INTERVAL_MS = 1_000;
 
-/** What a live-screen socket carries: the Bot whose screen it is showing. */
-type StreamData = { botId: string; recordingId?: string };
+/** What a live-screen socket carries: the Bot whose screen it is showing, and whether it proved itself. */
+type StreamData = {
+  botId: string;
+  recordingId?: string;
+  /**
+   * False only for a socket upgraded WITHOUT the query token, which owes the first-message auth
+   * frame; every other socket was authenticated at the upgrade itself.
+   */
+  authenticated: boolean;
+  /** The refusal deadline while one is pending. Set and cleared inside the websocket handlers. */
+  authTimer?: ReturnType<typeof setTimeout>;
+};
+
+/**
+ * What an authenticated stream socket does from the moment it owns the screen.
+ *
+ * The body of the old `open`, lifted so both ways of BECOMING authenticated land here: a socket that
+ * proved itself at the upgrade starts on open, and one that proves itself with the first message
+ * starts right after. Everything in it is the same contract as before — claimed before anything is
+ * awaited, cast following the Bot's current page, refused once the claim is gone. A structural
+ * socket, so this stays importable-light next to the handlers that call it with Bun's own.
+ */
+type StreamSocket = {
+  data: StreamData;
+  send(data: string): void;
+  close(code?: number, reason?: string): void;
+};
+
+function startStreaming(ws: StreamSocket): void {
+  const session = sessions.for(ws.data.botId);
+  /*
+   * Claimed before anything is awaited, and that order is the fix.
+   *
+   * Below this line the Bot's browser may have to be launched, which takes long enough for a
+   * client to connect and go away inside it. A close arriving in that window used to find nothing
+   * installed and so did nothing, while this function carried on to install a cast and a 1Hz
+   * interval for a socket that had already gone: no second close ever came, and the interval went
+   * on relaunching a browser somebody had stopped. With the claim taken first there is always
+   * something for that close to release, and everything below goes through the claim and is
+   * refused once it is gone.
+   */
+  const claim = session.viewer.claim(ws, (reason) => {
+    try {
+      ws.send(JSON.stringify({ type: "error", error: reason }));
+    } catch {
+      // Best effort. The socket may already be gone, which is not a reason to stop tearing down.
+    }
+  });
+  void (async () => {
+    try {
+      const send = (frame: unknown) => {
+        // A closed socket starts a fresh cast on the next connection.
+        try {
+          ws.send(JSON.stringify(frame));
+        } catch {
+          void session.viewer.release(ws);
+        }
+      };
+
+      /*
+       * The cast follows the Bot's current page. Re-checking also handles a page being closed
+       * underneath us without a listener per page.
+       */
+      let casting: Page | undefined;
+      const attach = async () => {
+        const target = await currentPage(ws.data.botId);
+        if (target === casting) return;
+        const cast = await startScreencast(target, send);
+        // The claim stops a cast it refuses, so a launch that lost the screen leaks nothing.
+        if (!(await claim.install(cast))) return;
+        casting = target;
+      };
+
+      await attach();
+      const follow = setInterval(() => {
+        void attach().catch(() => undefined);
+      }, FOLLOW_INTERVAL_MS);
+      if (!claim.setFollow(() => clearInterval(follow))) return;
+    } catch (error) {
+      /*
+       * Released before the socket is told, because this path is reachable in exactly the timing
+       * the claim exists for. A claim left behind here would keep the session occupied for the life
+       * of the process, and the sweep in sessions.ts could never take it: the unbounded growth that
+       * function was written to stop, reintroduced by the error path of the fix for it.
+       */
+      await session.viewer.release(ws);
+      ws.send(
+        JSON.stringify({
+          type: "error",
+          error: describe(error, "The screen could not be started."),
+        }),
+      );
+      ws.close();
+    }
+  })();
+}
 
 serve<StreamData>({
   port: PORT,
@@ -478,73 +574,54 @@ serve<StreamData>({
    */
   websocket: {
     async open(ws) {
-      const session = sessions.for(ws.data.botId);
-      /*
-       * Claimed before anything is awaited, and that order is the fix.
-       *
-       * Below this line the Bot's browser may have to be launched, which takes long enough for a
-       * client to connect and go away inside it. A close arriving in that window used to find nothing
-       * installed and so did nothing, while this function carried on to install a cast and a 1Hz
-       * interval for a socket that had already gone: no second close ever came, and the interval went
-       * on relaunching a browser somebody had stopped. With the claim taken first there is always
-       * something for that close to release, and everything below goes through the claim and is
-       * refused once it is gone.
-       */
-      const claim = session.viewer.claim(ws, (reason) => {
-        try {
-          ws.send(JSON.stringify({ type: "error", error: reason }));
-        } catch {
-          // Best effort. The socket may already be gone, which is not a reason to stop tearing down.
-        }
-      });
-      try {
-        const send = (frame: unknown) => {
-          // A closed socket starts a fresh cast on the next connection.
-          try {
-            ws.send(JSON.stringify(frame));
-          } catch {
-            void session.viewer.release(ws);
-          }
-        };
-
+      if (!ws.data.authenticated) {
         /*
-         * The cast follows the Bot's current page. Re-checking also handles a page being closed
-         * underneath us without a listener per page.
+         * Upgraded unauthenticated, for first-message auth. Nothing about the Bot is touched yet —
+         * no session, no claim, no browser — because until the token arrives this socket is nobody.
+         * The deadline is the whole restraint: a connection that presents nothing goes away on its
+         * own, and cannot even hold a session open by waiting.
          */
-        let casting: Page | undefined;
-        const attach = async () => {
-          const target = await currentPage(ws.data.botId);
-          if (target === casting) return;
-          const cast = await startScreencast(target, send);
-          // The claim stops a cast it refuses, so a launch that lost the screen leaks nothing.
-          if (!(await claim.install(cast))) return;
-          casting = target;
-        };
-
-        await attach();
-        const follow = setInterval(() => {
-          void attach().catch(() => undefined);
-        }, FOLLOW_INTERVAL_MS);
-        if (!claim.setFollow(() => clearInterval(follow))) return;
-      } catch (error) {
-        /*
-         * Released before the socket is told, because this path is reachable in exactly the timing
-         * the claim exists for. A claim left behind here would keep the session occupied for the life
-         * of the process, and the sweep in sessions.ts could never take it: the unbounded growth that
-         * function was written to stop, reintroduced by the error path of the fix for it.
-         */
-        await session.viewer.release(ws);
-        ws.send(
-          JSON.stringify({
-            type: "error",
-            error: describe(error, "The screen could not be started."),
-          }),
-        );
-        ws.close();
+        ws.data.authTimer = setTimeout(() => {
+          ws.close(4401, "Not authorised.");
+        }, STREAM_AUTH_DEADLINE_MS);
+        return;
       }
+      startStreaming(ws);
     },
 
     async message(ws, raw) {
+      if (!ws.data.authenticated) {
+        /*
+         * The first message IS the credential, whichever socket type sent it. Peeked before any
+         * dispatch: an input that arrives ahead of the token is refused as a whole, not applied to
+         * a screen nobody proved a right to. The timer is cleared either way — a wrong token is a
+         * refusal now, not a deadline later.
+         */
+        if (ws.data.authTimer) {
+          clearTimeout(ws.data.authTimer);
+          ws.data.authTimer = undefined;
+        }
+        let offered: string | null = null;
+        try {
+          offered = streamAuthToken(JSON.parse(String(raw)));
+        } catch {
+          offered = null;
+        }
+        if (offered === null || !matchesToken(ORBO_COMPUTER_TOKEN, offered)) {
+          try {
+            ws.send(
+              JSON.stringify({ type: "error", error: "Not authorised." }),
+            );
+          } catch {
+            // The socket may already be gone; the close below is what the client sees either way.
+          }
+          ws.close(4401, "Not authorised.");
+          return;
+        }
+        ws.data.authenticated = true;
+        startStreaming(ws);
+        return;
+      }
       const session = sessions.for(ws.data.botId);
       /*
        * Whose screen this is, asked before anything is done with the input.
@@ -634,6 +711,12 @@ serve<StreamData>({
     },
 
     async close(ws) {
+      // A socket refused on its deadline is closed by the timer itself; one that went away first
+      // leaves the timer behind, and this is where it is stopped.
+      if (ws.data.authTimer) {
+        clearTimeout(ws.data.authTimer);
+        ws.data.authTimer = undefined;
+      }
       // Names the socket, so it can only ever give up its own screen. A superseded socket closing
       // after its replacement has started releases nothing; see viewer.ts.
       //
@@ -653,12 +736,21 @@ serve<StreamData>({
      * whether this process is up, and a container orchestrator has to be able to ask that without
      * holding a secret.
      *
-     * The websocket upgrade is checked here too. A browser cannot set headers on an upgrade, so the
-     * stream carries the token as a query
-     * parameter the same way it already carries the Bot.
+     * The websocket upgrade is checked here too, with one further exception: a stream upgrade may
+     * arrive WITHOUT the token in its query and authenticate with its first message instead — the
+     * preferred path, because a token in a URL lands in access logs where a message does not. Such
+     * a socket is upgraded unauthenticated and refused at the first frame if it does not present
+     * the token there; see the `open` and `message` handlers. A non-websocket request for /stream
+     * is NOT exempt: it proves nothing about what will speak the protocol, and the refusal below
+     * must stay a bare 401 rather than a description of the endpoint.
      */
+    const streamUpgradeWithoutToken =
+      url.pathname === "/stream" &&
+      request.headers.get("upgrade")?.toLowerCase() === "websocket" &&
+      !matchesToken(ORBO_COMPUTER_TOKEN, offeredToken(request.headers, url));
     if (
       !isOpenPath(url.pathname) &&
+      !streamUpgradeWithoutToken &&
       !matchesToken(ORBO_COMPUTER_TOKEN, offeredToken(request.headers, url))
     ) {
       // Says nothing about what is here. A refusal that describes the endpoint it is protecting is a
@@ -673,8 +765,14 @@ serve<StreamData>({
     // Refused here rather than deeper down, because the id names a directory and the API server
     // forwards whatever URL segment a caller typed. `reset` deletes that directory as root.
     // `/health` is exempt for the same reason it is exempt from the token: it names no Bot, and an
-    // orchestrator's probe must not fail on a header it never meant to send.
-    if (!isOpenPath(url.pathname) && !isPlainBotId(botId)) {
+    // orchestrator's probe must not fail on a header it never meant to send. A stream upgrade that
+    // will authenticate by message is exempt too — its Bot id arrives in the query, untrusted
+    // until the token arrives, and the /stream branch below validates it either way.
+    if (
+      !isOpenPath(url.pathname) &&
+      !streamUpgradeWithoutToken &&
+      !isPlainBotId(botId)
+    ) {
       return json({ error: "That is not a usable bot id." }, 400);
     }
     // The admin network policy, pushed by the server on every change; applied without a restart.
@@ -716,6 +814,9 @@ serve<StreamData>({
           server.upgrade(request, {
             data: {
               botId: streamBotId,
+              // Authenticated at the upgrade when the token rode the query string, as the legacy
+              // path does; otherwise the socket owes the first-message frame.
+              authenticated: !streamUpgradeWithoutToken,
               ...(recordingId ? { recordingId } : {}),
             },
           })

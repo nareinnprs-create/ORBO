@@ -1,23 +1,80 @@
 import {
   createRootRouteWithContext,
-  Navigate,
+  Link,
   Outlet,
+  useRouter,
 } from "@tanstack/react-router";
 import { useEffect } from "react";
+import AgentOrb from "@/components/agents/orb/agent-orb";
+import { Button } from "@/components/ui/button";
 import { ThemeProvider } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { RouterContext } from "../router-context";
 import "@fontsource-variable/inter/wght.css";
 import "@fontsource-variable/montserrat/wght.css";
 
+/**
+ * A branded dead end for an address this build does not know.
+ *
+ * WHAT THIS REPLACES. An unknown URL used to `<Navigate replace to="/" />` — defensible while the
+ * address space was small, but a silent redirect also swallows the difference between "you are
+ * home" and "what you asked for does not exist", and a stale bookmark answered by home reads as the
+ * app having lost the thing. Now the address is told as it is, with the two ways out: back, and
+ * home. Home still sits behind the auth gate, so its link decides what it means: /sign for a
+ * visitor, /onboarding for somebody who has not finished it, the app for everyone else.
+ *
+ * Nothing relied on the redirect besides unknown URLs themselves: the retired pages (`/agents`,
+ * `/approvals`, and the rest of `LEGACY_PAGES`) are real routes that redirect explicitly, so they
+ * never reach this component. Exported for `app/tests/not-found.test.tsx`.
+ */
+export function NotFoundPage() {
+  const router = useRouter();
+  return (
+    // Outside `_app` on purpose — this renders under the root, where there is no sidebar and no
+    // chrome, so it stands on its own like /sign does.
+    <div className="flex min-h-dvh w-full flex-col items-center justify-center gap-6 p-4">
+      <img
+        alt=""
+        className="h-11 dark:hidden"
+        src="/brand/orbo_diya_horizontal_light.svg"
+      />
+      <img
+        alt=""
+        className="hidden h-11 dark:block"
+        src="/brand/orbo_diya_horizontal_dark.svg"
+      />
+      <AgentOrb size="56px" />
+      <div className="flex flex-col items-center gap-1 text-center">
+        <h1 className="font-heading text-2xl font-medium tracking-tight">
+          Page not found
+        </h1>
+        <p className="max-w-sm text-sm text-muted-foreground">
+          The address{" "}
+          <code className="text-xs">{router.state.location.pathname}</code>{" "}
+          doesn't match anything in ORBO.
+        </p>
+      </div>
+      <div className="flex items-center gap-2">
+        {router.history.canGoBack() ? (
+          <Button
+            onClick={() => router.history.back()}
+            size="lg"
+            variant="secondary"
+          >
+            Go back
+          </Button>
+        ) : null}
+        <Button render={(props) => <Link {...props} to="/" />} size="lg">
+          Go home
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export const Route = createRootRouteWithContext<RouterContext>()({
   component: RootComponent,
-  /*
-   * An address this build does not know goes home rather than to a dead end. Home sits behind the
-   * auth gate, so the guard decides what that means: /sign for a visitor, /onboarding for somebody
-   * who has not finished it, the app for everyone else.
-   */
-  notFoundComponent: () => <Navigate replace to="/" />,
+  notFoundComponent: NotFoundPage,
 });
 
 /**

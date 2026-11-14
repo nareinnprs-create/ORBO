@@ -20,6 +20,7 @@ import {
   ItemTitle,
 } from "@/components/ui/item";
 import { Separator } from "@/components/ui/separator";
+import { ErrorState, LoadingState } from "@/components/ui/states";
 import { Switch } from "@/components/ui/switch";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
 import { terminateMemberComputersMutationOptions } from "@/lib/enterprise/mutations";
@@ -97,9 +98,7 @@ function PeoplePage() {
         title="Who is here"
       >
         {failure ? (
-          <p className="mt-4 text-destructive text-sm" role="alert">
-            {failure.message}
-          </p>
+          <ErrorState className="mt-4">{failure.message}</ErrorState>
         ) : null}
         {terminate.data ? (
           <p className="mt-4 text-muted-foreground text-sm" role="status">
@@ -123,10 +122,10 @@ function PeoplePage() {
           value={search}
         />
 
-        {people.isPending ? null : people.error ? (
-          <p className="mt-4 text-destructive text-sm" role="alert">
-            Could not load people.
-          </p>
+        {people.isPending ? (
+          <LoadingState className="mt-4" label="Loading people…" />
+        ) : people.error ? (
+          <ErrorState className="mt-4">Could not load people.</ErrorState>
         ) : rows.length === 0 ? (
           <PageEmpty>
             {query

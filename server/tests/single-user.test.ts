@@ -12,11 +12,10 @@ import { singleUserEnabled } from "../src/auth/dev-actor";
  *
  * The cases below are the four a deployment can actually be in.
  *
- * This function still reads only the flag, which is what these cases pin, and `NODE_ENV` still
- * decides nothing here. Whether a deployment may HAVE no sign-in is a second question, asked by
- * `singleUserAllowed` in config.ts, which refuses it on any address other people can reach. The old
- * lock is not back: that one granted permission from a variable unset by default, and this one only
- * ever adds a refusal.
+ * This function reads only the flag and `NODE_ENV=production`, which is what these cases pin. Outside
+ * production `NODE_ENV` decides nothing, and whether a deployment may HAVE no sign-in is a second
+ * question, asked by `singleUserAllowed` in config.ts, which refuses it on any address other people
+ * can reach.
  */
 describe("running with no sign-in", () => {
   test("a configured provider always wins, whatever else is set", () => {
@@ -42,21 +41,56 @@ describe("running with no sign-in", () => {
     );
   });
 
-  test("NODE_ENV decides nothing, in either direction", () => {
-    // The previous lock. A server with NODE_ENV unset was the case it had to catch and the case it
-    // let through, so neither value may change the answer now.
+  // NODE_ENV still decides nothing about WHETHER the ask is read — the flag is the only lock there.
+  // It decides whether the ask is HONOURED (dev-actor.ts): under NODE_ENV=production both names
+  // refuse, outside it both name the same mode and NODE_ENV is not looked at otherwise.
+  test("outside production, NODE_ENV decides nothing", () => {
     expect(() =>
       singleUserEnabled({ NODE_ENV: "development" }, false),
     ).toThrow();
-    expect(() =>
-      singleUserEnabled({ NODE_ENV: "production" }, false),
-    ).toThrow();
     expect(
+      singleUserEnabled(
+        { NODE_ENV: "development", ORBO_SINGLE_USER: "true" },
+        false,
+      ),
+    ).toBe(true);
+  });
+
+  test("production refuses the flag under either name", () => {
+    expect(() =>
       singleUserEnabled(
         { NODE_ENV: "production", ORBO_SINGLE_USER: "true" },
         false,
       ),
-    ).toBe(true);
+    ).toThrow(/NODE_ENV=production/);
+    expect(() =>
+      singleUserEnabled(
+        { NODE_ENV: "production", ORBO_DEV_NO_AUTH: "true" },
+        false,
+      ),
+    ).toThrow(/ORBO_DEV_NO_AUTH means nothing in production/);
+  });
+
+  test("NODE_ENV is read through config's trim semantic, and process.env when unset", () => {
+    // `"production "` with a trailing space is what Docker's env_file and every dashboard text box
+    // preserve verbatim, and the reason config.ts compares through a trimmed `optional`.
+    expect(() =>
+      singleUserEnabled(
+        { NODE_ENV: "production ", ORBO_SINGLE_USER: "true" },
+        false,
+      ),
+    ).toThrow(/NODE_ENV=production/);
+    // No record entry, the environment itself is production: the boot path hands process.env in,
+    // but a test record without NODE_ENV must consult it rather than pretend the gate is off.
+    expect(() => {
+      const previous = process.env.NODE_ENV;
+      process.env.NODE_ENV = "production";
+      try {
+        singleUserEnabled({ ORBO_SINGLE_USER: "true" }, false);
+      } finally {
+        process.env.NODE_ENV = previous;
+      }
+    }).toThrow(/NODE_ENV=production/);
   });
 
   test("a flag set to anything but true is not a yes", () => {

@@ -21,8 +21,28 @@
  */
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { Element } from "happy-dom";
 
 GlobalRegistrator.register();
 /* `@base-ui/utils` is not a dependency of this package; the react package that owns it is. */
 await import("@base-ui/react/dialog");
 GlobalRegistrator.unregister();
+
+/*
+ * happy-dom 21 added the Web Animations API, which motion uses natively. Cancelling an animation
+ * rejects its `finished` promise with an AbortError — spec behaviour, and motion cancels animations
+ * on every interruption — but motion never attaches a handler to the WAAPI promise (in a browser
+ * this is only console noise, while bun fails a test run on an unhandled rejection). Wrap
+ * `Element.prototype.animate` once, here on happy-dom's implementation class that every window's
+ * subclasses inherit from, to mark that rejection as handled. The returned animation is untouched,
+ * so the native path motion exercises stays identical to production.
+ */
+const animate = Element.prototype.animate;
+Element.prototype.animate = function animateWithHandledCancel(
+  this: Element,
+  ...args: Parameters<typeof animate>
+) {
+  const animation = animate.apply(this, args);
+  animation.finished.catch(() => {});
+  return animation;
+} as typeof Element.prototype.animate;

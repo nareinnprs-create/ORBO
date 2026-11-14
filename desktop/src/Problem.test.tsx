@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, expect, spyOn, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import * as TauriCore from "@tauri-apps/api/core";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 
 let invokeCalls: Array<{ command: string; args?: unknown }> = [];
 let invokeFailure: string | null = null;
@@ -59,7 +59,7 @@ test("problem_ui_has_no_credential_restore_action", () => {
 });
 
 for (const Component of [Failure, InlineFailure]) {
-  test(`${Component.name} offers external setup help without including error data`, () => {
+  test(`${Component.name} names the administrator with no external link in unbranded builds`, () => {
     delete process.env.VITE_ORBO_SUPPORT_URL;
     const view = render(
       <Component
@@ -69,24 +69,29 @@ for (const Component of [Failure, InlineFailure]) {
         }}
       />,
     );
-    const help = view.getByRole("link", { name: "Get setup help" });
-    expect(help.getAttribute("href")).toBe(
-      "https://github.com/nareinnprs-create/ORBO/issues/new/choose",
-    );
-    expect(help.getAttribute("target")).toBe("_blank");
-    expect(help.getAttribute("rel")).toBe("noreferrer");
+    expect(view.queryByRole("link")).toBeNull();
+    expect(view.queryByText(/Get setup help/)).toBeNull();
+    expect(
+      view.getByText(
+        "Contact your ORBO administrator for help — no external link is included in this build.",
+      ),
+    ).toBeTruthy();
     expect(invokeCalls).toEqual([]);
-    fireEvent.click(help);
-    expect(invokeCalls).toEqual([
-      {
-        command: "plugin:opener|open_url",
-        args: {
-          url: "https://github.com/nareinnprs-create/ORBO/issues/new/choose",
-        },
-      },
-    ]);
   });
 }
+
+test("external setup help still sends no error data", () => {
+  const view = render(
+    <Failure
+      problem={{
+        said: "Synthetic start failure for private-user@example.test.",
+        detail: "API_KEY=synthetic-private-key /Users/private-user/install",
+      }}
+    />,
+  );
+  expect(view.queryByRole("link")).toBeNull();
+  expect(invokeCalls).toEqual([]);
+});
 
 test("setup help honors a branded support URL", () => {
   process.env.VITE_ORBO_SUPPORT_URL = "https://support.example.test/orbo";
@@ -104,7 +109,7 @@ test("setup help honors a branded support URL", () => {
 });
 
 test("setup help reports a failed browser open and allows retry", async () => {
-  delete process.env.VITE_ORBO_SUPPORT_URL;
+  process.env.VITE_ORBO_SUPPORT_URL = "https://support.example.test/orbo";
   invokeFailure = "synthetic browser refusal";
   const view = render(<Failure problem={{ said: "Synthetic failure." }} />);
   const help = view.getByRole("link", { name: "Get setup help" });
@@ -112,9 +117,7 @@ test("setup help reports a failed browser open and allows retry", async () => {
   fireEvent.click(help);
   const failure = await view.findByText(/Could not open your browser/);
   expect(failure.textContent).toContain("synthetic browser refusal");
-  expect(failure.textContent).toContain(
-    "https://github.com/nareinnprs-create/ORBO/issues/new/choose",
-  );
+  expect(failure.textContent).not.toContain("github.com");
 
   invokeFailure = null;
   fireEvent.click(help);

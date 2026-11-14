@@ -544,7 +544,7 @@ $botProvider = (Get-OrboSetting -Name 'BOT_PROVIDER' -Fallback 'openai').Trim().
 $oneComputerEach = Get-OrboSetting -Name 'ORBO_ONE_COMPUTER_EACH' -Fallback 'true'
 $supervisorToken = Get-OrboSetting -Name 'SUPERVISOR_TOKEN' -Fallback 'orbo-dev-supervisor-token'
 $computerToken = Get-OrboSetting -Name 'ORBO_COMPUTER_TOKEN' -Fallback 'orbo-dev-computer-token'
-$workerSharedSecret = Get-OrboSetting -Name 'WORKER_SHARED_SECRET' -Fallback 'orbo-dev-worker-secret'
+$workerSharedSecret = Get-OrboSetting -Name 'WORKER_SHARED_SECRET' -Fallback 'orbo-dev-worker-shared-secret'
 # The laptop stack runs orbo-langgraph on LANGGRAPH_PORT. The one-container image does not, so this
 # default stays in the script rather than in .env, for start.sh's reason: a
 # `docker run --env-file .env` must not inherit a URL pointing at a process the image lacks.

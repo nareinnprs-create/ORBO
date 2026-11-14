@@ -142,6 +142,9 @@ test("an administrator sets the team-wide controls", async () => {
   expect(view.getAllByRole("button", { name: "Remove" }).length).toBe(1);
 });
 
+// Every render in this file is a whole happy-dom page; alone this test takes well under two
+// seconds, but in a full-suite run the machine contends and Bun's default 5s timeout has
+// tripped, so this names the budget the suite actually observes.
 test("an administrator adds a team rule for every Bot", async () => {
   const view = draw();
   await view.findByText("Add a team rule");
@@ -165,4 +168,4 @@ test("an administrator adds a team rule for every Bot", async () => {
       },
     }),
   );
-});
+}, 15_000);

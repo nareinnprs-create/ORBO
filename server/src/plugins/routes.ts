@@ -592,6 +592,47 @@ export function createPluginRoutes(
   });
 
   /**
+   * Switch one tool of a server off, or back on.
+   *
+   * The per-tool half of the governing the grants surface already does per Bot: grants say which
+   * Bots may reach a tool, this says whether the deployment offers the tool at all. Disabling
+   * changes no grant — re-enabling restores every holder it had, and nothing about the switch
+   * touches what a refresh replaces.
+   */
+  routes.put("/servers/:id/tools/:tool{.+}", requireUser, async (context) => {
+    const forbidden = requireAdmin(context);
+    if (forbidden) return forbidden;
+
+    const body = (await context.req.json().catch(() => null)) as {
+      disabled?: unknown;
+    } | null;
+    if (typeof body?.disabled !== "boolean") {
+      return context.json({ error: "Say whether the tool is disabled." }, 400);
+    }
+
+    const serverId = context.req.param("id");
+    try {
+      await store.setToolDisabled({
+        serverId,
+        // The wildcard keeps a tool name carrying a slash one tool — the split `callTool` reads a
+        // ref with.
+        toolName: context.req.param("tool"),
+        disabled: body.disabled,
+        by: context.var.actor.id,
+      });
+      return context.json({ ok: true });
+    } catch (error) {
+      if (error instanceof CatalogueEntryUnknownError) {
+        return context.json({ error: error.message }, 404);
+      }
+      if (isDeploymentFault(error)) {
+        return context.json({ error: deploymentFaultSentence(error) }, 409);
+      }
+      throw error;
+    }
+  });
+
+  /**
    * Personal ⇄ Shared. Without `confirm`, a preview of what the switch would end and approve; with
    * it, the switch itself, which changes nothing unless every old account was ended at the vendor.
    */

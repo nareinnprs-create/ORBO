@@ -137,6 +137,8 @@ export type ApprovalTeamSettings = {
   enforceAutoReview: boolean;
   customRulesEnabled: boolean;
   hostCommandsCap: HostCommandPolicy;
+  /** Whether the read tier auto-runs; false asks before every action, reads included. */
+  autoRunReads: boolean;
 };
 /** Rules, preferences and team settings. Optional on the store so older fakes keep working. */
 export type ApprovalPolicyStore = {

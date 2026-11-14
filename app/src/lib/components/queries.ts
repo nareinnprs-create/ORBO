@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { client, tryClient } from "@/lib/client";
+import { botPollInterval, isPlaceholderBot } from "@/lib/copilot/active-bot";
 
 /** A component as the Admin surface sees it: its state, its versions and who is held back from it. */
 export type ComponentRecord = {
@@ -49,12 +50,16 @@ export function componentListQueryOptions() {
  *
  * Polled so open conversations stop offering revoked components; call-time checks still enforce
  * the grant.
+ *
+ * The same double gate the plugins grant poll carries: a Bot must be named at all, and the
+ * placeholder is not a Bot (`isPlaceholderBot` — it would 404 forever), and the cadence backs off
+ * when a read is failing with nothing ever received (`botPollInterval`).
  */
 export function agentComponentsQueryOptions(agentId: string | undefined) {
   return queryOptions({
     queryKey: componentKeys.forAgent(agentId ?? ""),
-    enabled: Boolean(agentId),
-    refetchInterval: 5_000,
+    enabled: Boolean(agentId) && !isPlaceholderBot(agentId ?? ""),
+    refetchInterval: botPollInterval(5_000),
     // Refetched when the tab is looked at again, so a grant changed on another screen is not waiting
     // out an interval before it shows.
     refetchOnWindowFocus: true,

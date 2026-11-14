@@ -28,6 +28,13 @@ All five above stop server startup if missing. The three `INTELLIGENCE_` values 
 checked as a set, so a partial set is refused as a misconfiguration rather than treated as
 unconfigured.
 
+The example `KEY_ENCRYPTION_KEY` from `.env.example` is missing in spirit, and is refused the same
+way: in production outright, and under any other `NODE_ENV` whenever the deployment answers beyond
+this machine — a public URL, a Tailnet address, a LAN alias — because in both cases the vault that
+key is encrypting is readable by whoever holds the value printed in a public repository. On
+loopback it is allowed with a warning, which is what a laptop wants. Generate one with `openssl
+rand -base64 32`.
+
 `COPILOTKIT_LICENSE_TOKEN` is optional: managed Intelligence issues no licence token, and a
 self-hosted Intelligence that has one sets this and has it forwarded to the runtime.
 
@@ -43,7 +50,8 @@ at `orbo-langgraph` on a laptop.
 | Variable             | Default                            | Meaning                                                             |
 | -------------------- | ---------------------------------- | ------------------------------------------------------------------- |
 | `PORT`               | `3001`                             | API server port. `SERVER_PORT` names the same port; set either, or both to the same value, or the server refuses to start. |
-| `NODE_ENV`           | unset                              | `production` refuses the example `KEY_ENCRYPTION_KEY`. It does not decide whether sign-in is required; see `ORBO_SINGLE_USER`. |
+| `ORBO_SERVER_HOST`   | `127.0.0.1`                        | The interface the API's socket binds to: an IP address or a hostname, never a URL. The loopback default is deliberate; `0.0.0.0` (or `::`) is a decision to answer on the machine's whole network. |
+| `NODE_ENV`           | unset                              | Grades the deployment as production. Under it, the example `KEY_ENCRYPTION_KEY`, `ORBO_SINGLE_USER` and its former name all refuse to start. Whether sign-in may be absent elsewhere is decided by the flag and the addresses the deployment answers on; see [Authentication](#authentication). |
 | `TENANT_PACKAGE_DIR` | `../examples/orbo`              | Tenant package directory, resolved from `server/`.                  |
 | `DEPLOYMENT_ID`      | the tenant package's id            | Names this deployment inside a shared Intelligence project, and prefixes the identity a Shared app's account is held under at the vendor. That identity is fixed when the app is made Shared, so changing this later does not move it. |
 | `OPENAI_API_KEY`     | unset                              | Default model key for built-in agents and both shipped Bots.        |
@@ -61,6 +69,8 @@ at `orbo-langgraph` on a laptop.
 | `ORBO_AGENT_TOOL_TOKEN`   | unset; `start.sh` generates one    | The secret a framework Bot presents when it calls a granted tool back through this server. |
 | `APP_DIST_DIR`       | unset                              | Where the built app is, when this process serves it. Set inside the container image; unset in development, where Vite serves the app. |
 | `AUDIT_RETENTION_DAYS` | unset                            | Whole number of days to keep audit rows; older ones are removed. Unset keeps the trail forever. |
+| `ORBO_SESSION_TTL_DAYS` | `7`                             | How long a sign-in session lasts. Whole number of days, at least 1. |
+| `ORBO_SESSION_UPDATE_AGE_SECONDS` | unset | How often an in-use session is rewritten as active. `0` renews on every use; unset keeps better-auth's once-a-day cadence. |
 | `WORKER_SHARED_SECRET` | unset; `start.sh` uses a fixed local default | The secret the routines worker presents to fire a due routine. Without it the server refuses every handoff, whether or not a worker exists to send one. |
 | `ORBO_GENERATIVE_UI` | unset (capability on)               | Set `false` or `0` to stop Bots from answering with generated interfaces. |
 | `ORBO_ACCESSIBILITY_DISABLED` | unset | `true` or `1` stops naming ORBO on the analytics the runtime already sends. |
@@ -112,8 +122,9 @@ Routines page says so when nothing has swept.
 
 Unlike `ORBO_AGENT_TOOL_TOKEN`, `start.sh` does not generate and persist this one. It supplies a fixed
 local default, `orbo-dev-worker-secret`, the same value every clone of this repository gets. That
-is fine here not because of where the server listens — it binds no hostname, so the port itself is
-reachable like any other — but because this is a dev-only default on a machine's own dev stack, and
+is fine here not because of where the server listens — the API binds the interface
+`ORBO_SERVER_HOST` names, 127.0.0.1 by default, which is this machine's own stack and nothing
+further — but because this is a dev-only default on a machine's own dev stack, and
 the endpoint it guards accepts nothing but an unguessable `routine_run_<uuid>` id: the server
 re-reads the routine, the owner and the channel from its own tables rather than trusting anything
 else the caller says, so a well-known value from a public repository gates nothing sensitive here.
@@ -312,7 +323,7 @@ policies apply. See [OpenAI WebRTC](https://developers.openai.com/api/docs/guide
 
 | Variable                     | Meaning                                                                                |
 | ---------------------------- | -------------------------------------------------------------------------------------- |
-| `ORBO_SINGLE_USER`        | One fixed administrator and no sign-in. **Required** when no identity provider is configured, or the deployment refuses to start. Refused on a public address. Ignored when a provider is configured. |
+| `ORBO_SINGLE_USER`        | One fixed administrator and no sign-in. **Required** when no identity provider is configured, or the deployment refuses to start. Refused under `NODE_ENV=production` outright, and refused on a public address under any `NODE_ENV`. Ignored when a provider is configured. |
 | `GOOGLE_OAUTH_CLIENT_ID`     | Google OAuth client id.                                                                |
 | `GOOGLE_OAUTH_CLIENT_SECRET` | Google OAuth client secret.                                                            |
 | `MICROSOFT_OAUTH_CLIENT_ID`  | Microsoft Entra ID application id.                                                     |
@@ -342,13 +353,22 @@ in that mode. A server you configure yourself is unaffected by all of this.
 
 **With no provider at all, `ORBO_SINGLE_USER=true` is required.** A deployment that configures
 nothing to sign anybody in and does not say that was deliberate refuses to start, naming what to
-configure, because a public URL where every visitor is an administrator fails silently. `NODE_ENV`
-does not enter into it. `.env.example` ships the line switched on, so a clone runs with no
-configuration at all. `ORBO_DEV_NO_AUTH=true`, the flag's former name, is still honoured.
+configure, because a public URL where every visitor is an administrator fails silently.
+`.env.example` ships the line switched on, so a clone runs with no configuration at all: `NODE_ENV`
+is unset there, and a laptop is exactly what the flag is for.
 
-**But not on a public address.** The flag says you meant an open deployment; it does not say who can
-reach it. If `ORBO_PUBLIC_URL`, `ORBO_APP_URL` or any `TRUSTED_ORIGINS` entry is an address
-the public internet routes to, the deployment refuses to start and names it. Loopback is silent. A
+**Under `NODE_ENV=production` the ask is refused outright.** The container image and the Helm chart
+set production for every deployment, and under it `ORBO_SINGLE_USER=true` (and its former name)
+refuses to start rather than be honoured: one administrator and no sign-in is a development
+convenience, and a production deployment is reachable by people who are not its administrator.
+Configure an identity provider instead. `ORBO_DEV_NO_AUTH=true`, the flag's former name, is still
+honoured outside production — with a warning telling you to rename the line to
+`ORBO_SINGLE_USER` — and is deprecated.
+
+**But not on a public address.** The ask is not enough even outside production; the deployment also
+refuses where somebody else can arrive. If `ORBO_PUBLIC_URL`, `ORBO_APP_URL` or any
+`TRUSTED_ORIGINS` entry is an address the public internet routes to, the deployment refuses to
+start and names it. Loopback is silent. A
 private address is allowed and warned about once at boot, because a home server, a Tailnet, a VPN
 address and a `.local` name are what this flag is mostly used for, and anybody on that network is
 the administrator. A value that cannot be parsed as a URL counts as public, because nobody checked
@@ -378,6 +398,13 @@ refused at start-up rather than at somebody's first attempt to sign in.
 `INITIAL_ADMIN_EMAILS` is required because nothing else grants the administrator role at first: an
 address it names becomes an administrator at every sign-in and cannot be demoted from the People
 screen, which is what guarantees a way back in. Everybody else's role is decided there instead.
+
+Session lifetime is environment, not a screen: `ORBO_SESSION_TTL_DAYS` (default 7) is how long a
+sign-in session lasts, and the optional `ORBO_SESSION_UPDATE_AGE_SECONDS` how often an in-use
+session is rewritten as active, where `0` renews on every use and unset keeps better-auth's
+once-a-day cadence. Both must be whole numbers of the unit the name says, or the deployment refuses
+to start — an expiry that quietly fell back to its default is a boundary somebody believes they set
+and did not.
 
 SAML and OpenID Connect providers are not configured here. They are registered while the deployment
 runs, under Admin → Identity providers, and routed by email domain.

@@ -229,6 +229,11 @@ describe("every curated entry is asked which credential it takes", () => {
 
     for (const entry of CATALOGUE) {
       const kind = serverCredentialKind(entry);
+      // Per-instance entries carry no fixed host: the caller names the loopback bridge, and the
+      // anchored pattern keeps it there. Without a host the store cannot resolve the entry at all.
+      const instanceHost = entry.hostPattern
+        ? "http://127.0.0.1:4310"
+        : undefined;
 
       if (kind === null) {
         // Takes none from the caller, so any id is refused, including one of the right kind.
@@ -237,6 +242,7 @@ describe("every curated entry is asked which credential it takes", () => {
             key: entry.key,
             credentialId: deploymentCredentialId,
             by: "admin@example.com",
+            instanceHost,
           }),
         ).rejects.toBeInstanceOf(CustomServerRefusedError);
         continue;
@@ -250,6 +256,7 @@ describe("every curated entry is asked which credential it takes", () => {
           key: entry.key,
           credentialId: deploymentCredentialId,
           by: "admin@example.com",
+          instanceHost,
         }),
       ).rejects.toBeInstanceOf(CustomServerRefusedError);
     }

@@ -1,6 +1,6 @@
+import { describe, expect, test } from "bun:test";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
-import { describe, expect, test } from "bun:test";
 
 function isPublicAddress(address: string): boolean {
   const ip = address.toLowerCase().replace(/^\[|\]$/g, "");

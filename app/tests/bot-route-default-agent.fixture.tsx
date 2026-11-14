@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, spyOn } from "bun:test";
+import * as ReactCoreV2 from "@copilotkit/react-core/v2";
 import { useState } from "react";
 import * as ActiveBot from "@/lib/copilot/active-bot";
 import * as BotThread from "@/lib/copilot/bot-thread";
 import * as StoppedTurn from "@/lib/copilot/stopped-turn";
-import * as ReactCoreV2 from "@copilotkit/react-core/v2";
 
 /**
  * Restorable namespace spies rather than `mock.module`, which bun cannot unregister. `mock.module`

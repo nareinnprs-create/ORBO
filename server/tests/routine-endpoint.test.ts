@@ -11,7 +11,7 @@ import { testEnvironment } from "./support/environment";
  * server/src/app.ts and server/src/config.ts.
  */
 
-const SECRET = "worker-shared-secret";
+const SECRET = "worker-shared-secret-0123456789";
 
 function stubRunner(): { runner: RoutineRunner; calls: string[] } {
   const calls: string[] = [];

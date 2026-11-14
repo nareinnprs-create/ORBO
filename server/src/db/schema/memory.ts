@@ -106,3 +106,28 @@ export const personalMemories = pgTable(
       .where(sql`${table.formedBy} = 'bot'`),
   ],
 );
+
+/**
+ * How far mining has read each conversation it read at all.
+ *
+ * One row per Intelligence thread, written after a pass mined it. A conversation is offered again
+ * only when something was said in it after this date, so a quiet channel costs one indexed lookup
+ * per pass and a chatty one is re-read whole — the transcript read carries no message dates, so
+ * there is nothing finer to cut on.
+ */
+export const memoryMining = pgTable("memory_mining", {
+  threadId: text("thread_id").primaryKey(),
+  ownerUserId: text("owner_user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  agentId: text("agent_id")
+    .notNull()
+    .references(() => agents.id, { onDelete: "cascade" }),
+  minedAt: timestamp("mined_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});

@@ -13,7 +13,7 @@ import { createDatabase } from "../src/db/client";
 import { loadTenantPackage } from "../src/tenant-package";
 import { testEnvironment } from "./support/environment";
 
-const fixtureToken = "synthetic-deployment-token";
+const fixtureToken = "synthetic-deployment-token-0123456";
 const encryptionKey = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
 
 /** Real query construction, with only the SQL execution boundary replaced. No database connects. */

@@ -15,18 +15,17 @@
  * Pure apart from the seams: page fetching arrives as an injected `fetchPage`, time
  * as an injected `now`, and notification rows go through an injected
  * `NotificationWriter`. Nothing here opens a database, which is why the tests run
- * with in-memory fakes and no Postgres (Docker is down).
- *
- * Production wiring (not this slice): implement `NotificationWriter` over the
- * `notifications` table the way `notifications/routes.ts` reads it — owner-scoped,
- * one row per key — storing the dedup key as the row id and inserting with
- * `onConflictDoNothing` (the drizzle form of the legacy `insertIfAbsent` dedup).
- * Persist the returned `monitor` update onto the `monitors` row. No new tables:
- * the notification IS the alert record (D9:A).
+ * with in-memory fakes and no Postgres. The production wiring lives in
+ * `./store.ts`: the `NotificationWriter` over the `notifications` table (owner-scoped,
+ * the dedup key as the row id, `onConflictDoNothing` — the drizzle form of the legacy
+ * `insertIfAbsent` dedup), the monitor update persisted onto the `monitors` row, and
+ * the due sweep that ties them together. No new tables: the notification IS the alert
+ * record (D9:A).
  *
  * Follow-ups, deliberately out of this slice:
- * - `consecutiveFailures` / `alertSequence` / `lastTimelessHash` need columns on
- *   `monitors` (TD-09 collapse plan step 2) before a real scheduler can persist them.
+ * - The backoff/pause/sequence columns now exist (`consecutive_failures`,
+ *   `alert_sequence`, `last_timeless_hash`; TD-09 step 2), so a real scheduler can
+ *   persist this module's state.
  * - `contains` / `price_below` notify on every matching poll while the condition
  *   holds (level-triggered). The legacy rising edge (`previouslyMatched`) needs a
  *   `lastMatched` column with the same collapse.
@@ -36,8 +35,8 @@
  *   baseline) needs the `monitor-pages` baseline, which does not exist yet.
  */
 import {
-  checkWatch,
   type Clock,
+  checkWatch,
   type FetchPage,
   type WatchMonitor,
 } from "./check";
@@ -51,9 +50,9 @@ export const MAX_BACKOFF_MINUTES = 60;
 export type FanoutMonitorStatus = "active" | "paused" | "stopped";
 
 /**
- * The monitor fields fan-out reads. A full `monitors` row plus fan-out state
- * satisfies this; the extra counters are carried by the caller until their columns
- * land (see header).
+ * The monitor fields fan-out reads. A full `monitors` row satisfies this; the row's
+ * fan-out counters (`consecutive_failures`, `alert_sequence`, `last_timeless_hash`,
+ * TD-09 step 2) are what makes the state persistable across restarts.
  */
 export interface FanoutMonitor extends WatchMonitor {
   ownerUserId: string;
