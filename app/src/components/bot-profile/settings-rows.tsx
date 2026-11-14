@@ -1,4 +1,5 @@
 import {
+  IconBinary,
   IconBrain,
   IconChecks,
   IconChevronRight,
@@ -50,6 +51,7 @@ type Row = {
     | "/bots/$agentId/approvals"
     | "/bots/$agentId/routines"
     | "/bots/$agentId/access"
+    | "/bots/$agentId/rea"
     | "/bots/$agentId/sharing"
     | "/bots/$agentId/setup";
   title: string;
@@ -160,6 +162,20 @@ export function BotSettingsRows({ agent }: { agent: AgentProfile }) {
         ? accessSummary(
             plugins.data.skills.length,
             connectorCount(plugins.data),
+          )
+        : "",
+    },
+    {
+      to: "/bots/$agentId/rea",
+      title: "Reverse engineering",
+      icon: IconBinary,
+      summary: plugins.data
+        ? countLabel(
+            plugins.data.tools.filter((tool) => tool.ref.startsWith("rea/"))
+              .length,
+            "tool",
+            "tools",
+            "No tools",
           )
         : "",
     },
