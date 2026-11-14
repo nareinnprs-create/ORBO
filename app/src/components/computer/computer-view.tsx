@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { supplySecret } from "@/lib/computers/control";
 import {
   readPageFrame,
   readScreenshot,
@@ -9,6 +8,8 @@ import {
 import { useComputerControl } from "@/lib/computers/use-control";
 import { ChannelAvatar } from "../channels/avatar";
 import { ComputerControlButton } from "./computer-controls";
+import { OverlayControls } from "./computer-overlay-controls";
+import { ComputerSecretForm } from "./computer-secret-form";
 import { DemonstrationRecorder } from "./demonstration-recorder";
 import { LiveScreen } from "./live-screen";
 import { useElementVisible, usePageVisible } from "./preview-visibility";
@@ -257,14 +258,11 @@ export function ComputerView({
     control,
     busy: changingControl,
     change: changeControl,
-    refresh: refreshControl,
   } = useComputerControl(computerId, !settled);
-  /** Held only until it is sent. Never lifted into a URL, a log, or anything that outlives this form. */
-  const [secret, setSecret] = useState("");
-  const [secretProblem, setSecretProblem] = useState<string | null>(null);
-  const [sendingSecret, setSendingSecret] = useState(false);
   const pageVisible = usePageVisible();
   const [previewRef, previewIntersecting] = useElementVisible<HTMLElement>();
+  /** Client-side freeze of the live view: the socket keeps running, frames stop being drawn. */
+  const [paused, setPaused] = useState(false);
   const driving = control?.holder === "human" && !control.transitioning;
   /** Read by the polling loop without restarting it on control changes. */
   const drivingRef = useRef(false);
@@ -379,6 +377,11 @@ export function ComputerView({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+  }, [expanded]);
+
+  // A pause belongs to one overlay session; reopening must not open on a frozen picture.
+  useEffect(() => {
+    if (!expanded) setPaused(false);
   }, [expanded]);
 
   // Always render the card frame; help/secret controls live below the conditional picture.
@@ -516,58 +519,14 @@ export function ComputerView({
             screen and take control again to check it.
           </p>
         ) : null}
-        {/*
-          Secret values go directly to the page path and are never included in the conversation.
-          Audit records that a secret was supplied, not the value.
-        */}
         {control?.secretWanted ? (
-          <form
-            className="border-t bg-muted/40 px-3 py-2 text-sm"
-            onSubmit={async (event) => {
-              event.preventDefault();
-              if (!secret || sendingSecret) return;
-              setSendingSecret(true);
+          <ComputerSecretForm
+            computerId={computerId}
+            onSent={() => {
               watchUntil.current = Date.now() + SECRET_CONFIRM_MS;
-              const result = await supplySecret(computerId, secret);
-              setSendingSecret(false);
-              // Clear even on failure so plaintext is not left in the DOM.
-              setSecret("");
-              setSecretProblem(result.ok ? null : (result.error ?? null));
-              await refreshControl?.();
             }}
-          >
-            <label className="block" htmlFor="orbo-secret">
-              <span className="font-medium">The assistant needs </span>
-              <span>{control.secretWanted}</span>
-            </label>
-            <div className="mt-1.5 flex gap-2">
-              <input
-                id="orbo-secret"
-                type="password"
-                value={secret}
-                onChange={(event) => setSecret(event.target.value)}
-                autoComplete="off"
-                autoCorrect="off"
-                spellCheck={false}
-                placeholder="Typed here, never shown to the assistant"
-                className="min-w-0 flex-1 rounded-md border bg-background px-2 py-1 text-sm"
-              />
-              <button
-                type="submit"
-                disabled={!secret || sendingSecret}
-                className="shrink-0 rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
-              >
-                {sendingSecret ? "Sending…" : "Send to the page"}
-              </button>
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              This goes straight to the page. It is not shown in the
-              conversation and the assistant never receives it.
-            </p>
-            {secretProblem ? (
-              <p className="mt-1 text-xs text-destructive">{secretProblem}</p>
-            ) : null}
-          </form>
+            wanted={control.secretWanted}
+          />
         ) : null}
 
         {!settled ? (
@@ -644,6 +603,7 @@ export function ComputerView({
                         computerId={computerId}
                         driving={driving}
                         onProblem={setStreamProblem}
+                        paused={paused}
                         retryKey={retryKey}
                       />
                       {/*
@@ -685,16 +645,17 @@ export function ComputerView({
                   offering control of whatever the Bot has open now. Those sentences are about the
                   present and this view is a record; a record does not get a steering wheel.
                 */}
-                {control?.transitioning ? (
-                  <p className="mt-3 text-center text-sm">
-                    Finishing the current action before giving you control…
-                  </p>
-                ) : null}
                 {settled ? null : (
-                  <div className="mt-4 flex items-center justify-center gap-4">
-                    <span className="flex min-w-0 items-center gap-2 text-sm">
+                  <>
+                    <OverlayControls
+                      canPause={showLiveScreen && !driving}
+                      computerId={computerId}
+                      onPauseChange={setPaused}
+                      paused={paused}
+                    />
+                    <div className="mt-4 flex items-center justify-center gap-4">
                       {name ? (
-                        <span className="flex shrink-0 items-center gap-1.5 font-medium">
+                        <span className="flex shrink-0 items-center gap-1.5 font-medium text-sm">
                           <ChannelAvatar
                             participantIds={[computerId]}
                             size={20}
@@ -702,22 +663,9 @@ export function ComputerView({
                           {name}
                         </span>
                       ) : null}
-                      {driving ? (
-                        <span className="truncate text-muted-foreground">
-                          You have control — click and type on the page.
-                          {control?.reason ? ` ${control.reason}` : null}
-                        </span>
-                      ) : control?.requested ? (
-                        <span className="truncate text-muted-foreground">
-                          <strong className="font-medium text-foreground">
-                            The assistant needs you.
-                          </strong>{" "}
-                          {control.reason}
-                        </span>
-                      ) : null}
-                    </span>
-                    <ComputerControlButton computerId={computerId} />
-                  </div>
+                      <ComputerControlButton computerId={computerId} />
+                    </div>
+                  </>
                 )}
                 {!settled && (
                   <DemonstrationRecorder
