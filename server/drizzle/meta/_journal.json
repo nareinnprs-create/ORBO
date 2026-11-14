@@ -407,6 +407,13 @@
       "when": 1794531980128,
       "tag": "0057_volatile_marvex",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1794626824579,
+      "tag": "0058_even_rumiko_fujikawa",
+      "breakpoints": true
     }
   ]
 }
