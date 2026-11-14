@@ -1,6 +1,7 @@
 import {
   IconBolt,
   IconBox,
+  IconLayoutDashboard,
   IconLogout,
   IconPlus,
   IconSearch,
@@ -355,6 +356,23 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu className="gap-px">
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              className="hover:bg-foreground/5 h-10"
+              render={(props) => (
+                <Link
+                  {...props}
+                  to="/manager"
+                  activeProps={{ className: "bg-foreground/5" }}
+                />
+              )}
+            >
+              <div className="size-[28px] flex items-center justify-center">
+                <IconLayoutDashboard />
+              </div>
+              <span className="text-sm">Dashboard</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton
               className="hover:bg-foreground/5 h-10"
