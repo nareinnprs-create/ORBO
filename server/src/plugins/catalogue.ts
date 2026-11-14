@@ -160,9 +160,10 @@ export type CatalogueEntry = {
  * asserts more than this deployment can stand behind. They are in the history if they are wanted
  * back, and re-adding one is a review of that vendor rather than a revert.
  *
- * `deployment-bearer` therefore has no entry using it. The shape stays because the call path still
- * needs it: a server an administrator added by URL has no catalogue entry at all, and that is the
- * branch it falls into.
+ * `deployment-bearer` was dormant after that removal and is live again here: Parallel's API-key
+ * entry, REA, GitHub and GitLab each hold one token for the deployment. It also still covers the
+ * branch a catalogue entry never reaches: a server an administrator added by URL has no entry at
+ * all, and that is the branch it falls into.
  *
  * Routines is the first entry here that is not a remote vendor at all — no host to dial, nothing
  * outside this process to trust. It is in the catalogue anyway, on purpose rather than by oversight:
@@ -312,6 +313,121 @@ export const CATALOGUE: readonly CatalogueEntry[] = Object.freeze([
       "notion-update-view",
     ]),
     docsUrl: "https://developers.notion.com/guides/mcp/build-mcp-client",
+  },
+  {
+    key: "github",
+    title: "GitHub",
+    vendor: "GitHub",
+    summary:
+      "Repositories, issues, pull requests, gists, Actions runs and notifications of the token's owner.",
+    /*
+     * GitHub publishes the remote MCP server on the Copilot API host — NOT `api.github.com`, which
+     * is the ordinary REST API and the host a reasonable guess would name. The endpoint also serves
+     * narrowed variants (`/x/{toolset}` paths, a `/readonly` suffix, the `X-MCP-Readonly` header);
+     * none are pinned, because narrowing what a Bot may call is done by writeTools below, where a
+     * person reviewed it, rather than by asking the vendor to serve a different tool list. The
+     * trailing slash is part of the vendor's published URL, not a typo.
+     */
+    host: "https://api.githubcopilot.com",
+    path: "/mcp/",
+    /*
+     * The token path, not the OAuth one. GitHub documents both; the PAT is what an administrator
+     * holding a token for the deployment's own automation already has, and the server honours
+     * whichever scopes it carries — so the write barrier below is what governs the writes, and a
+     * broad token cannot make anything here read-only that this list calls a write.
+     */
+    auth: { kind: "deployment-bearer" },
+    /*
+     * Every mutating tool the vendor's published list names — `*_write` suffixes and the mutating
+     * verbs GitHub's own naming leaves unsuffixed. Lean over-inclusive per the doctrine on
+     * writeTools above: an advertised tool missing from here would classify as a read, so
+     * reconciling this list against the live listing on the first Refresh tools is required.
+     */
+    writeTools: Object.freeze([
+      "actions_run_trigger",
+      "add_comment_to_pending_review",
+      "add_issue_comment",
+      "add_reply_to_pull_request_comment",
+      "assign_copilot_to_issue",
+      "assign_copilot_to_issue_with_intent",
+      "create_branch",
+      "create_gist",
+      "create_or_update_file",
+      "create_pull_request",
+      "create_pull_request_with_copilot",
+      "create_repository",
+      "create_repository_ruleset",
+      "custom_properties_write",
+      "delete_file",
+      "delete_repository",
+      "dismiss_notification",
+      "discussion_comment_write",
+      "fork_repository",
+      "issue_write",
+      "label_write",
+      "mark_all_notifications_read",
+      "manage_notification_subscription",
+      "manage_repository_notification_subscription",
+      "merge_pull_request",
+      "projects_write",
+      "pull_request_review_write",
+      "push_files",
+      "request_copilot_review",
+      "star_repository",
+      "sub_issue_write",
+      "unstar_repository",
+      "update_gist",
+      "update_issue_comment",
+      "update_pull_request",
+      "update_pull_request_branch",
+    ]),
+    docsUrl:
+      "https://docs.github.com/en/copilot/how-tos/copilot-in-your-ide/customize-copilot/extend-copilot-with-tools-and-context/set-up-the-github-mcp-server",
+  },
+  {
+    key: "gitlab",
+    title: "GitLab",
+    vendor: "GitLab",
+    summary:
+      "Projects, issues, merge requests, pipelines and work items of the token's owner.",
+    /*
+     * gitlab.com only. The vendor documents self-managed instances at <gitlab.example.com>, and a
+     * host per customer means a pattern rather than a pin — the shape REA takes below, and putting
+     * a self-managed instance in is a review of what a token aimed at an instance this deployment
+     * does not operate may reach, not an edit. The endpoint also honours a tool-name-prefix header
+     * ORBO deliberately does not send, so tool names arrive bare and are classified against this
+     * list as written.
+     */
+    host: "https://gitlab.com",
+    path: "/api/v4/mcp",
+    /*
+     * Only a fine-grained PAT (MCP tool resource, Execute permission) works here: legacy PATs —
+     * and project and group tokens — cannot carry the `mcp` scope and are refused with 403
+     * `insufficient_scope` however broad their `api` scope. A wrong token therefore fails at the
+     * vendor loudly rather than connecting half-capable, which is the direction to be wrong in.
+     */
+    auth: { kind: "deployment-bearer" },
+    /*
+     * The mutating tools of the vendor's published list; its reads are named `get_*`, `list_*` and
+     * `search_*`, and nothing here calls one a write. Same doctrine as every entry: reconcile
+     * against the live listing on the first Refresh tools.
+     */
+    writeTools: Object.freeze([
+      "add_branch",
+      "add_commit",
+      "attach_scan_profile",
+      "link_work_items",
+      "save_merge_request",
+      "save_merge_request_review",
+      "save_note",
+      "save_pipeline",
+      "save_project",
+      "save_vulnerability",
+      "save_work_item",
+      "send_duo_session_input",
+      "start_duo_session",
+    ]),
+    docsUrl: "https://docs.gitlab.com/user/model_context_protocol/mcp_server/",
   },
   {
     key: "routines",
