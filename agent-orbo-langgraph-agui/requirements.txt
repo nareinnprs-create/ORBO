@@ -7,6 +7,10 @@ langgraph==1.2.18
 langchain==1.4.7
 langchain-openai==1.6.0
 langchain-anthropic==1.7.7
+# The transitive `anthropic` floats under langchain-anthropic (it accepts >=0.120.0).
+# Pin the release this suite was verified against so fresh installs resolve the same
+# set the sibling harnesses do (agent-orbo-pydantic-ai, agent-orbo-ag2 pin theirs).
+anthropic==2.3.0
 langchain-google-genai==4.4.2
 # Same fastapi pin as the other Python harnesses (agent-orbo-pydantic-ai, agent-orbo-ag2, agent-orbo-langroid).
 fastapi==0.144.0
