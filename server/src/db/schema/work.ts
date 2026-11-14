@@ -123,9 +123,12 @@ export const tasks = pgTable(
     id: text("id").primaryKey(),
     /** The identity of the work, unique across every producer. See the header. */
     key: text("key").notNull(),
-    /** What offered it: a cron routine, a proactive setting, a spending import. */
+    /**
+     * What offered it: a cron routine, a proactive setting, a spending import,
+     * an imported watch (TD-09) still due its next check.
+     */
     producerKind: text("producer_kind")
-      .$type<"routine" | "proactive" | "finance">()
+      .$type<"routine" | "proactive" | "finance" | "monitor">()
       .notNull(),
     /** The producer's own id: the routine id, `proactive:<settingId>`, the importer. */
     producerId: text("producer_id").notNull(),
@@ -147,7 +150,7 @@ export const tasks = pgTable(
     ),
     check(
       "tasks_producer_kind_check",
-      sql`${table.producerKind} IN ('routine', 'proactive', 'finance')`,
+      sql`${table.producerKind} IN ('routine', 'proactive', 'finance', 'monitor')`,
     ),
   ],
 );

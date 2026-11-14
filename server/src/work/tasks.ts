@@ -35,7 +35,7 @@ export type TaskStatus = "open" | "running" | "succeeded" | "failed";
  * `routine` producer, TD-05's namespace-by-convention); kinds are their own column now,
  * so the key namespace and the producer kind each say the one true thing about a row.
  */
-export type TaskProducerKind = "routine" | "proactive" | "finance";
+export type TaskProducerKind = "routine" | "proactive" | "finance" | "monitor";
 
 export type TaskProducer = { kind: TaskProducerKind; id: string };
 
