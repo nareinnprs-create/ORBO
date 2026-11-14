@@ -172,6 +172,7 @@ export function createApprovalService(
       customRulesEnabled: team.customRulesEnabled,
       autoReview: preferences.autoReview || team.enforceAutoReview,
       askBeforeChanges: preferences.enabled,
+      autoRunReads: team.autoRunReads,
       ...(options.review ? { model: options.review } : {}),
     });
     // An unremarkable read is not a verdict anybody asked for; everything else is on the trail.

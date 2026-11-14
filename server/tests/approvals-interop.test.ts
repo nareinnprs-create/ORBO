@@ -167,6 +167,7 @@ function memoryStore(options: {
         enforceAutoReview: false,
         customRulesEnabled: true,
         hostCommandsCap: "allow",
+        autoRunReads: true,
         ...options.team,
       }),
       setTeamSettings: async () => {

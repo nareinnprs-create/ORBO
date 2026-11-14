@@ -224,6 +224,29 @@ test("host commands: the member's setting under the team cap, stricter wins", as
   expect(await service.hostCommandPolicy(owner)).toBe("allow");
 });
 
+test("the read tier auto-runs until an administrator asks for reads too", async () => {
+  const read = () =>
+    candidate({
+      toolRef: "mcp/wiki/search",
+      effect: "read",
+      scope: "wiki",
+      args: { query: "notes" },
+    });
+  await expect(service.gate(read())).resolves.toBeUndefined();
+  await service.setTeamSettings(admin, { autoRunReads: false });
+  const gated = read();
+  expect(await suspends(service.gate(gated))).toBeTrue();
+  const [request] = (await store.list(owner)).filter(
+    (row) => row.action.toolCallId === gated.continuation?.toolCallId,
+  );
+  expect(request?.action.policy).toMatchObject({
+    behaviour: "ask",
+    source: "default",
+  });
+  await service.setTeamSettings(admin, { autoRunReads: true });
+  await expect(service.gate(read())).resolves.toBeUndefined();
+});
+
 test("a saved rule is changed in place, only by its owner, and the change is on the trail", async () => {
   const rule = await service.createRule(owner, {
     botId: "*",

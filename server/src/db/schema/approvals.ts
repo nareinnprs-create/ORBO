@@ -56,6 +56,8 @@ export const approvalTeamSettings = pgTable(
       .$type<HostCommandPolicy>()
       .notNull()
       .default("allow"),
+    /** Whether the read risk tier auto-runs; false asks before every action, reads included. */
+    autoRunReads: boolean("auto_run_reads").notNull().default(true),
     updatedBy: text("updated_by").references(() => users.id, {
       onDelete: "set null",
     }),

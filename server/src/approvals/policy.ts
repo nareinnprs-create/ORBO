@@ -145,6 +145,16 @@ export function safetyRequirement(
 }
 
 /**
+ * The risk tier of an action, straight from the tool classification: a read only looks, anything
+ * else can change something. The tier is what auto-runs or not: reads by default, writes only when
+ * a rule or the person's own "ask before changes" preference allows.
+ */
+export type ToolRiskTier = "read" | "write";
+export function toolRiskTier(effect: string): ToolRiskTier {
+  return effect === "read" ? "read" : "write";
+}
+
+/**
  * Whether auto-review looks at this action at all: anything that could affect an account or share
  * information, which is every effect other than a read, less memory writes and settings changes.
  */
@@ -284,6 +294,8 @@ export async function decideAction(input: {
   customRulesEnabled: boolean;
   autoReview: boolean;
   askBeforeChanges: boolean;
+  /** Whether the read tier auto-runs. False (an administrator's floor) asks before reads too. */
+  autoRunReads?: boolean;
   model?: ReviewModel;
 }): Promise<ApprovalPolicyOutcome> {
   const { candidate } = input;
@@ -397,11 +409,19 @@ export async function decideAction(input: {
       reason: "A rule allows this kind of action.",
       ...(review ? { review } : {}),
     };
-  if (input.askBeforeChanges && candidate.effect !== "read")
+  if (toolRiskTier(candidate.effect) === "write" && input.askBeforeChanges)
     return {
       behaviour: "ask",
       source: "default",
       reason: "You asked to review changes before they happen.",
+      ...(review ? { review } : {}),
+    };
+  if (toolRiskTier(candidate.effect) === "read" && input.autoRunReads === false)
+    return {
+      behaviour: "ask",
+      source: "default",
+      reason:
+        "This workspace reviews every action with you before it runs, reads included.",
       ...(review ? { review } : {}),
     };
   return {

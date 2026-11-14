@@ -128,6 +128,7 @@ export function createApprovalRoutes(
         enforceAutoReview: z.boolean().optional(),
         customRulesEnabled: z.boolean().optional(),
         hostCommandsCap: hostCommands.optional(),
+        autoRunReads: z.boolean().optional(),
       })
       .parse(await context.req.json());
     return context.json(
