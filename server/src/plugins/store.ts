@@ -139,6 +139,14 @@ export type ToolRecord = {
    * of a claim rather than a claim of safety.
    */
   destructive: boolean;
+  /**
+   * Whether an administrator has switched this tool off on its server.
+   *
+   * Still listed, because the switch is a fact somebody may reverse, and a hidden tool would
+   * read on the page as never having existed. The tool stays granted and stays out of every
+   * model's menu, and a call to it is refused at the gate.
+   */
+  disabled: boolean;
   grantedTo: string[];
 };
 
@@ -4430,6 +4438,7 @@ export function createPluginStore(options: PluginStoreOptions) {
                 ref,
                 effect: classifyTool(entry, tool.name, true, tool.effect),
                 destructive: tool.destructive,
+                disabled: row.disabledTools.includes(tool.name),
                 grantedTo: grants.get(ref) ?? [],
               };
             }),
@@ -5062,6 +5071,63 @@ export function createPluginStore(options: PluginStoreOptions) {
       });
     },
 
+    /**
+     * Switch one tool on a server off, or back on.
+     *
+     * WRITTEN ON THE SERVER, NOT ON THE TOOL ROW, because `mcp_tools` is replaced wholesale by
+     * every refresh and a switch-off there would be undone by the next Refresh press — the one
+     * action the screen sits next to. Grants are left exactly as they are: a grant is a decision
+     * about a Bot, this is a decision about a tool, and re-enabling must not make whoever re-grant
+     * every holder the administrator just silenced.
+     *
+     * AN UNKNOWN SERVER IS REFUSED, the same words `requireServer` uses, so a route cannot report
+     * success over a row that was never there.
+     */
+    async setToolDisabled(input: {
+      serverId: string;
+      toolName: string;
+      disabled: boolean;
+      by: string;
+    }): Promise<void> {
+      const [row] = await database
+        .select({ disabledTools: mcpServers.disabledTools })
+        .from(mcpServers)
+        .where(eq(mcpServers.id, input.serverId))
+        .limit(1);
+      if (!row) throw new CatalogueEntryUnknownError(input.serverId);
+
+      // Rebuilt from the whole list rather than spliced, so disabling a name already in the
+      // column, or enabling one that is not, writes the same answer a first press would.
+      const disabledTools = input.disabled
+        ? row.disabledTools.includes(input.toolName)
+          ? row.disabledTools
+          : [...row.disabledTools, input.toolName]
+        : row.disabledTools.filter((name) => name !== input.toolName);
+      if (
+        disabledTools.length === row.disabledTools.length &&
+        disabledTools.every((name, index) => name === row.disabledTools[index])
+      ) {
+        return;
+      }
+
+      await database
+        .update(mcpServers)
+        .set({ disabledTools, updatedAt: new Date() })
+        .where(eq(mcpServers.id, input.serverId));
+
+      await recordAuditEvent(auditStore, {
+        eventType: "configuration.changed",
+        targetType: "mcp_server",
+        targetId: input.serverId,
+        payload: {
+          actor: input.by,
+          change: input.disabled ? "tool_disabled" : "tool_enabled",
+          server: input.serverId,
+          tool: input.toolName,
+        },
+      });
+    },
+
     /** Everything one Bot may use. The runtime asks this and offers exactly what comes back. */
     async listForAgent(agentId: string): Promise<GrantedPlugins> {
       const held = await database
@@ -5101,10 +5167,34 @@ export function createPluginStore(options: PluginStoreOptions) {
               .from(mcpTools)
               .where(inArray(mcpTools.serverId, grantedServers))
               .orderBy(asc(mcpTools.name));
+
+      /*
+       * What each of those servers has switched off, in one read for the whole set. A disabled tool
+       * is still granted and still advertised; this is the read that keeps it out of the offer, so
+       * the model is never handed a name its call would be refused for.
+       */
+      const disabledTools = new Map(
+        grantedServers.length === 0
+          ? []
+          : (
+              await database
+                .select({
+                  id: mcpServers.id,
+                  disabledTools: mcpServers.disabledTools,
+                })
+                .from(mcpServers)
+                .where(inArray(mcpServers.id, grantedServers))
+            ).map((row) => [row.id, row.disabledTools] as const),
+      );
+
       // A set, so this is a lookup per row rather than a walk of the grants per row.
       const granted = new Set(toolRefs);
       const grantedTools = toolRows
-        .filter((row) => granted.has(`${row.serverId}/${row.name}`))
+        .filter(
+          (row) =>
+            granted.has(`${row.serverId}/${row.name}`) &&
+            !(disabledTools.get(row.serverId) ?? []).includes(row.name),
+        )
         .map((row) => {
           const ref = `${row.serverId}/${row.name}`;
           return {
@@ -7673,6 +7763,35 @@ export function createPluginStore(options: PluginStoreOptions) {
       }
 
       const { row, entry, access, app } = await requireServer(serverId);
+
+      /*
+       * OFF BEFORE THE ADVERTISED-TOOLS LOOKUP, the policy engine, the vault and the vendor. A
+       * disabled tool is a switch an administrator has thrown, and everything downstream of here
+       * is the machinery that switch exists to stop — including the confirmation prompts a write
+       * would raise, which must not be answered with the model's next attempt instead.
+       *
+       * The grant check has already passed, so this is a granted tool standing switched off: the
+       * one refusal a re-enable reverses in place, which is why the trail records it as a refusal
+       * of its own rather than folding it into `not_granted`.
+       */
+      if (row.disabledTools.includes(toolName)) {
+        const reason = `The tool ${toolName} has been switched off on ${serverId}.`;
+        await recordAuditEvent(auditStore, {
+          eventType: "mcp.call_rejected",
+          targetType: "mcp_tool",
+          targetId: input.ref,
+          ...(input.initiator ? { initiator: input.initiator } : {}),
+          payload: {
+            actor: auditActor,
+            bot: input.botId,
+            server: serverId,
+            tool: toolName,
+            refusal: "tool_disabled",
+            reason,
+          },
+        });
+        throw new PluginRefusedError(reason, null);
+      }
 
       const advertised = await database
         .select({

@@ -50,6 +50,7 @@ import { redirectUriFor } from "../src/plugins/oauth";
 import type { AccountRef } from "../src/plugins/shared-accounts";
 import {
   type AccessToken,
+  CatalogueEntryUnknownError,
   CustomServerRefusedError,
   createPluginStore,
   exchangeRefreshTokenOverHttp,
@@ -3966,6 +3967,255 @@ describe("a vendor reply that is not a token", () => {
     } finally {
       globalThis.fetch = realFetch;
     }
+  });
+});
+
+/**
+ * Switching one tool of a server off.
+ *
+ * The switch is the deployment-level answer to a question the grant surface answers per Bot: a
+ * grant says which Bots may reach a tool, this says whether the deployment offers the tool at all.
+ * The properties under test are the three the column buys — the tool stays granted and stays out of
+ * the offer, a call to it is refused before anything downstream of the gate runs, and re-enabling
+ * puts it back exactly as it was, grants included.
+ */
+describe("a tool switched off on its server", () => {
+  const toggleServerId = `toggle_server_${suite}`;
+  const toggleHolderId = `agent_toggle_holder_${suite}`;
+  const toggleRefusedId = `agent_toggle_refused_${suite}`;
+  const toggleAgainId = `agent_toggle_again_${suite}`;
+  const enabledTool = `toggle_on_${suite}`;
+  const disabledTool = `toggle_off_${suite}`;
+  const disabledRef = `${toggleServerId}/${disabledTool}`;
+
+  /**
+   * A store with the vendor seam stubbed, because the file-level one has no `callVendor`.
+   *
+   * The refusal tests must show the vendor was never reached, which is only provable through a seam
+   * that records; the success test needs an answer that is not a throw. Both are the same stub.
+   */
+  let vendorReached: string[] = [];
+  function toggleStore() {
+    vendorReached = [];
+    return createPluginStore({
+      database,
+      auditStore: createAuditStore(database),
+      credentials: credentialsStub,
+      encryptionKey: "x".repeat(44),
+      policy: () => policy,
+      // Stops before the network, and records that it was asked at all.
+      callVendor: async (connection) => {
+        vendorReached.push(connection.token ?? "<none>");
+        return { text: "[vendor not reached in tests]", isError: false };
+      },
+    });
+  }
+
+  beforeAll(async () => {
+    await database.insert(mcpServers).values({
+      id: toggleServerId,
+      title: "Toggle",
+      vendor: "Toggle",
+      url: "https://toggle.example/mcp",
+      provenance: "custom",
+    });
+    await database.insert(mcpTools).values([
+      {
+        serverId: toggleServerId,
+        name: enabledTool,
+        description: "stays offered throughout",
+      },
+      {
+        serverId: toggleServerId,
+        name: disabledTool,
+        description: "the one switched off",
+      },
+    ]);
+    await database.insert(agents).values([
+      {
+        id: toggleHolderId,
+        name: "Toggle Holder",
+        type: "built_in",
+        configuration: {},
+      },
+      {
+        id: toggleRefusedId,
+        name: "Toggle Refused",
+        type: "built_in",
+        configuration: {},
+      },
+      {
+        id: toggleAgainId,
+        name: "Toggle Again",
+        type: "built_in",
+        configuration: {},
+      },
+    ]);
+    for (const botId of [toggleHolderId, toggleRefusedId, toggleAgainId]) {
+      await store.grant("mcp", disabledRef, botId, "admin@example.com");
+    }
+    // The sibling the disabled tool is measured against, so the offer test shows a disabled tool
+    // being held BACK rather than the Bot merely holding nothing.
+    await store.grant(
+      "mcp",
+      `${toggleServerId}/${enabledTool}`,
+      toggleHolderId,
+      "admin@example.com",
+    );
+  });
+
+  afterAll(async () => {
+    // Grants cascade off the Bots; the tools cascade off the server.
+    await database
+      .delete(agents)
+      .where(
+        inArray(agents.id, [toggleHolderId, toggleRefusedId, toggleAgainId]),
+      );
+    await database.delete(mcpServers).where(eq(mcpServers.id, toggleServerId));
+  });
+
+  test("disabling hides the tool from the offer and marks it on the listing, leaving the grant alone", async () => {
+    await store.setToolDisabled({
+      serverId: toggleServerId,
+      toolName: disabledTool,
+      disabled: true,
+      by: "admin@example.com",
+    });
+
+    const offered = await store.listForAgent(toggleHolderId);
+    expect(offered.tools.map((tool) => tool.ref)).toEqual([
+      `${toggleServerId}/${enabledTool}`,
+    ]);
+
+    const listed = (await store.listServers()).find(
+      (server) => server.id === toggleServerId,
+    );
+    expect(
+      listed?.tools.map((tool) => ({
+        name: tool.name,
+        disabled: tool.disabled,
+        grantedTo: tool.grantedTo,
+      })),
+    ).toEqual([
+      {
+        name: disabledTool,
+        disabled: true,
+        grantedTo: [toggleHolderId, toggleRefusedId, toggleAgainId],
+      },
+      {
+        name: enabledTool,
+        disabled: false,
+        grantedTo: [toggleHolderId],
+      },
+    ]);
+
+    // The grant is the record of a decision about a Bot, and the switch is not one of those.
+    const grants = await database
+      .select({ agentId: pluginGrants.agentId })
+      .from(pluginGrants)
+      .where(
+        and(
+          eq(pluginGrants.kind, "mcp"),
+          eq(pluginGrants.ref, disabledRef),
+          eq(pluginGrants.agentId, toggleHolderId),
+        ),
+      );
+    expect(grants).toEqual([{ agentId: toggleHolderId }]);
+
+    const [change] = await database
+      .select({ payload: auditEvents.payload })
+      .from(auditEvents)
+      .where(
+        and(
+          eq(auditEvents.targetType, "mcp_server"),
+          eq(auditEvents.targetId, toggleServerId),
+          sinceThisRun(),
+          eq(sql<string>`${auditEvents.payload} ->> 'change'`, "tool_disabled"),
+        ),
+      );
+    expect(change?.payload).toMatchObject({
+      actor: "admin@example.com",
+      server: toggleServerId,
+      tool: disabledTool,
+    });
+  });
+
+  test("a call to a disabled tool is refused at the gate, before the vendor", async () => {
+    const local = toggleStore();
+    await expect(
+      local.callTool({
+        ref: disabledRef,
+        args: {},
+        botId: toggleRefusedId,
+        actorId: "user_asker",
+      }),
+    ).rejects.toBeInstanceOf(PluginRefusedError);
+    expect(vendorReached).toEqual([]);
+
+    const rows = await auditRowsFor(disabledRef, toggleRefusedId, "user_asker");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      eventType: "mcp.call_rejected",
+      payload: expect.objectContaining({ refusal: "tool_disabled" }),
+    });
+  });
+
+  test("re-enabling puts the tool back, grants included, and the call goes out", async () => {
+    await store.setToolDisabled({
+      serverId: toggleServerId,
+      toolName: disabledTool,
+      disabled: false,
+      by: "admin@example.com",
+    });
+
+    const offered = await store.listForAgent(toggleAgainId);
+    expect(offered.tools.map((tool) => tool.ref)).toContain(disabledRef);
+
+    const local = toggleStore();
+    const answer = await local.callTool({
+      ref: disabledRef,
+      args: {},
+      botId: toggleAgainId,
+      actorId: "user_asker",
+    });
+    expect(answer.isError).toBe(false);
+    expect(vendorReached).toHaveLength(1);
+
+    // The call is recorded, and what must not be among its rows is a refusal: this Bot is holding
+    // a granted, enabled tool.
+    const rows = await auditRowsFor(disabledRef, toggleAgainId, "user_asker");
+    expect(rows.some((row) => row.eventType === "mcp.call_rejected")).toBe(
+      false,
+    );
+  });
+
+  test("disabling twice writes the column once, and an unknown server is refused", async () => {
+    await store.setToolDisabled({
+      serverId: toggleServerId,
+      toolName: disabledTool,
+      disabled: true,
+      by: "admin@example.com",
+    });
+    await store.setToolDisabled({
+      serverId: toggleServerId,
+      toolName: disabledTool,
+      disabled: true,
+      by: "admin@example.com",
+    });
+    const [row] = await database
+      .select({ disabledTools: mcpServers.disabledTools })
+      .from(mcpServers)
+      .where(eq(mcpServers.id, toggleServerId));
+    expect(row?.disabledTools).toEqual([disabledTool]);
+
+    await expect(
+      store.setToolDisabled({
+        serverId: `toggle_absent_${suite}`,
+        toolName: disabledTool,
+        disabled: true,
+        by: "admin@example.com",
+      }),
+    ).rejects.toBeInstanceOf(CatalogueEntryUnknownError);
   });
 });
 

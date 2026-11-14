@@ -137,6 +137,15 @@ export const mcpServers = pgTable(
     toolsRefreshedAt: timestamp("tools_refreshed_at", { withTimezone: true }),
     /** The last failure, kept so the Plugins page can say why a server has no tools. */
     lastError: text("last_error"),
+    /**
+     * Tool names an administrator has switched off on this server, as the tool half of a ref.
+     *
+     * On the server rather than on {@link mcpTools}, because a refresh replaces every tool row
+     * wholesale and the switch-off must survive it. Grants on a disabled tool are left alone — a
+     * grant is the record of a decision about a Bot, this is a decision about a tool, and
+     * re-enabling restores the grant exactly as re-advertising a withdrawn tool does.
+     */
+    disabledTools: text("disabled_tools").array().notNull().default([]),
     addedBy: text("added_by"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
