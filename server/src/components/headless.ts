@@ -240,8 +240,61 @@ export type HeadlessComponentSpec = {
 const saved = (what: string) =>
   `The ${what} is saved in this conversation and is drawn when the person opens it.`;
 
+/**
+ * The REA mirrors, declared twice like every other card: the app's sources are not shipped with the
+ * server image, so the schema is restated here and the mirror test fails if the two diverge.
+ */
+const EvidenceBundleProps = z.object({
+  title: z.string().describe("What was analysed, e.g. the app or binary"),
+  caption: z
+    .string()
+    .optional()
+    .describe("One line of context, e.g. which version or which tool"),
+  summary: z
+    .string()
+    .describe("The findings, already written for a person to read"),
+  files: z
+    .array(
+      z.object({
+        name: z.string().describe("File path or module name"),
+        size: z
+          .string()
+          .optional()
+          .describe("Already formatted, e.g. '1.2 MB'"),
+        note: z.string().optional().describe("What this file shows"),
+      }),
+    )
+    .describe("The files in the bundle, in reading order"),
+});
+
+const VersionDiffProps = z.object({
+  title: z.string().describe("What is being compared, e.g. the binary name"),
+  caption: z.string().optional(),
+  from: z.string().describe("The older version label"),
+  to: z.string().describe("The newer version label"),
+  summary: z
+    .string()
+    .optional()
+    .describe("What changed, in a sentence, before the diff"),
+  diff: z
+    .string()
+    .describe("A unified diff, with - and + lines and @@ hunks, as text"),
+});
+
 /** Every display component a headless turn can record. Keyed by the same names the app registers. */
 export const HEADLESS_COMPONENTS: readonly HeadlessComponentSpec[] = [
+  {
+    name: "showEvidenceBundle",
+    title: "Evidence bundle",
+    parameters: EvidenceBundleProps,
+    confirmation: saved("evidence bundle"),
+  },
+  {
+    name: "showVersionDiff",
+    title: "Version diff",
+    parameters: VersionDiffProps,
+    confirmation: saved("version diff"),
+  },
   {
     name: "showAreaChart",
     title: "Area chart",
