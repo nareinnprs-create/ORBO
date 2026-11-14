@@ -14,7 +14,7 @@ function appWithHostDispatcher(
   return createApp(
     loadConfig(
       testEnvironment({
-        ORBO_AGENT_TOOL_TOKEN: "legacy-agent-tool-token",
+        ORBO_AGENT_TOOL_TOKEN: "legacy-agent-tool-token-0123456",
         KEY_ENCRYPTION_KEY: KEY,
       }),
     ),
@@ -74,7 +74,7 @@ describe("host access tools on the signed agent callback route", () => {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-orbo-agent-token": "legacy-agent-tool-token",
+        "x-orbo-agent-token": "legacy-agent-tool-token-0123456",
       },
       body: JSON.stringify({
         name: "host_read_file",

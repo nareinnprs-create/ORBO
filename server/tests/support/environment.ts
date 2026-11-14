@@ -25,7 +25,7 @@ export function testEnvironment(
     INTELLIGENCE_API_KEY: "tenant-api-key",
     COPILOTKIT_LICENSE_TOKEN: "license-token",
     ORBO_MANAGED_AGENT_AG_UI_URL: "http://localhost:4200/ag-ui",
-    ORBO_MANAGED_AGENT_TOKEN: "managed-agent-token",
+    ORBO_MANAGED_AGENT_TOKEN: "managed-agent-token-0123456789",
     ...overrides,
   };
 }

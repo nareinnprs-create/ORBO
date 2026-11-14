@@ -79,7 +79,7 @@ describe("POST /api/route text cap", () => {
   });
 });
 
-const SECRET = "worker-shared-secret";
+const SECRET = "worker-shared-secret-0123456789";
 
 function internalApp(runner: RoutineRunner | undefined) {
   const args: Parameters<typeof createApp> = [

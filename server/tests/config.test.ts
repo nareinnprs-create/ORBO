@@ -19,7 +19,7 @@ const baseEnvironment = {
   INTELLIGENCE_API_KEY: "tenant-api-key",
   COPILOTKIT_LICENSE_TOKEN: "license-token",
   ORBO_MANAGED_AGENT_AG_UI_URL: " http://localhost:4200/ag-ui ",
-  ORBO_MANAGED_AGENT_TOKEN: "managed-agent-token",
+  ORBO_MANAGED_AGENT_TOKEN: "managed-agent-token-0123456789",
 };
 
 /**
@@ -78,7 +78,7 @@ describe("deployment configuration", () => {
     });
     expect(config.managedAgent).toEqual({
       endpoint: new URL("http://localhost:4200/ag-ui"),
-      token: "managed-agent-token",
+      token: "managed-agent-token-0123456789",
     });
     expect(config.tenantPackageDirectory).toBe("../examples/orbo");
   });
@@ -877,7 +877,7 @@ describe("deployment configuration", () => {
       ...baseEnvironment,
       ORBO_COMPUTER_SUPERVISOR_URL: "http://localhost:4000",
       SUPERVISOR_TOKEN: "supervisor-token",
-      ORBO_COMPUTER_TOKEN: "computer-token",
+      ORBO_COMPUTER_TOKEN: "computer-token-0123456789abcdef",
     });
 
     expect(config.computer?.provider).toBe("docker");
@@ -885,7 +885,7 @@ describe("deployment configuration", () => {
       provider: "docker",
       baseUrl: "http://localhost:4000",
       supervisorToken: "supervisor-token",
-      token: "computer-token",
+      token: "computer-token-0123456789abcdef",
       allowPrivateHosts: false,
     });
   });
@@ -894,14 +894,14 @@ describe("deployment configuration", () => {
     const config = loadConfig({
       ...baseEnvironment,
       ORBO_AGENT_COMPUTER_URL: "http://localhost:4100",
-      ORBO_COMPUTER_TOKEN: "computer-token",
+      ORBO_COMPUTER_TOKEN: "computer-token-0123456789abcdef",
     });
 
     expect(config.computer?.provider).toBe("shared");
     expect(config.computer).toEqual({
       provider: "shared",
       baseUrl: "http://localhost:4100",
-      token: "computer-token",
+      token: "computer-token-0123456789abcdef",
       allowPrivateHosts: false,
     });
   });
@@ -959,7 +959,7 @@ describe("deployment configuration", () => {
     const config = loadConfig({
       ...productionEnvironment,
       ORBO_AGENT_COMPUTER_URL: "http://localhost:4100",
-      ORBO_COMPUTER_TOKEN: "computer-token",
+      ORBO_COMPUTER_TOKEN: "computer-token-0123456789abcdef",
     });
 
     expect(config.computer?.allowPrivateHosts).toBe(false);

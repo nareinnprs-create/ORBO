@@ -1341,6 +1341,59 @@ function refuseDevelopmentTokens(environment: Environment): void {
   }
 }
 
+/**
+ * The shortest secret this server will accept for a service handoff, and the boot
+ * refusal that enforces it.
+ *
+ * The worker refuses a `WORKER_SHARED_SECRET` under 24 characters at its own boot
+ * (docs/ops-worker.md) — but that refusal fires on the worker, leaving the server to
+ * answer 401s to a worker whose operator typo'd a short secret into one side's env
+ * file only. This floor refuses HERE, before anything binds a port, and covers the
+ * other internal bearer credentials the server itself checks, which no other process
+ * ever validates:
+ *
+ * - `WORKER_SHARED_SECRET` — the routines worker's handoff credential.
+ * - `ORBO_COMPUTER_TOKEN` — the shared secret computers require of callers.
+ * - `ORBO_AGENT_TOOL_TOKEN` — what the agent tool endpoint demands of callers.
+ * - `ORBO_MANAGED_AGENT_TOKEN` — what the managed-agent AG-UI bridge demands.
+ *
+ * The bound is 29 because that is the shipped development default's length
+ * (`orbo-dev-worker-shared-secret`): a deployment carrying a secret SHORTER than the
+ * value printed in this repository has no excuse, and a guessable handoff credential
+ * is refused no matter which `NODE_ENV` or address it would have served.
+ *
+ * The values in `DEVELOPMENT_TOKENS` keep their own gate — refused in production and
+ * beyond loopback, warned about and allowed on a loopback laptop, which is the
+ * convenience the install scripts intend. This floor leaves them to it rather than
+ * turning that loopback convenience into a refusal; a custom secret shorter than the
+ * floor has no such story and stops the boot here.
+ */
+const SERVICE_SECRET_MIN_LENGTH = 29;
+
+const SERVICE_SECRET_NAMES = [
+  "WORKER_SHARED_SECRET",
+  "ORBO_COMPUTER_TOKEN",
+  "ORBO_AGENT_TOOL_TOKEN",
+  "ORBO_MANAGED_AGENT_TOKEN",
+] as const;
+
+function refuseShortServiceSecrets(environment: Environment): void {
+  for (const name of SERVICE_SECRET_NAMES) {
+    const value = optional(environment, name);
+    if (!value || value.length >= SERVICE_SECRET_MIN_LENGTH) {
+      continue;
+    }
+    const development =
+      DEVELOPMENT_TOKENS[name as keyof typeof DEVELOPMENT_TOKENS];
+    if (development !== undefined && value === development) {
+      continue;
+    }
+    throw new Error(
+      `${name} is set but only ${value.length} characters long; a handoff credential shorter than ${SERVICE_SECRET_MIN_LENGTH} characters is guessable, so the deployment refuses to start. Generate one with \`openssl rand -base64 32\` and set the same value everywhere it is read.`,
+    );
+  }
+}
+
 function computerConfig(environment: Environment): ComputerConfig | undefined {
   const supervisorAddress = optional(
     environment,
@@ -1669,8 +1722,10 @@ export function loadConfig(
   const workerSharedSecret = optional(environment, "WORKER_SHARED_SECRET");
   // Before anything below builds on these values: a deployment carrying the tokens the install
   // scripts mint refuses here rather than at the first use, where it would instead be one working
-  // request away from being exploited.
+  // request away from being exploited. The length floor runs beside it: a custom secret shorter
+  // than the shipped dev default stops the boot too, on any NODE_ENV at any address.
   refuseDevelopmentTokens(environment);
+  refuseShortServiceSecrets(environment);
   const rateLimit = rateLimitConfig(environment);
 
   return {

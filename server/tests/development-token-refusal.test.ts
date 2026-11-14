@@ -56,7 +56,7 @@ describe("the development tokens are refused where somebody else could be listen
         deployed({
           ORBO_COMPUTER_SUPERVISOR_URL: "http://supervisor:4300",
           SUPERVISOR_TOKEN: "orbo-dev-supervisor-token",
-          ORBO_COMPUTER_TOKEN: "a-real-computer-token",
+          ORBO_COMPUTER_TOKEN: "a-real-computer-token-01234567",
         }),
       ),
     ).toThrow(/orbo-dev-supervisor-token|development token/);
@@ -93,11 +93,11 @@ describe("the development tokens are refused where somebody else could be listen
       deployed({
         NODE_ENV: "production",
         ORBO_AGENT_COMPUTER_URL: "http://127.0.0.1:4100",
-        ORBO_COMPUTER_TOKEN: "a-real-computer-token",
-        WORKER_SHARED_SECRET: "a-real-worker-secret",
+        ORBO_COMPUTER_TOKEN: "a-real-computer-token-01234567",
+        WORKER_SHARED_SECRET: "a-real-worker-secret-0123456789",
       }),
     );
-    expect(config.computer?.token).toBe("a-real-computer-token");
+    expect(config.computer?.token).toBe("a-real-computer-token-01234567");
   });
 });
 
@@ -122,6 +122,55 @@ describe("the development tokens are only a warning on a loopback laptop", () =>
       ORBO_COMPUTER_TOKEN: "orbo-dev-computer-token",
       SUPERVISOR_TOKEN: "orbo-dev-supervisor-token",
       WORKER_SHARED_SECRET: "orbo-dev-worker-shared-secret",
+    });
+    expect(config.computer?.token).toBe("orbo-dev-computer-token");
+  });
+});
+
+describe("the service secret length floor", () => {
+  /** Loopback-only, no sign-in provider: the install scripts' own shape. */
+  const laptop = {
+    DATABASE_URL: "postgres://orbo:orbo@localhost:5432/orbo",
+    KEY_ENCRYPTION_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+    INTELLIGENCE_API_URL: "http://localhost:7100",
+    INTELLIGENCE_GATEWAY_WS_URL: "ws://localhost:7103",
+    INTELLIGENCE_API_KEY: "tenant-api-key",
+    COPILOTKIT_LICENSE_TOKEN: "license-token",
+    ORBO_SINGLE_USER: "true",
+  };
+
+  test("each handoff credential shorter than the floor stops the boot", () => {
+    for (const [name, value] of [
+      ["WORKER_SHARED_SECRET", "short-worker-secret"],
+      ["ORBO_COMPUTER_TOKEN", "short-computer-token"],
+      ["ORBO_AGENT_TOOL_TOKEN", "short-agent-tool-token"],
+      ["ORBO_MANAGED_AGENT_TOKEN", "short-managed-token"],
+    ] as const) {
+      // Refused on a loopback laptop with nothing deployed: the floor is about
+      // guessability, not reachability, so NODE_ENV and address decide nothing.
+      expect(() => loadConfig({ ...laptop, [name]: value })).toThrow(
+        new RegExp(`${name} is set but only ${value.length} characters`),
+      );
+    }
+  });
+
+  test("a value exactly at the floor loads", () => {
+    const config = loadConfig({
+      ...laptop,
+      WORKER_SHARED_SECRET: "x".repeat(29),
+    });
+    expect(config.workerSharedSecret).toBe("x".repeat(29));
+  });
+
+  test("the shipped development tokens keep their own gate", () => {
+    // The computer token's dev default is 23 characters, under the floor: on a
+    // loopback laptop the dev-token gate warns and allows, and the floor defers
+    // to it rather than turning that convenience into a refusal. Beyond loopback
+    // and in production the dev-token gate refuses before the floor is reached.
+    const config = loadConfig({
+      ...laptop,
+      ORBO_AGENT_COMPUTER_URL: "http://127.0.0.1:4100",
+      ORBO_COMPUTER_TOKEN: "orbo-dev-computer-token",
     });
     expect(config.computer?.token).toBe("orbo-dev-computer-token");
   });
